@@ -1,0 +1,383 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* Full screen container */
+.login-container {
+  height: 100vh;
+  width: 100vw;
+  display: flex;
+  overflow: hidden; 
+  background: #ffffff;
+  font-family: 'Segoe UI', Inter, sans-serif;
+}
+
+/* Split screen layout */
+.login-fullscreen-split {
+  display: flex;
+  width: 100%;
+  height: 100%;
+}
+
+/* LEFT SIDE - Just Image Container */
+.login-left {
+  flex: 0 0 50%;
+  background-color: #f1f5f9;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+/* Left side image */
+.left-side-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* RIGHT SIDE - Form Area */
+.login-right {
+  flex: 0 0 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: #ffffff;
+  padding: 40px;
+}
+
+.login-body {
+  width: 100%;
+  max-width: 420px; 
+  display: flex;
+  flex-direction: column;
+}
+
+/* BRAND HEADER DESIGN */
+.brand-header-large {
+  text-align: center;
+  margin-bottom: 30px; 
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.brand-icon-placeholder {
+  margin-bottom: 12px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.brand-logo-icon {
+  width: 85px; 
+  height: auto;
+}
+
+.fallback-icon {
+  font-size: 65px;
+  color: #3a7d34;
+}
+
+.brand-title-primary,
+.brand-title-secondary {
+  font-family: 'Georgia', 'Times New Roman', serif;
+  color: #397e32; 
+  font-weight: 500;
+  text-transform: uppercase;
+  line-height: 1.2;
+  margin: 0;
+}
+
+.brand-title-primary {
+  font-size: 26px;
+  letter-spacing: 1px;
+}
+
+.brand-title-secondary {
+  font-size: 22px;
+  letter-spacing: 1px;
+}
+
+.brand-tagline {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 14px;
+  color: #397e32;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
+/* Form Inputs */
+.input-group {
+  margin-bottom: 24px;
+}
+
+.input-group label {
+  display: block;
+  font-weight: 600;
+  color: #1e293b;
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+
+.input-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+/* Left icon styling */
+.input-icon {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #94a3b8;
+  font-size: 15px;
+  z-index: 1;
+  pointer-events: none;
+}
+
+/* Input field styling */
+.input-wrapper input {
+  width: 100%;
+  padding: 13px 40px 13px 42px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 14px;
+  transition: all 0.3s ease;
+  color: #334155;
+  background: #ffffff;
+  height: 48px;
+}
+
+.input-wrapper input::placeholder {
+  color: #94a3b8;
+}
+
+.input-wrapper input:focus {
+  outline: none;
+  border-color: #397e32;
+  box-shadow: 0 0 0 3px rgba(57, 126, 50, 0.1);
+}
+
+/* Password wrapper - special styling */
+.password-wrapper {
+  position: relative;
+}
+
+.password-wrapper .input-icon {
+  left: 14px;
+}
+
+/* Password input with extra right padding for the toggle button */
+.password-input {
+  padding-right: 48px !important;
+}
+
+/* Password toggle button - inside the input */
+.password-toggle-btn {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: #94a3b8;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  z-index: 2;
+  font-size: 16px;
+  transition: color 0.2s ease;
+}
+
+.password-toggle-btn:hover {
+  color: #397e32;
+}
+
+.password-toggle-btn:focus {
+  outline: none;
+}
+
+.password-toggle-btn i {
+  font-size: 16px;
+  color: #94a3b8;
+  transition: color 0.2s ease;
+}
+
+.password-toggle-btn:hover i {
+  color: #397e32;
+}
+
+/* Forgot Password link */
+.forgot-link-wrapper {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 20px;
+  margin-top: -10px;
+}
+
+.forgot-link {
+  color: #397e32;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.forgot-link:hover {
+  color: #2d6627;
+  text-decoration: underline;
+}
+
+/* Sign In Button */
+.login-btn {
+  width: 100%;
+  padding: 14px;
+  background: #397e32;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 48px;
+}
+
+.login-btn:hover:not(:disabled) {
+  background: #2d6627;
+}
+
+.login-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+/* Error Message */
+.error-message {
+  background: rgba(239, 68, 68, 0.1);
+  border-left: 3px solid #ef4444;
+  padding: 12px 14px;
+  border-radius: 6px;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #ef4444;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+/* Success Message */
+.success-message {
+  background: rgba(34, 197, 94, 0.1);
+  border-left: 3px solid #22c55e;
+  padding: 12px 14px;
+  border-radius: 6px;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #16a34a;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+/* Back Link */
+.back-link {
+  text-align: center;
+  margin-top: 20px;
+  color: #64748b;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.back-link:hover {
+  color: #397e32;
+}
+
+/* Mobile & Tablet Responsive Design */
+@media (max-width: 900px) {
+  .login-container {
+    overflow: auto; 
+    height: auto;
+    min-height: 100vh;
+  }
+  
+  .login-fullscreen-split {
+    flex-direction: column;
+  }
+  
+  .login-left {
+    height: 350px;
+    flex: none;
+  }
+  
+  .login-right {
+    padding: 50px 20px;
+    flex: none;
+  }
+}
+
+/* Small screens */
+@media (max-width: 480px) {
+  .login-right {
+    padding: 30px 16px;
+  }
+  
+  .login-body {
+    max-width: 100%;
+  }
+  
+  .brand-title-primary {
+    font-size: 20px;
+  }
+  
+  .brand-title-secondary {
+    font-size: 17px;
+  }
+  
+  .input-wrapper input {
+    padding: 11px 36px 11px 38px;
+    height: 44px;
+    font-size: 13px;
+  }
+  
+  .password-input {
+    padding-right: 44px !important;
+  }
+  
+  .password-toggle-btn {
+    right: 10px;
+    width: 20px;
+    height: 20px;
+  }
+  
+  .login-btn {
+    height: 44px;
+    font-size: 14px;
+  }
+}

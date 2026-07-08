@@ -1,0 +1,26 @@
+:root {
+  /* Primary Color Palette (Inspired by modern dashboard) */
+  --primary-blue: #002b80;
+  --primary-blue-dark: #1d4ed8;
+  --primary-blue-light: #eff6ff;
+  
+  --primary-purple: #8b5cf6;
+  --primary-purple-dark: #7c3aed;
+  --primary-purple-light: #f5f3ff;
+  
+  --primary-orange: #f97316;
+  --primary-orange-dark: #ea580c;
+  --primary-orange-light: #fff7ed;
+  
+  --success-green: #10b981;
+  --success-green-dark: #059669;
+  --warning-yellow: #f59e0b;
+  --danger-red: #ef4444;
+  --gray-soft: #64748b;
+  
+  --bg-page: #f8fafc;
+  --bg-white: #ffffff;
+  --border-light: #e2e8f0;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+}

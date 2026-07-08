@@ -1,0 +1,620 @@
+/* ==========================================================================
+   MODERN DEPARTMENT CREATION DESIGN SYSTEM - BLUE THEME
+   ========================================================================== */
+:root {
+  --first-color: #2563eb;
+  --first-color-hover: #1d4ed8;
+  --bg-page: #f8fafc;
+  --bg-white: #ffffff;
+  --border-light: #e2e8f0;
+  --border-input: #d8e2dc;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #94a3b8;
+  --active-green-bg: #dcfce7;
+  --active-green-text: #166534;
+  --inactive-red-bg: #fee2e2;
+  --inactive-red-text: #991b1b;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--bg-page);
+  font-family: "Inter", -apple-system, sans-serif;
+  color: var(--text-primary);
+}
+
+/* Page Shell Layout */
+.dept-shell-container {
+  display: flex;
+  min-height: 100vh;
+  background: var(--bg-page);
+}
+
+.dept-shell {
+  flex: 1;
+  margin-left: 260px;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-page);
+  min-width: 0;
+}
+
+/* ==========================================================================
+   MAIN MAIN BODY
+   ========================================================================== */
+.dept-main {
+  padding: 28px;
+  flex: 1;
+}
+
+.dept-content {
+  /* Removed max-width limits dynamically through React inline styling for full width */
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+/* Breadcrumb */
+.dept-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #64748b;
+  margin-bottom: 20px;
+  justify-content: flex-end;
+}
+
+.dept-breadcrumb span { cursor: pointer; }
+.dept-breadcrumb strong { color: #1e293b; font-weight: 600; }
+
+/* ==========================================================================
+   NAV VIEW BUTTON - BLUE
+   ========================================================================== */
+.dept-nav-view-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: #2563eb;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: background 0.2s;
+}
+
+.dept-nav-view-btn:hover {
+  background: #1d4ed8;
+}
+
+/* ==========================================================================
+   ADD NEW BUTTON - BLUE
+   ========================================================================== */
+.dept-btn-add-new {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 20px;
+  background: #2563eb;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: background 0.2s;
+  white-space: nowrap;
+}
+
+.dept-btn-add-new:hover {
+  background: #1d4ed8;
+}
+
+/* ==========================================================================
+   FORM CONTAINER & FIELDS
+   ========================================================================== */
+.dept-form-card {
+  background: #ffffff;
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.dept-form-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.dept-form-item label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #0f172a;
+  display: inline-flex;
+  align-items: center;
+}
+
+.dept-req-star {
+  color: #ef4444;
+  margin-left: 4px;
+}
+
+/* Input Icon Wrap */
+.dept-input-icon-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.dept-input-icon-wrap input,
+.dept-input-icon-wrap textarea {
+  width: 100%;
+  height: 38px;
+  padding: 8px 12px 8px 38px;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  color: #1e293b;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.dept-input-icon-wrap input:focus,
+.dept-input-icon-wrap textarea:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.dept-input-icon-wrap textarea {
+  height: 90px;
+  resize: none;
+  font-family: inherit;
+}
+
+.dept-input-icon-wrap input:disabled {
+  background: #f1f5f9;
+  cursor: not-allowed;
+}
+
+.dept-input-prefix-icon {
+  position: absolute;
+  left: 12px;
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.dept-input-helper-text {
+  font-size: 12px;
+  color: #64748b;
+  margin-top: 4px;
+}
+
+/* Form Error */
+.dept-form-error {
+  color: #dc2626;
+  padding: 12px 16px;
+  background: #fee2e2;
+  border-radius: 6px;
+  border: 1px solid #fecaca;
+  margin-bottom: 20px;
+}
+
+/* ==========================================================================
+   BUTTONS BAR & FOOTER ACTION - BLUE
+   ========================================================================== */
+.dept-form-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 24px;
+  background-color: #fafbfc;
+  border-top: 1px solid #e2e8f0;
+}
+
+.dept-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 20px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.dept-btn.primary {
+  background: #2563eb;
+  color: white;
+}
+
+.dept-btn.primary:hover {
+  background: #1d4ed8;
+}
+
+.dept-btn.secondary {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.dept-btn.secondary:hover {
+  background: #e2e8f0;
+}
+
+.dept-btn.tertiary {
+  background: none;
+  color: #475569;
+}
+
+.dept-btn.tertiary:hover {
+  background: #f1f5f9;
+}
+
+/* ==========================================================================
+   FILTER CARD - BLUE
+   ========================================================================== */
+.dept-filter-btn.search {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 14px;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  height: 36px;
+  transition: all 0.2s;
+  background: #2563eb;
+  color: white;
+}
+
+.dept-filter-btn.search:hover {
+  background: #1d4ed8;
+}
+
+.dept-filter-btn.reset {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 14px;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  height: 36px;
+  transition: all 0.2s;
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.dept-filter-btn.reset:hover {
+  background: #e2e8f0;
+}
+
+/* ==========================================================================
+   DATA TABLE CONTAINER
+   ========================================================================== */
+.dept-table-panel {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.dept-table-container {
+  overflow-x: auto;
+}
+
+.dept-list-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.dept-list-table th {
+  background: #f8fafc;
+  color: #64748b;
+  font-weight: 600;
+  font-size: 11px;
+  padding: 12px 16px;
+  border-bottom: 1px solid #e2e8f0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.dept-list-table th.sortable {
+  cursor: pointer;
+  user-select: none;
+}
+
+.dept-list-table th.sortable:hover {
+  color: #2563eb;
+}
+
+.dept-list-table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid #f1f5f9;
+  color: #1e293b;
+  vertical-align: middle;
+}
+
+.dept-list-table tbody tr:hover {
+  background: #f8fafc;
+}
+
+.dept-list-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* ==========================================================================
+   ACTIONS DROPDOWN
+   ========================================================================== */
+.dept-actions-dropdown-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 9;
+}
+
+.dept-actions-dropdown-menu {
+  position: absolute;
+  right: 0;
+  top: 28px;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  min-width: 120px;
+  z-index: 10;
+  padding: 4px;
+}
+
+.dept-actions-dropdown-menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: none;
+  border: none;
+  width: 100%;
+  text-align: left;
+  font-size: 13px;
+  color: #0f172a;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.dept-actions-dropdown-menu button:hover {
+  background: #f1f5f9;
+}
+
+.dept-actions-dropdown-menu button.deactivate-btn {
+  color: #dc2626;
+}
+
+.dept-actions-dropdown-menu button.deactivate-btn:hover {
+  background: #fee2e2;
+}
+
+/* ==========================================================================
+   PAGINATION - BLUE ACTIVE
+   ========================================================================== */
+.dept-table-pagination-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.dept-pagination-info {
+  font-size: 13px;
+  color: #64748b;
+}
+
+.dept-pagination-controls {
+  display: flex;
+  gap: 4px;
+}
+
+.dept-pag-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 32px;
+  background: none;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  color: #64748b;
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 0.2s;
+}
+
+.dept-pag-btn:hover:not(:disabled) {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+}
+
+.dept-pag-btn.active {
+  background: #2563eb;
+  color: white;
+  border-color: #2563eb;
+}
+
+.dept-pag-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ==========================================================================
+   CONFIRMATION MODAL
+   ========================================================================== */
+.dept-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.dept-modal {
+  background: white;
+  border-radius: 8px;
+  max-width: 400px;
+  width: 90%;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+}
+
+.dept-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.dept-modal-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.dept-modal-close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #64748b;
+  padding: 4px;
+}
+
+.dept-modal-body {
+  padding: 20px;
+}
+
+.dept-modal-warning {
+  color: #dc2626;
+  font-size: 13px;
+  margin-top: 8px;
+}
+
+.dept-modal-footer {
+  padding: 16px 20px;
+  border-top: 1px solid #e2e8f0;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.dept-btn-cancel-modal {
+  padding: 6px 16px;
+  background: #f1f5f9;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  color: #475569;
+}
+
+.dept-btn-cancel-modal:hover {
+  background: #e2e8f0;
+}
+
+.dept-btn-delete-modal {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 16px;
+  background: #dc2626;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.dept-btn-delete-modal:hover {
+  background: #b91c1c;
+}
+
+/* ==========================================================================
+   RESPONSIVE LAYOUT DESIGN RULES
+   ========================================================================== */
+@media (max-width: 1024px) {
+  .dept-shell {
+    /* removed margin-left: 0 to respect sidebar width */
+  }
+}
+
+@media (max-width: 768px) {
+  .dept-view-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .dept-btn-add-new {
+    width: 100%;
+    justify-content: center;
+  }
+  .dept-table-pagination-bar {
+    flex-direction: column;
+    gap: 12px;
+  }
+  .dept-form-footer {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .dept-form-footer .dept-btn {
+    flex: 1;
+    justify-content: center;
+    min-width: 80px;
+  }
+  .dept-main {
+    padding: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .dept-filter-btn {
+    font-size: 12px;
+    padding: 4px 10px;
+  }
+  .dept-btn {
+    font-size: 12px;
+    padding: 6px 14px;
+  }
+}
+
+/* Added globally via script for responsive sidebar */
+@media (max-width: 768px) {
+  .dm-shell { margin-left: 240px; } /* matches sidebar.css */
+}
+@media (max-width: 480px) {
+  .dm-shell { margin-left: 70px; } /* matches sidebar.css */
+}

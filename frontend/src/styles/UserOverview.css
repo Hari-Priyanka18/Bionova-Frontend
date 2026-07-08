@@ -1,0 +1,199 @@
+/* ===== OVERVIEW GRID ===== */
+.mp-overview-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 16px;
+}
+
+.mp-overview-card {
+  background: #ffffff;
+  border: 1px solid #e9ecef;
+  border-radius: 12px;
+  padding: 18px;
+}
+
+.mp-card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #374151;
+  letter-spacing: 0.5px;
+  margin-bottom: 16px;
+  text-transform: uppercase;
+}
+
+.mp-card-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.mp-card-title-row .mp-card-title {
+  margin-bottom: 0;
+}
+
+.mp-view-all-btn {
+  background: transparent;
+  border: none;
+  font-size: 12px;
+  font-weight: 600;
+  color: #195dfa;
+  cursor: pointer;
+}
+
+/* ===== INFO TABLE ===== */
+.mp-info-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.mp-info-table td {
+  padding: 6px 0;
+  font-size: 13px;
+  vertical-align: top;
+}
+
+.mp-info-table td:first-child {
+  color: #9ca3af;
+  width: 110px;
+  font-weight: 500;
+}
+
+.mp-info-table td:last-child {
+  color: #0d1126;
+  font-weight: 600;
+}
+
+.mp-info-desc-label {
+  font-size: 11px;
+  color: #9ca3af;
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+.mp-info-desc {
+  font-size: 13px;
+  color: #374151;
+  line-height: 1.5;
+}
+
+/* ===== PROGRESS CHART ===== */
+.mp-progress-chart-wrap {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 12px;
+}
+
+.mp-progress-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mp-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #374151;
+}
+
+.mp-legend-item span {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.mp-legend-item strong {
+  margin-left: auto;
+}
+
+/* ===== TASK SUMMARY ===== */
+.mp-task-summary-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.mp-task-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.mp-task-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mp-icon-blue  { background: #eff6ff; color: #3b82f6; }
+.mp-icon-green { background: #f0fdf4; color: #10b981; }
+.mp-icon-orange{ background: #fff7ed; color: #f59e0b; }
+.mp-icon-red   { background: #fef2f2; color: #ef4444; }
+
+.mp-task-num {
+  font-size: 22px;
+  font-weight: 800;
+  color: #0d1126;
+}
+
+.mp-task-label {
+  font-size: 11px;
+  color: #9ca3af;
+  text-align: center;
+}
+
+/* ===== MILESTONES CARD ===== */
+.mp-milestones-card {
+  grid-column: span 2;
+}
+
+.mp-milestone-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.mp-milestone-table td {
+  padding: 10px 0;
+  font-size: 13px;
+  border-bottom: 1px solid #f3f4f6;
+  color: #374151;
+}
+
+.mp-milestone-table td:last-child {
+  text-align: right;
+  color: #6b7280;
+  font-weight: 600;
+}
+
+.mp-milestone-table tr:last-child td {
+  border-bottom: none;
+}
+
+/* ===== RESPONSIVE ===== */
+@media (max-width: 1200px) {
+  .mp-overview-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .mp-milestones-card {
+    grid-column: span 2;
+  }
+}
+
+@media (max-width: 768px) {
+  .mp-overview-grid {
+    grid-template-columns: 1fr;
+  }
+  .mp-milestones-card {
+    grid-column: span 1;
+  }
+}

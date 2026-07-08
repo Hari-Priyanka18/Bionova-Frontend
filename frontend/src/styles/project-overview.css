@@ -1,0 +1,218 @@
+.pd-overview-container {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Overview Content */
+.pd-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.pd-stat-card {
+  background: white;
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.pd-stat-icon-wrap {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.pd-stat-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.pd-stat-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
+.pd-stat-value-row {
+  display: flex;
+  flex-direction: column;
+}
+
+.pd-stat-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.pd-stat-subtitle {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+/* Sections */
+.pd-section-card {
+  background: white;
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 24px;
+}
+
+.pd-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.pd-section-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.pd-add-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: white;
+  border: 1px solid var(--primary-blue-light);
+  color: var(--primary-blue-dark);
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.pd-view-all {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--primary-blue-dark);
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+/* Tables */
+.pd-table-responsive {
+  overflow-x: auto;
+}
+
+.pd-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.pd-table th {
+  text-align: left;
+  padding: 12px 16px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-light);
+  background-color: #f8fafc;
+}
+
+.pd-table td {
+  padding: 12px 16px;
+  font-size: 13px;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-light);
+  vertical-align: middle;
+}
+
+.pd-code-col {
+  color: var(--primary-blue-dark) !important;
+  font-weight: 500;
+}
+
+/* Status Badges */
+.pd-status-badge {
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.pd-status-badge.st-completed {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.pd-status-badge.st-in-progress {
+  background: #e0e7ff;
+  color: #3730a3;
+}
+
+.pd-status-badge.st-not-started {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+/* Progress */
+.pd-progress-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.pd-progress-bar {
+  flex: 1;
+  height: 6px;
+  background: #e2e8f0;
+  border-radius: 3px;
+  overflow: hidden;
+  min-width: 80px;
+}
+
+.pd-progress-fill {
+  height: 100%;
+  border-radius: 3px;
+}
+
+.pd-progress-wrap span {
+  font-size: 12px;
+  color: var(--text-secondary);
+  min-width: 30px;
+}
+
+/* Actions */
+.pd-action-btn {
+  background: none;
+  border: none;
+  color: var(--primary-blue-dark);
+  background-color: var(--primary-blue-light);
+  padding: 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pd-section-footer {
+  margin-top: 16px;
+  text-align: right;
+}
+
+.pd-section-footer a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--primary-blue-dark);
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+}

@@ -1,0 +1,252 @@
+.um-container {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding-top: 10px;
+}
+
+.um-section {
+  background: #ffffff;
+  border-radius: 8px;
+  padding: 24px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+.um-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.um-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.um-header-row .um-header {
+  margin-bottom: 0;
+}
+
+.um-header-icon {
+  color: #195dfa;
+}
+
+.um-header-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #0d1126;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.um-header-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.um-milestone-ref {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.um-view-all {
+  background: transparent;
+  border: none;
+  color: #195dfa;
+  font-size: 13px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+
+.um-table-container {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.um-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.um-table th {
+  text-align: left;
+  font-size: 12px;
+  font-weight: 700;
+  color: #111827;
+  padding: 12px 16px;
+  border-bottom: 1px solid #f3f4f6;
+  white-space: nowrap;
+}
+
+.um-table td {
+  padding: 16px;
+  font-size: 13px;
+  color: #374151;
+  border-bottom: 1px solid #f9fafb;
+  vertical-align: middle;
+}
+
+.um-table tr {
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.um-table tr:hover {
+  background-color: #f9fafb;
+}
+
+.um-table tr.selected-row {
+  background-color: #f0f5ff; /* light blue */
+}
+
+.um-milestone-name-col {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.um-milestone-circle {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.um-milestone-circle.completed {
+  background-color: #10b981;
+}
+.um-milestone-circle.in-progress {
+  background-color: #195dfa;
+}
+.um-milestone-circle.not-started {
+  background-color: #d1d5db;
+}
+
+.um-mname-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.um-mname-num {
+  font-size: 11px;
+  font-weight: 600;
+  color: #9ca3af;
+  margin-bottom: 2px;
+}
+
+.um-mname {
+  font-weight: 600;
+  color: #111827;
+}
+
+.um-desc {
+  max-width: 200px;
+  line-height: 1.4;
+  color: #4b5563;
+}
+
+.um-center-txt {
+  text-align: center;
+}
+
+/* Badges */
+.um-badge {
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.status-completed { background: #dcfce7; color: #16a34a; }
+.status-inprogress { background: #dbeafe; color: #2563eb; }
+.status-notstarted { background: #f3f4f6; color: #6b7280; }
+.status-pending { background: #ffedd5; color: #ea580c; }
+.status-high { background: #fee2e2; color: #dc2626; }
+.status-medium { background: #ffedd5; color: #ea580c; }
+.status-default { background: #f3f4f6; color: #374151; }
+
+.um-link {
+  color: #2563eb;
+  cursor: pointer;
+}
+
+/* Horizontal Progress */
+.um-horiz-prog-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.um-horiz-pct {
+  font-size: 12px;
+  font-weight: 600;
+  width: 32px;
+}
+
+.um-horiz-bar-bg {
+  flex: 1;
+  height: 6px;
+  background-color: #e5e7eb;
+  border-radius: 4px;
+  overflow: hidden;
+  min-width: 60px;
+}
+
+.um-horiz-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+}
+
+/* Pagination */
+.um-pagination {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 20px;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.um-pag-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.um-pag-controls button {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  cursor: pointer;
+  color: #9ca3af;
+}
+
+.um-pag-page {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #195dfa;
+  border-radius: 4px;
+  color: #195dfa;
+  font-weight: 600;
+}

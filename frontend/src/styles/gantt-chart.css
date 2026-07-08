@@ -1,0 +1,380 @@
+/* ═══════════════════════════════════════════════
+   GANTT CHART — COMPLETE STYLES
+   ═══════════════════════════════════════════════ */
+
+/* Outer container */
+.gc-wrap {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: #fff;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  overflow: hidden;
+  font-size: 12px;
+  font-family: inherit;
+  color: #1e293b;
+}
+
+/* ─── Toolbar ─── */
+.gc-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 14px;
+  border-bottom: 1px solid #e2e8f0;
+  background: #fff;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.gc-tb-left,
+.gc-tb-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.gc-lbl {
+  font-size: 11px;
+  color: #64748b;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.gc-sel {
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 4px 24px 4px 8px;
+  font-size: 12px;
+  font-weight: 500;
+  background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") no-repeat right 6px center;
+  appearance: none;
+  color: #1e293b;
+  cursor: pointer;
+  min-width: 130px;
+}
+
+.gc-zoom {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 2px 6px;
+}
+
+.gc-icn {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #64748b;
+}
+.gc-icn:hover { background: #f1f5f9; }
+
+.gc-zoom-val {
+  font-size: 12px;
+  font-weight: 600;
+  min-width: 34px;
+  text-align: center;
+}
+
+.gc-today-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1d4ed8;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.gc-today-btn:hover { background: #dbeafe; }
+
+.gc-filter-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  color: #475569;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.gc-filter-btn:hover { background: #f8fafc; }
+
+/* Baseline toggle */
+.gc-tog {
+  width: 34px;
+  height: 18px;
+  border-radius: 9px;
+  background: #cbd5e1;
+  position: relative;
+  cursor: pointer;
+  transition: background 0.2s;
+  flex-shrink: 0;
+}
+.gc-tog.on { background: #3b82f6; }
+.gc-tog-knob {
+  width: 14px;
+  height: 14px;
+  background: white;
+  border-radius: 50%;
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  transition: left 0.2s;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+}
+.gc-tog.on .gc-tog-knob { left: 18px; }
+
+/* ─── Body: left table + right timeline ─── */
+.gc-body {
+  display: flex;
+  flex: 1;
+  overflow: auto;
+  position: relative;
+  min-height: 0;
+  align-items: flex-start;
+}
+
+/* LEFT fixed panel */
+.gc-left {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  background: #fff;
+  z-index: 20;
+  position: sticky;
+  left: 0;
+}
+
+.gc-left-hdr {
+  flex-shrink: 0;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+  position: sticky;
+  top: 0;
+  z-index: 22;
+}
+
+.gc-left-body {
+  /* Naturally expands to content height */
+}
+
+/* DIVIDER */
+/* DIVIDER is now handled by borderRight and boxShadow on .gc-left inline styles */
+.gc-divider {
+  display: none;
+}
+
+/* RIGHT scrollable timeline */
+.gc-right {
+  flex: 1;
+  position: relative;
+  /* NO overflow auto here, let the width naturally expand inside gc-body */
+}
+
+/* Sticky header inside right pane */
+.gc-right-hdr {
+  position: sticky;
+  top: 0;
+  z-index: 18;
+  background: #fff;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.gc-months-row {
+  display: flex;
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+  height: 22px;
+}
+
+.gc-month {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 600;
+  text-align: center;
+  line-height: 22px;
+  border-right: 1px solid #e2e8f0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.gc-days-row {
+  display: flex;
+  height: 22px;
+  background: #fafafa;
+}
+
+.gc-days-cell {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  border-right: 1px dashed #e2e8f0;
+}
+
+.gc-day-n {
+  font-size: 9px;
+  color: #94a3b8;
+}
+
+/* Bars scrollable area */
+.gc-bars-area {
+  position: relative;
+  min-height: 100%;
+}
+
+/* Row stripes */
+.gc-row-stripe {
+  position: absolute;
+  left: 0;
+  height: 38px;
+}
+.gc-row-stripe:nth-child(odd) { background: transparent; }
+
+/* Grid lines */
+.gc-grid {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  z-index: 1;
+}
+.gc-grid-month {
+  position: absolute;
+  top: 0;
+  width: 1px;
+  background: #e2e8f0;
+}
+.gc-grid-week {
+  position: absolute;
+  top: 0;
+  width: 1px;
+  background: #f1f5f9;
+}
+
+/* Today line */
+.gc-today-line {
+  position: absolute;
+  top: 0;
+  width: 2px;
+  background: #3b82f6;
+  z-index: 6;
+}
+.gc-today-tag {
+  position: absolute;
+  top: -4px;
+  left: -18px;
+  background: #3b82f6;
+  color: white;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+
+/* ─── Table styles ─── */
+.gc-tbl {
+  border-collapse: collapse;
+  width: 100%;
+  table-layout: fixed;
+}
+
+.gc-tbl th {
+  padding: 0 8px;
+  height: 44px; /* Matches 22px + 22px of the right header */
+  font-size: 11px;
+  font-weight: 600;
+  color: #475569;
+  text-align: left;
+  background: #f8fafc;
+  border-bottom: none; /* .gc-left-hdr already provides the border */
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.gc-tbl td {
+  padding: 0 8px;
+  height: 38px;
+  font-size: 11px;
+  color: #334155;
+  border-bottom: 1px solid #f1f5f9;
+  background: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 38px;
+}
+
+.gc-tr.gc-ms td {
+  font-weight: 600;
+  background: #fafbff;
+}
+
+.gc-tr:hover td { background: #f8fafc !important; }
+
+.gc-tr.gc-active td {
+  background: #eff6ff !important;
+  color: #1d4ed8;
+}
+
+.gc-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 38px;
+  overflow: hidden;
+}
+
+.gc-name-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ─── Legend ─── */
+.gc-legend {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: 8px 16px;
+  border-top: 1px solid #e2e8f0;
+  background: #fafafa;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.gc-leg-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #64748b;
+  font-weight: 500;
+}
+
+/* Compact Mode Overrides (Full Height, No Internal Y-Scroll) */
+.gc-compact {
+  height: auto;
+}

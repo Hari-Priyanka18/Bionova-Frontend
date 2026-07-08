@@ -1,0 +1,635 @@
+/* ==========================================================================
+   MODERN EMPLOYEE CREATION DESIGN SYSTEM - BLUE THEME
+   ========================================================================== */
+:root {
+  --first-color: #2563eb;
+  --first-color-hover: #1d4ed8;
+  --second-color: #0a2540;
+  --second-color-hover: #001f3f;
+  --bg-page: #f8fafc;
+  --bg-white: #ffffff;
+  --border-light: #e2e8f0;
+  --border-input: #d8e2dc;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #94a3b8;
+  --active-green-bg: #dcfce7;
+  --active-green-text: #166534;
+  --inactive-red-bg: #fee2e2;
+  --inactive-red-text: #991b1b;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--bg-page);
+  font-family: "Inter", -apple-system, sans-serif;
+  color: var(--text-primary);
+}
+
+/* Page Shell Layout */
+.emp-shell-container {
+  display: flex;
+  min-height: 100vh;
+  background: var(--bg-page);
+}
+
+.emp-shell {
+  flex: 1;
+  margin-left: 260px;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-page);
+  min-width: 0;
+}
+
+/* ==========================================================================
+   MAIN MAIN BODY
+   ========================================================================== */
+.emp-main {
+  padding: 28px;
+  flex: 1;
+}
+
+.emp-content {
+  max-width: 1280px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+/* Breadcrumb */
+.emp-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #64748b;
+  margin-bottom: 20px;
+  justify-content: flex-end;
+}
+
+.emp-breadcrumb span { cursor: pointer; }
+.emp-breadcrumb strong { color: #1e293b; font-weight: 600; }
+
+/* ==========================================================================
+   NAV VIEW BUTTON - BLUE
+   ========================================================================== */
+.emp-nav-view-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: #2563eb;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: background 0.2s;
+}
+
+.emp-nav-view-btn:hover {
+  background: #1d4ed8;
+}
+
+/* ==========================================================================
+   ADD NEW BUTTON - BLUE
+   ========================================================================== */
+.emp-btn-add-new {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 20px;
+  background: #2563eb;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: background 0.2s;
+  white-space: nowrap;
+}
+
+.emp-btn-add-new:hover {
+  background: #1d4ed8;
+}
+
+/* ==========================================================================
+   FORM CONTAINER & GRID SYSTEMS
+   ========================================================================== */
+.emp-form-card {
+  background: #ffffff;
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.emp-form-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.emp-form-section-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #1e293b;
+  margin-bottom: 20px;
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 12px;
+}
+
+/* Form Grid Rows */
+.emp-form-row-4 {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+
+.emp-form-row-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+.emp-form-row-2 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+/* Form Item styling */
+.emp-form-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.emp-form-item label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #0f172a;
+  display: inline-flex;
+  align-items: center;
+}
+
+.emp-req-star {
+  color: #ef4444;
+  margin-left: 4px;
+}
+
+/* Input Icon Wrap */
+.emp-input-icon-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.emp-input-icon-wrap input,
+.emp-input-icon-wrap select,
+.emp-input-icon-wrap textarea {
+  width: 100%;
+  height: 38px;
+  padding: 8px 12px 8px 38px;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  color: #1e293b;
+  font-size: 13px;
+  outline: none;
+  transition: all 0.2s;
+}
+
+.emp-input-icon-wrap input:focus,
+.emp-input-icon-wrap select:focus,
+.emp-input-icon-wrap textarea:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.emp-input-icon-wrap select {
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23475569' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 14px;
+  padding-right: 32px;
+}
+
+.emp-input-icon-wrap textarea {
+  height: 96px;
+  padding-top: 12px;
+  resize: vertical;
+  line-height: 1.5;
+  font-family: inherit;
+}
+
+/* Input Icon Prefix */
+.emp-input-prefix-icon {
+  position: absolute;
+  left: 12px;
+  color: #94a3b8;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Password eye suffix */
+.emp-input-suffix-btn {
+  position: absolute;
+  right: 12px;
+  background: none;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+}
+
+.emp-input-suffix-btn:hover {
+  color: #475569;
+}
+
+/* Special Spanning Rules */
+.emp-span-2 {
+  grid-column: span 2;
+}
+
+/* Photo Upload Picker inside form layout */
+.emp-photo-row-container {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 6px;
+}
+
+.emp-photo-row-preview {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  color: #94a3b8;
+}
+
+.emp-photo-row-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.emp-photo-row-upload-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  height: 34px;
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #475569;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.emp-photo-row-upload-btn:hover {
+  background: #f8fafc;
+}
+
+/* ==========================================================================
+   BUTTONS BAR & FOOTER ACTION - BLUE
+   ========================================================================== */
+.emp-form-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 24px;
+  background-color: #fafbfc;
+  border-top: 1px solid #e2e8f0;
+}
+
+.emp-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 20px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.emp-btn.primary {
+  background: #2563eb;
+  color: white;
+}
+
+.emp-btn.primary:hover {
+  background: #1d4ed8;
+}
+
+.emp-btn.secondary {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.emp-btn.secondary:hover {
+  background: #e2e8f0;
+}
+
+.emp-btn.tertiary {
+  background: none;
+  color: #475569;
+}
+
+.emp-btn.tertiary:hover {
+  background: #f1f5f9;
+}
+
+/* ==========================================================================
+   FILTER CARD - BLUE
+   ========================================================================== */
+.emp-filter-btn.search {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 14px;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  height: 36px;
+  transition: all 0.2s;
+  background: #2563eb;
+  color: white;
+}
+
+.emp-filter-btn.search:hover {
+  background: #1d4ed8;
+}
+
+.emp-filter-btn.reset {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 14px;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  height: 36px;
+  transition: all 0.2s;
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.emp-filter-btn.reset:hover {
+  background: #e2e8f0;
+}
+
+/* ==========================================================================
+   DATA TABLE CONTAINER
+   ========================================================================== */
+.emp-table-panel {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.emp-table-container {
+  overflow-x: auto;
+}
+
+.emp-list-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.emp-list-table th {
+  background: #f8fafc;
+  color: #64748b;
+  font-weight: 600;
+  font-size: 11px;
+  padding: 12px 16px;
+  border-bottom: 1px solid #e2e8f0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.emp-list-table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid #f1f5f9;
+  color: #1e293b;
+  vertical-align: middle;
+}
+
+.emp-list-table tbody tr:hover {
+  background: #f8fafc;
+}
+
+.emp-list-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* ==========================================================================
+   ACTIONS DROPDOWN
+   ========================================================================== */
+.emp-actions-dropdown-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 9;
+}
+
+.emp-actions-dropdown-menu {
+  position: absolute;
+  right: 0;
+  top: 28px;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  min-width: 120px;
+  z-index: 10;
+  padding: 4px;
+}
+
+.emp-actions-dropdown-menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: none;
+  border: none;
+  width: 100%;
+  text-align: left;
+  font-size: 13px;
+  color: #0f172a;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.emp-actions-dropdown-menu button:hover {
+  background: #f1f5f9;
+}
+
+.emp-actions-dropdown-menu button.deactivate-btn {
+  color: #dc2626;
+}
+
+.emp-actions-dropdown-menu button.deactivate-btn:hover {
+  background: #fee2e2;
+}
+
+/* ==========================================================================
+   PAGINATION - BLUE ACTIVE
+   ========================================================================== */
+.emp-table-pagination-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.emp-pagination-info {
+  font-size: 13px;
+  color: #64748b;
+}
+
+.emp-pagination-controls {
+  display: flex;
+  gap: 4px;
+}
+
+.emp-pag-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 32px;
+  background: none;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  color: #64748b;
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 0.2s;
+}
+
+.emp-pag-btn:hover:not(:disabled) {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+}
+
+.emp-pag-btn.active {
+  background: #2563eb;
+  color: white;
+  border-color: #2563eb;
+}
+
+.emp-pag-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ==========================================================================
+   RESPONSIVE LAYOUT DESIGN RULES
+   ========================================================================== */
+@media (max-width: 1024px) {
+  .emp-shell {
+    /* removed margin-left: 0 to respect sidebar width */
+  }
+  .emp-form-row-4 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .emp-form-row-3 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .emp-form-row-2 {
+    grid-template-columns: 1fr;
+  }
+  .emp-span-2 {
+    grid-column: span 1;
+  }
+}
+
+@media (max-width: 768px) {
+  .emp-form-row-4,
+  .emp-form-row-3 {
+    grid-template-columns: 1fr;
+  }
+  .emp-view-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .emp-btn-add-new {
+    width: 100%;
+    justify-content: center;
+  }
+  .emp-table-pagination-bar {
+    flex-direction: column;
+    gap: 12px;
+  }
+  .emp-form-footer {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .emp-form-footer .emp-btn {
+    flex: 1;
+    justify-content: center;
+    min-width: 80px;
+  }
+  .emp-main {
+    padding: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .emp-filter-btn {
+    font-size: 12px;
+    padding: 4px 10px;
+  }
+  .emp-btn {
+    font-size: 12px;
+    padding: 6px 14px;
+  }
+}
+
+/* Added globally via script for responsive sidebar */
+@media (max-width: 768px) {
+  .emp-shell { margin-left: 240px; } /* matches sidebar.css */
+}
+@media (max-width: 480px) {
+  .emp-shell { margin-left: 70px; } /* matches sidebar.css */
+}

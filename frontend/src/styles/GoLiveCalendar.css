@@ -1,0 +1,552 @@
+/* =====================================================
+   GoLiveCalendar.css  –  Modal Popup Styles
+   ===================================================== */
+
+/* Overlay backdrop */
+.glm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(3px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  animation: glm-fade-in 0.2s ease;
+}
+
+@keyframes glm-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* Modal container */
+.glm-modal {
+  background: #ffffff;
+  border-radius: 14px;
+  width: 100%;
+  max-width: 800px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 25px 60px rgba(15, 23, 42, 0.25), 0 8px 24px rgba(15, 23, 42, 0.12);
+  animation: glm-slide-up 0.25s ease;
+  overflow: hidden;
+}
+
+@keyframes glm-slide-up {
+  from { transform: translateY(20px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+/* ── Header ── */
+.glm-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 22px 24px 16px;
+  border-bottom: 1px solid #e2e8f0;
+  flex-shrink: 0;
+}
+
+.glm-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0 0 4px;
+}
+
+.glm-subtitle {
+  font-size: 13px;
+  color: #64748b;
+  margin: 0;
+  max-width: 520px;
+}
+
+.glm-close-btn {
+  background: none;
+  border: none;
+  color: #64748b;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+  transition: background 0.15s;
+  flex-shrink: 0;
+}
+
+.glm-close-btn:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+/* ── Step Indicator ── */
+.glm-steps {
+  display: flex;
+  align-items: center;
+  padding: 14px 24px;
+  gap: 8px;
+  background: #ffffff;
+  border-bottom: 1px solid #e2e8f0;
+  flex-shrink: 0;
+}
+
+.glm-step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #94a3b8;
+  transition: color 0.2s;
+}
+
+.glm-step.active { color: #1d4ed8; }
+.glm-step.done   { color: #16a34a; }
+
+.glm-step-num {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: #64748b;
+  transition: all 0.2s;
+}
+
+.glm-step.active .glm-step-num {
+  background: #1d4ed8;
+  color: white;
+}
+
+.glm-step.done .glm-step-num {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
+.glm-step-line {
+  flex: 1;
+  height: 2px;
+  background: #e2e8f0;
+  border-radius: 2px;
+  max-width: 60px;
+}
+
+/* ── Body (scrollable) ── */
+.glm-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background-color: #ffffff;
+}
+
+/* Section labels */
+.glm-section-label {
+  font-size: 14px;
+  font-weight: 700;
+  color: #1d4ed8;
+  margin: 0;
+}
+
+.glm-section-hint {
+  font-size: 12px;
+  color: #64748b;
+  margin: 2px 0 0;
+}
+
+/* ── Option Cards ── */
+.glm-option-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 14px 16px;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+  background: #fafafa;
+}
+
+.glm-option-card:hover { border-color: #93c5fd; background: #f0f6ff; }
+.glm-option-card.selected { border-color: #1d4ed8; background: #eff6ff; }
+
+.glm-option-card strong {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  color: #0f172a;
+  margin-bottom: 3px;
+}
+
+.glm-option-card p {
+  margin: 0;
+  font-size: 12px;
+  color: #64748b;
+  line-height: 1.5;
+}
+
+.glm-radio {
+  width: 16px;
+  height: 16px;
+  accent-color: #1d4ed8;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+/* ── Sub-cards (Company / Plant / External) ── */
+.glm-sub-cards {
+  margin-left: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.glm-sub-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 10px 14px;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+  background: #fff;
+}
+
+.glm-sub-card:hover    { border-color: #93c5fd; background: #f0f6ff; }
+.glm-sub-card.selected { border-color: #1d4ed8; background: #eff6ff; }
+
+.glm-radio-sm,
+.glm-checkbox-sm {
+  width: 14px;
+  height: 14px;
+  accent-color: #1d4ed8;
+  cursor: pointer;
+}
+
+.glm-sub-icon { color: #475569; flex-shrink: 0; }
+
+.glm-sub-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.glm-sub-desc {
+  font-size: 11px;
+  color: #64748b;
+}
+
+.glm-info-note {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #1d4ed8;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 6px;
+  padding: 8px 12px;
+}
+
+/* ── Checkbox grid (Consider Only) ── */
+.glm-chk-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  background: #ffffff;
+  border: 1.5px solid #93c5fd;
+  border-radius: 10px;
+  padding: 16px 20px;
+}
+
+.glm-chk-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.glm-chk-master {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #0f172a;
+  cursor: pointer;
+}
+
+.glm-chk-master input[type="checkbox"],
+.glm-chk-sub input[type="checkbox"] {
+  accent-color: #1d4ed8;
+  cursor: pointer;
+}
+
+.glm-chk-master input[type="checkbox"] { width: 16px; height: 16px; }
+
+.glm-chk-subs {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-left: 24px;
+  transition: opacity 0.2s;
+}
+
+.glm-chk-subs.disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.glm-chk-sub {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  color: #475569;
+  cursor: pointer;
+}
+
+.glm-chk-sub input[type="checkbox"] { width: 14px; height: 14px; }
+
+/* ── Preview Table ── */
+.glm-preview-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.glm-preview-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 12px;
+  border-radius: 6px;
+  width: fit-content;
+}
+
+.glm-preview-badge.success { background: #dcfce7; color: #16a34a; }
+
+.glm-preview-rules {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.glm-tag {
+  display: inline-block;
+  background: #e0e7ff;
+  color: #3730a3;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 12px;
+  border-radius: 20px;
+}
+
+/* Confirm note */
+.glm-confirm-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #b45309;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin-top: 10px;
+}
+
+/* ── Footer ── */
+.glm-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 24px;
+  border-top: 1px solid #e2e8f0;
+  background: #ffffff;
+  flex-shrink: 0;
+  gap: 10px;
+}
+
+.glm-btn-secondary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 16px;
+  background: white;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #334155;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.glm-btn-secondary:hover {
+  background: #f1f5f9;
+}
+
+.glm-btn-primary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 20px;
+  background: #2563eb;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  color: white;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.glm-btn-primary:hover    { background: #1d4ed8; }
+.glm-btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+
+/* Spinner */
+.glm-spin {
+  animation: glm-rotate 0.8s linear infinite;
+}
+
+@keyframes glm-rotate {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* =====================================================
+   Hierarchical Tree Table Styles
+   ===================================================== */
+.glm-preview-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  overflow: hidden;
+  background: white;
+}
+
+.glm-preview-table th {
+  background: #f1f5f9;
+  color: #475569;
+  font-weight: 600;
+  font-size: 12px;
+  padding: 12px 16px;
+  text-align: left;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+.glm-tree-row {
+  transition: background-color 0.2s;
+  background-color: #ffffff;
+}
+
+.glm-tree-row:last-child td {
+  border-bottom: none;
+}
+
+.glm-tree-row:hover {
+  background-color: #f8fafc;
+}
+
+.glm-tree-row td {
+  font-weight: 500;
+  color: #334155;
+  padding: 12px 16px;
+  border-bottom: 1px solid #f1f5f9;
+  vertical-align: middle;
+}
+
+/* Highlighted Column */
+.glm-highlight-cell {
+  background-color: #f0f9ff;
+  color: #0369a1 !important;
+  font-weight: 700 !important;
+}
+
+/* Indentation & Tree Structure */
+.glm-tree-name {
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+}
+
+.glm-tree-indent {
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.glm-tree-toggle {
+  background: none;
+  border: none;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  color: #64748b;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.glm-tree-toggle:hover {
+  background-color: #e2e8f0;
+  color: #0f172a;
+}
+
+.glm-tree-toggle-placeholder {
+  width: 20px;
+  height: 20px;
+  display: inline-block;
+}
+
+/* Badges for Project(P), Milestone(M), Task(T) */
+.glm-type-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  color: white;
+  flex-shrink: 0;
+}
+
+.glm-type-p { background-color: #3b82f6; } /* Project - Blue */
+.glm-type-m { background-color: #8b5cf6; } /* Milestone - Purple */
+.glm-type-t { background-color: #10b981; } /* Task - Green */
+
+/* Bold parent rows */
+.glm-tree-row.level-0 td { font-weight: 600; }
+.glm-tree-row.level-0 { background-color: #fafaf9; }
+
+.glm-entity-code {
+  font-weight: 700;
+}
+
+.glm-entity-sep {
+  color: #94a3b8;
+}
+
+.glm-entity-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}

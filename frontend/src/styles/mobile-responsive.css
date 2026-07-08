@@ -1,0 +1,412 @@
+/* ============================================================
+   BIONOVA – Global Mobile Responsive Styles
+   Fixes: sidebar stuck, page content layout, all pages
+   ============================================================ */
+
+/* ───────────────────────────────────────────────
+   DESKTOP ONLY (≥ 1025px)
+─────────────────────────────────────────────── */
+@media screen and (min-width: 1025px) {
+  .mobile-menu-btn {
+    display: none !important;
+  }
+  .sidebar-overlay {
+    display: none !important;
+  }
+}
+
+/* ───────────────────────────────────────────────
+   TABLET + MOBILE (≤ 1024px)
+─────────────────────────────────────────────── */
+@media screen and (max-width: 1024px) {
+
+  /* ─── SIDEBAR: Hidden off-screen by default ─── */
+  .sidebar {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    height: 100vh !important;
+    width: 270px !important;           /* Full panel width always */
+    padding: 22px 16px !important;
+    transform: translateX(-100%) !important;
+    transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    z-index: 1100 !important;
+    display: flex !important;
+    box-shadow: none !important;
+    border-right: none !important;
+    /* Remove collapsed width override */
+    overflow-y: auto !important;
+  }
+
+  /* ─── SIDEBAR: Slide IN when mobile-open ─── */
+  .sidebar.mobile-open {
+    transform: translateX(0) !important;
+    box-shadow: 8px 0 32px rgba(0, 0, 0, 0.18) !important;
+  }
+
+  /* Always show text labels when sidebar is open on mobile */
+  .sidebar.mobile-open .company-text,
+  .sidebar.mobile-open .menu-list li span,
+  .sidebar.mobile-open .dropdown-header span,
+  .sidebar.mobile-open .dropdown-header svg:last-child,
+  .sidebar.mobile-open .logout-button span {
+    display: flex !important;
+  }
+
+  .sidebar.mobile-open .menu-list > li,
+  .sidebar.mobile-open .dropdown-header {
+    justify-content: flex-start !important;
+  }
+
+  .sidebar.mobile-open .logo-section {
+    justify-content: space-between !important;
+  }
+
+  .sidebar.mobile-open .submenu-list li {
+    padding-left: 50px !important;
+    text-align: left !important;
+  }
+
+  /* ─── SIDEBAR: Collapsed class has NO effect on mobile ─── */
+  body.sidebar-collapsed .sidebar {
+    width: 270px !important;
+    padding: 22px 16px !important;
+  }
+
+  /* Re-show all hidden text even if sidebar-collapsed class is on body */
+  .sidebar .menu-list li span,
+  .sidebar .dropdown-header span,
+  .sidebar .dropdown-header svg:last-child,
+  .sidebar .logout-button span,
+  .sidebar .bottom-logo-text-container {
+    display: flex !important;
+  }
+
+  /* ─── OVERLAY: Dark backdrop behind open sidebar ─── */
+  .sidebar-overlay {
+    position: fixed !important;
+    inset: 0 !important;
+    background: rgba(10, 20, 40, 0.52) !important;
+    backdrop-filter: blur(3px) !important;
+    -webkit-backdrop-filter: blur(3px) !important;
+    z-index: 1099 !important;
+    animation: overlayFadeIn 0.3s ease-out forwards;
+  }
+
+  @keyframes overlayFadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+
+  /* ─── MOBILE HAMBURGER BUTTON ─── */
+  .mobile-menu-btn {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    background: #f1f5f9 !important;
+    border: none !important;
+    border-radius: 8px !important;
+    padding: 8px !important;
+    cursor: pointer;
+    color: #334155 !important;
+    min-height: 40px !important;
+    min-width: 40px !important;
+    transition: background 0.2s;
+  }
+
+  .mobile-menu-btn:active {
+    background: #e2e8f0 !important;
+  }
+
+  /* ─── HIDE desktop-only header items ─── */
+  .header-desktop-items {
+    display: none !important;
+  }
+
+  /* ─── ALL PAGE SHELLS: reset left margin ─── */
+  .cc-shell,
+  .db-shell,
+  .db-shell-container .db-shell,
+  .dashboard-main,
+  .pf-shell,
+  .pjs-shell,
+  .ms-shell,
+  .calendar-layout,
+  .calendar-main,
+  .pc-shell,
+  .al-shell,
+  .proj-shell,
+  .tb-shell,
+  .emp-shell,
+  .dept-shell,
+  .dept-map-shell,
+  .ts-shell,
+  .task-shell,
+  .ud-shell {
+    margin-left: 0 !important;
+    width: 100% !important;
+    padding-bottom: 24px;
+  }
+
+  /* ─── Admin/DB shell sidebar hide via CSS ─── */
+  .db-shell-container > aside {
+    display: none !important;
+  }
+
+  /* ─── STICKY HEADER on mobile ─── */
+  header,
+  .top-header,
+  .ms-topbar,
+  .calendar-top-bar {
+    position: sticky !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    background: rgba(255, 255, 255, 0.95) !important;
+    backdrop-filter: blur(10px) !important;
+    -webkit-backdrop-filter: blur(10px) !important;
+    z-index: 50 !important;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06) !important;
+    padding: 10px 14px !important;
+  }
+
+  /* ─── FOOTER bars: full width ─── */
+  .cc-footer,
+  .pjs-footer,
+  .ms-footer {
+    left: 0 !important;
+    width: 100% !important;
+    padding: 12px 16px !important;
+    box-shadow: 0 -4px 15px rgba(0, 0, 0, 0.05) !important;
+  }
+
+  /* ─── MAIN CONTENT inner padding ─── */
+  .cc-main,
+  .dashboard-main,
+  .pf-main,
+  .pjs-main,
+  .ms-main,
+  .pc-main,
+  .al-main,
+  .proj-main,
+  .tb-main,
+  .emp-main,
+  .dept-main,
+  .dept-map-content,
+  .ts-main,
+  .task-main,
+  .db-main {
+    padding: 16px !important;
+  }
+
+  /* ─── GRID LAYOUTS: Stack to single column ─── */
+  .db-charts-grid,
+  .db-lists-grid,
+  .erp-kpi-grid,
+  .dashboard-grid,
+  .analytics-grid,
+  .upcoming-grid,
+  .cc-filter-row,
+  .pf-content,
+  .pjs-stats-grid,
+  .tb-metrics-grid {
+    grid-template-columns: 1fr !important;
+    gap: 16px !important;
+  }
+
+  /* ─── FORMS: Single column ─── */
+  .cc-form-layout-row.columns-2,
+  .cc-form-layout-row.columns-3,
+  .cc-form-layout-row.columns-4,
+  .form-row,
+  .pjs-form-row,
+  .ms-form-grid.two,
+  .ms-form-grid.three {
+    grid-template-columns: 1fr !important;
+    gap: 14px !important;
+  }
+
+  /* ─── PROFILE ─── */
+  .pf-info-layout {
+    flex-direction: column !important;
+    align-items: center;
+    gap: 24px !important;
+  }
+
+  .pf-details-list {
+    width: 100% !important;
+  }
+
+  .pf-detail-label {
+    width: 140px !important;
+    font-size: 13px !important;
+  }
+
+  /* ─── TOUCH TARGET SIZE ─── */
+  button,
+  input[type="submit"],
+  input[type="button"] {
+    min-height: 44px;
+  }
+
+  /* ─── PREMIUM TABLE → CARD TRANSFORMATION ─── */
+  .cc-table-container,
+  .table-container,
+  .pjs-table-wrap,
+  .ms-table-wrap {
+    border: none !important;
+    overflow-x: hidden !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+  }
+
+  .cc-list-table,
+  .custom-table,
+  .pjs-data-table,
+  .ms-task-table {
+    display: flex !important;
+    flex-direction: column;
+    gap: 14px;
+    width: 100%;
+    min-width: unset !important;
+  }
+
+  .cc-list-table thead,
+  .custom-table thead,
+  .pjs-data-table thead,
+  .ms-task-table thead {
+    display: none !important;
+  }
+
+  .cc-list-table tbody,
+  .custom-table tbody,
+  .pjs-data-table tbody,
+  .ms-task-table tbody {
+    display: contents;
+  }
+
+  .cc-list-table tr,
+  .custom-table tr,
+  .pjs-data-table tr,
+  .ms-task-table tr {
+    display: flex;
+    flex-direction: column;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+    padding: 14px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    transition: box-shadow 0.2s;
+  }
+
+  .cc-list-table tr:hover,
+  .custom-table tr:hover {
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  }
+
+  .cc-list-table td,
+  .custom-table td,
+  .pjs-data-table td,
+  .ms-task-table td {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 9px 0;
+    border-bottom: 1px solid #f1f5f9;
+    text-align: right;
+    width: 100%;
+    word-break: break-word;
+    white-space: normal !important;
+    font-size: 14px;
+    color: #0f172a;
+  }
+
+  .cc-list-table td:last-child,
+  .custom-table td:last-child,
+  .pjs-data-table td:last-child {
+    border-bottom: none;
+    justify-content: center;
+    padding-top: 14px;
+    margin-top: 6px;
+    border-top: 1px dashed #e2e8f0;
+  }
+
+  .cc-list-table td::before,
+  .custom-table td::before,
+  .pjs-data-table td::before,
+  .ms-task-table td::before {
+    content: attr(data-label);
+    font-weight: 600;
+    font-size: 12px;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    text-align: left;
+    margin-right: 12px;
+    min-width: 90px;
+    flex-shrink: 0;
+  }
+
+  /* ─── FILTER ROW ─── */
+  .cc-filter-buttons-row {
+    width: 100%;
+    justify-content: flex-start;
+    flex-direction: column;
+    margin-top: 14px;
+    gap: 10px;
+  }
+
+  .cc-filter-btn {
+    width: 100%;
+    justify-content: center;
+    border-radius: 10px;
+  }
+
+  /* ─── WELCOME TOAST POSITION ─── */
+  .db-shell-container .erp-welcome-toast {
+    top: 70px;
+    right: 12px;
+    left: 12px;
+    min-width: auto;
+  }
+}
+
+/* ───────────────────────────────────────────────
+   SMALL MOBILE (≤ 640px)
+─────────────────────────────────────────────── */
+@media screen and (max-width: 640px) {
+
+  .erp-kpi-grid,
+  .db-charts-grid,
+  .db-lists-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .welcome-section {
+    flex-direction: column !important;
+    text-align: center;
+    gap: 14px;
+    padding: 18px !important;
+  }
+
+  .todo-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .todo-badges {
+    margin-left: 28px;
+  }
+
+  header h1,
+  .top-header h1 {
+    font-size: 16px !important;
+  }
+
+  .cc-form-layout-row,
+  .form-row {
+    grid-template-columns: 1fr !important;
+  }
+}

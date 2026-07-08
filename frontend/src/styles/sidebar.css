@@ -1,0 +1,456 @@
+.sidebar {
+    width: 260px;
+    height: 100vh;
+    background: linear-gradient(180deg, #02153f 0%, #002a7a 100%);
+    color: #fff;
+    display: flex;
+    flex-direction: column;
+    padding: 22px 16px;
+    position: fixed;
+    left: 0;
+    top: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    z-index: 1000;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ========== Logo Section ========== */
+.logo-section {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 35px;
+    padding: 0 4px;
+    width: 100%;
+}
+
+.logo-details {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.sidebar-collapse-btn {
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.7);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px;
+    border-radius: 50%;
+    transition: all 0.2s ease;
+}
+
+.sidebar-collapse-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #ffffff;
+}
+
+/* Mobile-only close (X) button inside sidebar */
+.sidebar-mobile-close-btn {
+    display: none; /* Hidden on desktop */
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    color: rgba(255, 255, 255, 0.85);
+    cursor: pointer;
+    align-items: center;
+    justify-content: center;
+    padding: 6px;
+    border-radius: 50%;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+}
+
+.sidebar-mobile-close-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+    color: #ffffff;
+}
+
+@media (max-width: 1024px) {
+    .sidebar-mobile-close-btn {
+        display: flex !important;
+    }
+}
+
+.company-logo {
+    width: 48px;
+    height: 48px;
+    object-fit: contain;
+    flex-shrink: 0;
+}
+
+.company-text {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.3;
+}
+
+.company-text h3 {
+    margin: 0;
+    color: #ffffff;
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+}
+
+.company-text span {
+    margin-top: 2px;
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    word-break: break-word;
+}
+
+/* ========== Menu Styles ========== */
+.menu-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    flex: 1;
+}
+
+.menu-list > li {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 18px;
+    margin-bottom: 8px;
+    border-radius: 12px;
+    cursor: pointer;
+    font-size: 15px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    color: rgba(255, 255, 255, 0.85);
+}
+
+.menu-list > li:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #ffffff;
+}
+
+.menu-list > li.active,
+.menu-list > li.active-single {
+    background: linear-gradient(135deg, #1677ff, #4285f4) !important;
+    color: #ffffff !important;
+    box-shadow: 0px 4px 12px rgba(22, 119, 255, 0.3) !important;
+}
+
+/* ========== DROPDOWN MENU ALIGNMENT FIXES ========== */
+.menu-list li.dropdown-container {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+.menu-list li.dropdown-container:hover {
+    background: transparent !important;
+}
+
+.dropdown-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 18px;
+    border-radius: 12px;
+    transition: all 0.2s ease;
+}
+
+.dropdown-header:hover {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.dropdown-container.active-dropdown .dropdown-header {
+    background: linear-gradient(135deg, #1677ff, #4285f4);
+    color: #ffffff;
+    box-shadow: 0px 4px 12px rgba(22, 119, 255, 0.3);
+}
+
+.submenu-list {
+    list-style: none;
+    padding: 6px 0 0 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.submenu-list li {
+    padding: 8px 12px 8px 46px !important; /* Adjusted for better text wrapping */
+    margin: 0;
+    border-radius: 10px;
+    font-size: 13px; /* Slightly smaller font to fit better */
+    line-height: 1.4;
+    display: flex;
+    align-items: center;
+    color: rgba(255, 255, 255, 0.7);
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+.submenu-list li:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #ffffff;
+}
+
+.submenu-list li.submenu-active {
+    color: #4facfe;
+    font-weight: 600;
+    background: rgba(255, 255, 255, 0.05);
+}
+
+/* ========== Logout Button ========== */
+.logout-button {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 18px;
+    margin: 16px 4px;
+    border-radius: 8px;
+    color: #ff6b6b;
+    cursor: pointer;
+    transition: all 0.3s;
+    font-weight: 500;
+}
+
+.logout-button:hover {
+    background: rgba(255, 107, 107, 0.1);
+}
+
+/* Scrollbar */
+.sidebar::-webkit-scrollbar { width: 4px; }
+.sidebar::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.05); }
+.sidebar::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); border-radius: 4px; }
+
+/* ── Mobile: sidebar-collapse-btn hidden on mobile (hamburger used instead) ── */
+@media (max-width: 1024px) {
+    .sidebar-collapse-btn { display: none !important; }
+}
+
+/* ========== Department Mapping Shell Alignment ========== */
+.dept-map-shell {
+    margin-left: 260px;
+}
+
+/* ========== COLLAPSED SIDEBAR SUPPORT ========== */
+@media screen and (min-width: 1025px) {
+    /* Slim sidebar when collapsed */
+    body.sidebar-collapsed .sidebar {
+        width: 76px !important;
+        padding: 22px 8px !important;
+    }
+
+    body.sidebar-collapsed .sidebar .company-text {
+        display: none !important;
+    }
+
+    body.sidebar-collapsed .sidebar .logo-section {
+        justify-content: center !important;
+        padding: 0 !important;
+    }
+
+    body.sidebar-collapsed .sidebar .logo-details {
+        justify-content: center !important;
+    }
+
+    /* Hide text labels and chevrons in slim sidebar */
+    body.sidebar-collapsed .sidebar .menu-list li span,
+    body.sidebar-collapsed .sidebar .dropdown-header span,
+    body.sidebar-collapsed .sidebar .dropdown-header svg:last-child,
+    body.sidebar-collapsed .sidebar .logout-button span {
+        display: none !important;
+    }
+
+    /* Hide submenus in collapsed mode */
+    body.sidebar-collapsed .sidebar .submenu-list {
+        display: none !important;
+    }
+
+    /* Center icons inside the slim sidebar list items */
+    body.sidebar-collapsed .sidebar .menu-list > li,
+    body.sidebar-collapsed .sidebar .dropdown-header,
+    body.sidebar-collapsed .sidebar .logout-button {
+        justify-content: center !important;
+        padding: 14px 0 !important;
+    }
+
+    /* Transition effect for all shells */
+    .cc-shell, 
+    .db-shell, 
+    .dashboard-shell, 
+    .pf-shell, 
+    .projects-shell, 
+    .ms-shell, 
+    .mc-shell,
+    .calendar-layout, 
+    .calendar-main, 
+    .pc-shell, 
+    .proj-shell,
+    .al-shell, 
+    .tb-shell, 
+    .emp-shell, 
+    .dm-shell, 
+    .dept-shell, 
+    .dept-map-shell,
+    .ts-shell, 
+    .task-shell,
+    .pm-shell {
+        transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    /* Adjust page shells margin to match slim sidebar */
+    body.sidebar-collapsed .cc-shell,
+    body.sidebar-collapsed .db-shell,
+    body.sidebar-collapsed .dashboard-shell,
+    body.sidebar-collapsed .pf-shell,
+    body.sidebar-collapsed .projects-shell,
+    body.sidebar-collapsed .ms-shell,
+    body.sidebar-collapsed .mc-shell,
+    body.sidebar-collapsed .calendar-layout,
+    body.sidebar-collapsed .calendar-main,
+    body.sidebar-collapsed .pc-shell,
+    body.sidebar-collapsed .proj-shell,
+    body.sidebar-collapsed .al-shell,
+    body.sidebar-collapsed .tb-shell,
+    body.sidebar-collapsed .emp-shell,
+    body.sidebar-collapsed .dm-shell,
+    body.sidebar-collapsed .dept-shell,
+    body.sidebar-collapsed .dept-map-shell,
+    body.sidebar-collapsed .ts-shell,
+    body.sidebar-collapsed .task-shell,
+    body.sidebar-collapsed .pm-shell {
+        margin-left: 76px !important;
+        width: calc(100% - 76px) !important;
+    }
+    
+    /* Expand content inner wrappers to full screen (override max-width) */
+    body.sidebar-collapsed .cc-content,
+    body.sidebar-collapsed .pc-content,
+    body.sidebar-collapsed .al-content,
+    body.sidebar-collapsed .proj-content,
+    body.sidebar-collapsed .emp-content,
+    body.sidebar-collapsed .dept-content,
+    body.sidebar-collapsed .dept-map-content,
+    body.sidebar-collapsed .mc-content {
+        max-width: none !important;
+        width: 100% !important;
+    }
+    
+    /* Header & other top bars adjustments */
+    body.sidebar-collapsed header {
+        left: 76px !important;
+        width: calc(100% - 76px) !important;
+        padding-left: 28px !important;
+        transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    body.sidebar-collapsed .top-header,
+    body.sidebar-collapsed .ms-topbar,
+    body.sidebar-collapsed .calendar-top-bar {
+        left: 76px !important;
+        width: calc(100% - 76px) !important;
+        padding-left: 28px !important;
+        transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1), padding-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+}
+/* ChatGPT Style Custom Tooltip & Hover Swap */
+.chatgpt-style-btn {
+    position: relative;
+    border-radius: 8px;
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+.chatgpt-style-btn .chatgpt-btn-logo {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #ffffff;
+    border-radius: 8px;
+    width: 36px;
+    height: 36px;
+    padding: 4px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    transition: opacity 0.2s ease;
+}
+.chatgpt-style-btn .chatgpt-btn-logo img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    transform: scale(1.2);
+}
+.chatgpt-style-btn .chatgpt-btn-icon {
+    position: absolute;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    color: rgba(255, 255, 255, 0.7);
+}
+.chatgpt-style-btn:hover .chatgpt-btn-logo {
+    opacity: 0;
+}
+.chatgpt-style-btn:hover .chatgpt-btn-icon {
+    opacity: 1;
+    color: #ffffff;
+}
+.chatgpt-style-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+.chatgpt-style-btn::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    left: 100%;
+    top: 50%;
+    transform: translateY(-50%) translateX(8px);
+    background: #000000;
+    color: #ffffff;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    white-space: nowrap;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    pointer-events: none;
+    z-index: 9999;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}
+.chatgpt-style-btn:hover::after {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(-50%) translateX(14px);
+}
+
+/* ========== Header Layout (Responsive) ========== */
+.main-header {
+    left: 260px;
+    width: calc(100% - 260px);
+    z-index: 100;
+    transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+body.sidebar-collapsed .main-header {
+    left: 76px !important;
+    width: calc(100% - 76px) !important;
+}
+
+@media (max-width: 1024px) {
+    .main-header {
+        left: 0 !important;
+        width: 100% !important;
+        padding-left: 50px !important; /* To prevent overlapping with mobile menu icon if needed */
+    }
+}
