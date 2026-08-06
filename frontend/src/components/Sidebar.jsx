@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { House, Building, Flag, Users, Calendar, Settings, Factory, MapPinned, FolderPlus, ChevronDown, ChevronRight, ChevronLeft, LogOut, ClipboardCheck, User, X, PanelLeftOpen, PanelLeftClose, FileText } from "lucide-react";
+import { House, Building, Flag, Users, Calendar, Settings, Factory, MapPinned, FolderPlus, ChevronDown, ChevronRight, ChevronLeft, LogOut, ClipboardCheck, User, X, PanelLeftOpen, PanelLeftClose, FileText, Briefcase, Lock } from "lucide-react";
 import "../styles/sidebar.css";
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL;
@@ -20,10 +20,13 @@ const Sidebar = ({ onLogout }) => {
   const [isCollapsed, setIsCollapsed] = useState(
     localStorage.getItem("sidebarCollapsed") === "true"
   );
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   const [menuItems, setMenuItems] = useState([]);
   const [singleItems, setSingleItems] = useState([]);
   const [openDropdowns, setOpenDropdowns] = useState({});
+  const [hasNoAccess, setHasNoAccess] = useState(false);
+  const [isRouteForbidden, setIsRouteForbidden] = useState(false);
 
   useEffect(() => {
     const loadSidebarMenu = async () => {
@@ -31,6 +34,9 @@ const Sidebar = ({ onLogout }) => {
       if (!empId) return;
 
       try {
+        const userRole = (sessionStorage.getItem("userRole") || localStorage.getItem("userRole") || "").toLowerCase();
+        const isAdmin = userRole === "admin" || userRole === "super_admin";
+
         const hasRbacRes = await fetch(`${apiBaseUrl}/api/rbac/employees/${empId}/has-rbac`, {
           headers: getAuthHeaders()
         });
@@ -45,9 +51,30 @@ const Sidebar = ({ onLogout }) => {
         });
         if (permsRes.ok) {
           const permissions = await permsRes.json();
+          sessionStorage.setItem("userPermissions", JSON.stringify(permissions));
 
-          // Filter screens (if hasRbac is false, show all screens)
-          const allowedScreens = permissions.filter(p => !hasRbac || p.viewFlg);
+          // If user is Admin, show all screens.
+          // If user is non-Admin and hasRbac is true, filter by viewFlg.
+          // If user is non-Admin and hasRbac is false (unassigned), give ZERO access!
+          let allowedScreens = [];
+          if (isAdmin) {
+            allowedScreens = permissions;
+          } else if (hasRbac) {
+            allowedScreens = permissions.filter(p => p.viewFlg);
+          } else {
+            allowedScreens = [];
+          }
+
+          // If non-Admin user has no allowed screens -> ZERO ACCESS!
+          if (!isAdmin && allowedScreens.length === 0) {
+            setHasNoAccess(true);
+            setIsRouteForbidden(false);
+            setMenuItems([]);
+            setSingleItems([]);
+            return;
+          }
+
+          setHasNoAccess(false);
 
           // SCREEN_MAPPING with optional displayName override
           const SCREEN_MAPPING = {
@@ -57,12 +84,13 @@ const Sidebar = ({ onLogout }) => {
             'LAND_CREATION': { path: '/agriland-allocation', icon: MapPinned },
             'DEPARTMENT_CREATION': { path: '/department-creation', icon: Settings },
             'DEPARTMENT_MAPPING': { path: '/department-mapping', icon: Settings },
+            'DESIGNATION_CREATION': { path: '/designation-creation', icon: Briefcase },
             'EMPLOYEE_CREATION': { path: '/employee-creation', icon: User },
 
             'PROJECT_CREATION': { path: '/project-creation', icon: FolderPlus },
             'MILESTONE_CREATION': { path: '/milestone-creation', icon: FolderPlus },
             'PROJECT_DASHBOARD': { path: '/pm-dashboard', icon: FolderPlus },
-            'LIVE_PROJECT_LIST': { path: '/project-list', icon: FolderPlus },
+
             'TASK_BOARD': { path: '/task-board', icon: FolderPlus },
             'GANTT_CHART': { path: '/all-project-gantt-chart', icon: FolderPlus },
             'ALL_PROJECT_GANTT_CHART': { path: '/all-project-gantt-chart', icon: FolderPlus },
@@ -72,7 +100,7 @@ const Sidebar = ({ onLogout }) => {
             'MY_TASK': { path: '/my-tasks', icon: ClipboardCheck },
             'MY_PROJECTS': { path: '/projects', icon: FolderPlus },
             'CALENDAR': { path: '/calendar', icon: Calendar },
-            'USER_TASK_BOARD': { path: '/user-task-board', icon: ClipboardCheck },
+            'USER_TASK_BOARD': { path: '/user-task-board', icon: ClipboardCheck, displayName: "Task Board" },
 
             'PUBLIC_HOLIDAYS': { path: '/public-holidays', icon: Calendar },
             'PROFILE': { path: '/profile', icon: User },
@@ -82,6 +110,25 @@ const Sidebar = ({ onLogout }) => {
             'ASSIGN_ACCESS': { path: '/assign-access', icon: ClipboardCheck },
             'PROJECT_ACCESS': { path: '/project-access', icon: FolderPlus }
           };
+
+          // Check if current route is allowed
+          if (!isAdmin) {
+            const allowedPaths = new Set();
+            allowedScreens.forEach(s => {
+              const mapped = SCREEN_MAPPING[s.screenCode];
+              if (mapped) allowedPaths.add(mapped.path);
+            });
+            allowedPaths.add('/profile');
+
+            const currentPath = location.pathname;
+            if (!allowedPaths.has(currentPath) && currentPath !== '/') {
+              setIsRouteForbidden(true);
+            } else {
+              setIsRouteForbidden(false);
+            }
+          } else {
+            setIsRouteForbidden(false);
+          }
 
           // Group screens
           const groups = {};
@@ -129,7 +176,6 @@ const Sidebar = ({ onLogout }) => {
             'PROJECT_DASHBOARD',
             'PROJECT_CREATION',
             'MILESTONE_CREATION',
-            'LIVE_PROJECT_LIST',
             'TASK_BOARD',
             'GANTT_CHART',
             'ALL_PROJECT_GANTT_CHART',
@@ -315,49 +361,87 @@ const Sidebar = ({ onLogout }) => {
         </div>
 
         <ul className="menu-list">
-          {menuItems.map((item) => (
-            <li
-              key={item.key}
-              className={`dropdown-container ${(item.isActive || openDropdowns[item.key]) ? "active-dropdown" : ""}`}
-            >
-              <div
-                className="dropdown-header"
-                onClick={() => toggleDropdown(item.key)}
-              >
-                <div className="d-flex align-items-center gap-2">
-                  <item.icon size={20} /> <span className="m-0">{item.name}</span>
-                </div>
-                {openDropdowns[item.key] ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+          {hasNoAccess ? (
+            <li style={{
+              padding: "20px 12px",
+              textAlign: "center",
+              backgroundColor: "rgba(239, 68, 68, 0.15)",
+              borderRadius: "12px",
+              border: "1px solid rgba(239, 68, 68, 0.3)",
+              margin: "12px 6px"
+            }}>
+              <div style={{
+                width: "42px",
+                height: "42px",
+                borderRadius: "50%",
+                backgroundColor: "#ef4444",
+                color: "white",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                margin: "0 auto 10px auto",
+                fontWeight: "700"
+              }}>
+                <Lock size={22} />
               </div>
-
-              {!isCollapsed && openDropdowns[item.key] && (
-                <ul className="submenu-list">
-                  {item.subItems.map((sub, sIdx) => (
-                    <li
-                      key={sIdx}
-                      onClick={() => handleNavigate(sub.path)}
-                      className={location.pathname === sub.path ? "submenu-active" : ""}
-                    >
-                      {sub.name}
-                    </li>
-                  ))}
-                </ul>
+              {!isCollapsed && (
+                <>
+                  <div style={{ fontSize: "14px", fontWeight: "700", color: "#ffffff", marginBottom: "4px" }}>
+                    Access Denied
+                  </div>
+                  <div style={{ fontSize: "11px", color: "rgba(255, 255, 255, 0.75)", lineHeight: "1.4" }}>
+                    No screen permissions assigned to your account
+                  </div>
+                </>
               )}
             </li>
-          ))}
+          ) : (
+            <>
+              {menuItems.map((item) => (
+                <li
+                  key={item.key}
+                  className={`dropdown-container ${(item.isActive || openDropdowns[item.key]) ? "active-dropdown" : ""}`}
+                >
+                  <div
+                    className="dropdown-header"
+                    onClick={() => toggleDropdown(item.key)}
+                  >
+                    <div className="d-flex align-items-center gap-2">
+                      <item.icon size={20} /> <span className="m-0">{item.name}</span>
+                    </div>
+                    {openDropdowns[item.key] ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+                  </div>
 
-          {singleItems.map((m, i) => (
-            <li
-              key={i}
-              onClick={() => handleNavigate(m.path)}
-              className={location.pathname === m.path ? "active-single" : ""}
-            >
-              <m.icon size={20} /> <span>{m.name}</span>
-            </li>
-          ))}
+                  {!isCollapsed && openDropdowns[item.key] && (
+                    <ul className="submenu-list">
+                      {item.subItems.map((sub, sIdx) => (
+                        <li
+                          key={sIdx}
+                          onClick={() => handleNavigate(sub.path)}
+                          className={location.pathname === sub.path ? "submenu-active" : ""}
+                        >
+                          {sub.name}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </li>
+              ))}
+
+              {singleItems.map((m, i) => (
+                <li
+                  key={i}
+                  onClick={() => handleNavigate(m.path)}
+                  className={location.pathname === m.path ? "active-single" : ""}
+                >
+                  <m.icon size={20} /> <span>{m.name}</span>
+                </li>
+              ))}
+            </>
+          )}
         </ul>
 
-        <div className="logout-button" onClick={() => { onLogout(); closeMobileSidebar(); }}>
+        <div className="logout-button" onClick={() => setShowLogoutConfirm(true)}>
           <LogOut size={20} /> <span>Logout</span>
         </div>
 
@@ -396,6 +480,173 @@ const Sidebar = ({ onLogout }) => {
           )}
         </div>
       </div>
+
+      {/* Access Denied / Access Ledu Full Page Screen */}
+      {(hasNoAccess || isRouteForbidden) && (
+        <div style={{
+          position: "fixed",
+          top: 0,
+          right: 0,
+          bottom: 0,
+          left: isCollapsed ? "80px" : "260px",
+          backgroundColor: "#F8FAFC",
+          zIndex: 999999,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "40px",
+          textAlign: "center",
+          transition: "left 0.3s ease",
+          boxSizing: "border-box"
+        }}>
+          <div style={{
+            width: "90px",
+            height: "90px",
+            borderRadius: "50%",
+            backgroundColor: "#FEE2E2",
+            color: "#EF4444",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: "40px",
+            marginBottom: "24px",
+            boxShadow: "0 10px 15px -3px rgba(239, 68, 68, 0.2)",
+            border: "2px solid #FCA5A5"
+          }}>
+            <Lock size={44} />
+          </div>
+          <h2 style={{ fontSize: "28px", fontWeight: "800", color: "#0F172A", marginBottom: "12px", letterSpacing: "-0.5px" }}>
+            Access Denied
+          </h2>
+          <p style={{ fontSize: "16px", color: "#64748B", maxWidth: "520px", lineHeight: "1.6", marginBottom: "32px" }}>
+            {hasNoAccess 
+              ? "You do not have access permission to any screens in the system. Please contact your Administrator or Project Manager to assign screen access permissions." 
+              : "You do not have permission to view this specific screen. Please contact your Administrator or Project Manager to request access."}
+          </p>
+          <button 
+            onClick={() => setShowLogoutConfirm(true)}
+            style={{
+              backgroundColor: "#EF4444",
+              color: "white",
+              border: "none",
+              padding: "12px 30px",
+              borderRadius: "10px",
+              fontWeight: "700",
+              fontSize: "15px",
+              cursor: "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "10px",
+              boxShadow: "0 4px 12px rgba(239, 68, 68, 0.35)",
+              transition: "all 0.2s ease"
+            }}
+          >
+            <LogOut size={18} /> Logout Account
+          </button>
+        </div>
+      )}
+
+      {/* Logout Confirmation Alert Popup Modal */}
+      {showLogoutConfirm && (
+        <div style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          width: "100vw",
+          height: "100vh",
+          backgroundColor: "rgba(15, 23, 42, 0.6)",
+          backdropFilter: "blur(4px)",
+          zIndex: 9999999,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "20px"
+        }}>
+          <div style={{
+            backgroundColor: "#ffffff",
+            borderRadius: "16px",
+            padding: "28px 24px",
+            maxWidth: "380px",
+            width: "100%",
+            boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
+            textAlign: "center",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: "16px",
+            animation: "fadeIn 0.2s ease-out"
+          }}>
+            <div style={{
+              width: "56px",
+              height: "56px",
+              borderRadius: "50%",
+              backgroundColor: "#fee2e2",
+              color: "#ef4444",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center"
+            }}>
+              <LogOut size={26} />
+            </div>
+
+            <div>
+              <h3 style={{ fontSize: "18px", fontWeight: "700", color: "#0f172a", margin: "0 0 8px 0" }}>
+                Confirm Logout
+              </h3>
+              <p style={{ fontSize: "14px", color: "#64748b", margin: 0, lineHeight: "1.5" }}>
+                Are you sure you want to log out? You will need to log in again to access your account.
+              </p>
+            </div>
+
+            <div style={{ display: "flex", gap: "12px", width: "100%", marginTop: "8px" }}>
+              <button
+                onClick={() => setShowLogoutConfirm(false)}
+                style={{
+                  flex: 1,
+                  padding: "10px 16px",
+                  borderRadius: "8px",
+                  border: "1px solid #cbd5e1",
+                  backgroundColor: "#ffffff",
+                  color: "#475569",
+                  fontWeight: "600",
+                  fontSize: "14px",
+                  cursor: "pointer",
+                  transition: "all 0.15s ease"
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#f8fafc"}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "#ffffff"}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  setShowLogoutConfirm(false);
+                  if (onLogout) onLogout();
+                  closeMobileSidebar();
+                }}
+                style={{
+                  flex: 1,
+                  padding: "10px 16px",
+                  borderRadius: "8px",
+                  border: "none",
+                  backgroundColor: "#ef4444",
+                  color: "#ffffff",
+                  fontWeight: "600",
+                  fontSize: "14px",
+                  cursor: "pointer",
+                  boxShadow: "0 4px 12px rgba(239, 68, 68, 0.25)",
+                  transition: "all 0.15s ease"
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#dc2626"}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "#ef4444"}
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 };

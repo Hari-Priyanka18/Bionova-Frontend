@@ -1096,3 +1096,21 @@ input:checked + .cc-slider:before { transform: translateX(16px); }
 @media (max-width: 480px) {
   .cm-shell { margin-left: 70px; } /* matches sidebar.css */
 }
+
+.spinning {
+  animation: spin 1.2s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.cc-overview-card {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.cc-overview-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
+}

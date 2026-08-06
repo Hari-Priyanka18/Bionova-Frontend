@@ -1,7 +1,8 @@
 .gantt-page {
   font-family: 'Inter', sans-serif;
   background-color: #f8fafc;
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
 }
@@ -12,7 +13,7 @@
   display: flex;
   flex-direction: column;
   height: 100vh;
-  overflow-y: auto;
+  overflow-y: hidden;
   overflow-x: hidden;
   transition: margin-left 0.3s ease;
 }
@@ -25,6 +26,9 @@ body.sidebar-collapsed .gc-shell {
 .gantt-main {
   padding: 24px;
   flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .gantt-header-row {

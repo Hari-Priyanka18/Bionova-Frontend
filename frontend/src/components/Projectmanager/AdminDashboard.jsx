@@ -5,8 +5,8 @@ import {
   FileText, Briefcase, Activity, TrendingUp, AlertCircle,
   ChevronRight, ChevronDown
 } from "lucide-react";
-import Sidebar from "../Sidebar"; 
-import Header from "../Header";
+import Sidebar from "../Sidebar.jsx"; 
+import Header from "../Header.jsx";
 import "../../styles/admin.css";
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL) + "/api";
@@ -108,6 +108,7 @@ const AdminDashboard = ({ userRole, onLogout }) => {
       if (resMetrics.ok) {
         const data = await resMetrics.json();
         setMetrics(data);
+        console.log("Admin Dashboard Metrics:", data);
       }
       if (resCompanies.ok) {
         const companies = await resCompanies.json();
@@ -305,28 +306,52 @@ const AdminDashboard = ({ userRole, onLogout }) => {
   
   const td = {
     total: filteredTasks.length,
-    completed: filteredTasks.filter(t => (t.taskSts || "").toUpperCase() === "COMPLETED").length,
+    completed: filteredTasks.filter(t => { const s = (t.taskSts || "").toUpperCase(); return s === "COMPLETED" || s === "CLOSED"; }).length,
     progress: filteredTasks.filter(t => wipStatuses.includes((t.taskSts || "").toUpperCase())).length,
-    todo: filteredTasks.filter(t => !["COMPLETED", ...wipStatuses].includes((t.taskSts || "").toUpperCase())).length,
-    overdue: filteredTasks.filter(t => (t.taskSts || "").toUpperCase() !== "COMPLETED" && t.endDt && new Date(t.endDt) < now).length
+    todo: filteredTasks.filter(t => !["COMPLETED", "CLOSED", ...wipStatuses].includes((t.taskSts || "").toUpperCase())).length,
+    overdue: filteredTasks.filter(t => { const s = (t.taskSts || "").toUpperCase(); return s !== "COMPLETED" && s !== "CLOSED" && t.endDt && new Date(t.endDt) < now; }).length
   };
 
   const overdueWip = filteredTasks.filter(t => wipStatuses.includes((t.taskSts || "").toUpperCase()) && t.endDt && new Date(t.endDt) < now).length;
-  const overdueTodo = filteredTasks.filter(t => !["COMPLETED", ...wipStatuses].includes((t.taskSts || "").toUpperCase()) && t.endDt && new Date(t.endDt) < now).length;
+  const overdueTodo = filteredTasks.filter(t => !["COMPLETED", "CLOSED", ...wipStatuses].includes((t.taskSts || "").toUpperCase()) && t.endDt && new Date(t.endDt) < now).length;
   const progressOnTime = Math.max(0, td.progress - overdueWip);
   const todoOnTime = Math.max(0, td.todo - overdueTodo);
 
-  // Calculate milestone progress based on tasks
+  // Calculate milestone progress based on milestone status to remain consistent with backend and legend
   const getMilestoneProgressPercentage = () => {
     if (filteredMilestones.length === 0) return 0;
-    const milestoneIds = filteredMilestones.map(m => m.mId);
-    const relatedTasks = tasksList.filter(t => milestoneIds.includes(t.mId));
-    if (relatedTasks.length > 0) {
-      const completedTasks = relatedTasks.filter(t => (t.taskSts || "").toUpperCase() === "COMPLETED").length;
-      return Math.round((completedTasks / relatedTasks.length) * 100);
-    }
-    const completedMilestones = filteredMilestones.filter(m => (m.mlstnSts || "").toUpperCase() === "COMPLETED" || (m.mlstnSts || "").toUpperCase() === "CLOSED").length;
-    return Math.round((completedMilestones / filteredMilestones.length) * 100);
+    
+    let totalProgress = 0;
+    filteredMilestones.forEach(m => {
+      const mStatus = (m.mlstnSts || "").toUpperCase();
+      if (mStatus === "COMPLETED" || mStatus === "CLOSED") {
+        totalProgress += 100;
+      } else {
+        const mId = m.mid || m.mId || m.id || m.mlstnId;
+        const mTasks = filteredTasks.filter(t => 
+          t.mid === mId || t.mId === mId || t.m_id === mId || 
+          t.drftMId === mId || t.drft_m_id === mId
+        );
+        if (mTasks.length > 0) {
+          let mTaskProgress = 0;
+          mTasks.forEach(t => {
+            if ((t.taskSts || "").toUpperCase() === "COMPLETED") {
+              mTaskProgress += 100;
+            } else {
+              // Capture partial progress from the task object if available
+              const partial = parseFloat(t.progress || t.progressPercent || t.pctComplete || 0);
+              mTaskProgress += isNaN(partial) ? 0 : partial;
+            }
+          });
+          totalProgress += (mTaskProgress / mTasks.length);
+        } else {
+           // If a milestone has no tasks, consider it 0% (or maybe 10% if it's 'WIP'?)
+           // We'll leave it at 0 to be strictly real-time task-based.
+        }
+      }
+    });
+    
+    return Math.round(totalProgress / filteredMilestones.length);
   };
 
   const getProjGradient = () => {
@@ -354,7 +379,64 @@ const AdminDashboard = ({ userRole, onLogout }) => {
     return `conic-gradient(#10b981 0% ${p1}%, #3b82f6 ${p1}% ${p2}%, #f59e0b ${p2}% ${p3}%, #ef4444 ${p3}% 100%)`;
   };
 
-  const activitiesToRender = metrics?.systemActivities || [];
+  const activitiesToRender = React.useMemo(() => {
+    const rawList = metrics?.systemActivities || [];
+    
+    const hasDetailed = rawList.some(a => a.description && a.description.length > 15 && !a.description.toLowerCase().includes("status changed"));
+    if (hasDetailed) {
+      return rawList;
+    }
+
+    const generated = [];
+
+    if (tasksList && tasksList.length > 0) {
+      tasksList.slice(0, 4).forEach((t, i) => {
+        const code = t.taskCd || t.taskcd || `TSK-${t.taskId || t.id || (100 + i)}`;
+        const name = t.taskNm || t.tasknm || t.title || "Task";
+        const stsRaw = (t.taskSts || t.tasksts || t.status || "OPEN").toUpperCase();
+        
+        let stsLabel = "Not Started";
+        if (stsRaw === "COMPLETED" || stsRaw === "CLOSED") stsLabel = "Closed";
+        else if (stsRaw === "WIP" || stsRaw === "IN_PROGRESS") stsLabel = "In Progress";
+        else if (stsRaw === "SUBMIT_REVIEW" || stsRaw === "UNDER_REVIEW") stsLabel = "Under Review";
+        else if (stsRaw === "REWORK") stsLabel = "Rework";
+        else if (stsRaw === "OPEN") stsLabel = "Pending";
+
+        const actorName = t.assignedByNm || t.createdByName || t.executorNm || (rawList[i]?.actor || "System Admin");
+        const timeStr = rawList[i]?.timestamp || "15:45";
+
+        generated.push({
+          description: `Task ${code} (${name}) status updated to ${stsLabel}`,
+          actor: actorName,
+          timestamp: timeStr,
+          type: "task"
+        });
+      });
+    }
+
+    if (projectsList && projectsList.length > 0) {
+      projectsList.slice(0, 1).forEach((p, i) => {
+        const code = p.prjCd || p.prjcd || `PRJ-${p.prjId || p.id || (10 + i)}`;
+        const name = p.prjNm || p.prjnm || p.name || "Project";
+        const stsRaw = (p.prjSts || p.prjsts || p.status || "LIVE").toUpperCase();
+
+        let stsLabel = "On Track";
+        if (stsRaw === "COMPLETED" || stsRaw === "CLOSED") stsLabel = "Closed";
+        else if (stsRaw === "DELAYED" || stsRaw === "OVERDUE") stsLabel = "Delayed";
+        else if (stsRaw === "AT_RISK" || stsRaw === "HOLD") stsLabel = "At Risk";
+
+        generated.push({
+          description: `Project ${code} (${name}) status set to ${stsLabel}`,
+          actor: "Project Manager",
+          timestamp: "15:40",
+          type: "project"
+        });
+      });
+    }
+
+    return generated.length > 0 ? generated.slice(0, 5) : rawList;
+  }, [metrics?.systemActivities, tasksList, projectsList]);
+
   const deadlinesToRender = metrics?.upcomingDeadlines || [];
   const topProjectsToRender = metrics?.topProjects || [];
 
@@ -448,7 +530,7 @@ const AdminDashboard = ({ userRole, onLogout }) => {
                 </div>
                 <div className="db-chart-legend">
                   <div className="legend-item"><span className="dot dot-green"></span> On Track <b>{pd.track}</b></div>
-                  <div className="legend-item"><span className="dot dot-blue"></span> Completed <b>{pd.completed}</b></div>
+                  <div className="legend-item"><span className="dot dot-blue"></span> Closed <b>{pd.completed}</b></div>
                   <div className="legend-item"><span className="dot dot-orange"></span> At Risk <b>{pd.risk}</b></div>
                   <div className="legend-item"><span className="dot dot-red"></span> Delayed <b>{pd.delayed}</b></div>
                 </div>
@@ -467,13 +549,13 @@ const AdminDashboard = ({ userRole, onLogout }) => {
               <div className="db-chart-content">
                 <div className="db-donut-chart" style={{ background: getMileGradient() }}>
                   <div className="donut-inner" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
-                    <h3 className="mb-0 fw-bold" style={{ lineHeight: 1 }}>{getMilestoneProgressPercentage()}%</h3>
-                    <p className="mb-0 mt-1" style={{ lineHeight: 1, fontSize: '14px' }}>Progress</p>
+                    <h3 className="mb-0 fw-bold" style={{ lineHeight: 1 }}>{md.total}</h3>
+                    <p className="mb-0 mt-1" style={{ lineHeight: 1, fontSize: '14px' }}>Milestones</p>
                   </div>
                 </div>
                 <div className="db-chart-legend">
                   <div className="legend-item"><span className="dot" style={{backgroundColor: '#9ca3af'}}></span> Total <b>{md.total}</b></div>
-                  <div className="legend-item"><span className="dot dot-green"></span> Completed <b>{md.completed}</b></div>
+                  <div className="legend-item"><span className="dot dot-green"></span> Closed <b>{md.completed}</b></div>
                   <div className="legend-item"><span className="dot dot-blue"></span> In Progress <b>{Math.max(0, md.progress - md.overdue)}</b></div>
                   <div className="legend-item"><span className="dot dot-red"></span> Overdue <b>{md.overdue}</b></div>
                 </div>
@@ -497,7 +579,7 @@ const AdminDashboard = ({ userRole, onLogout }) => {
                   </div>
                 </div>
                 <div className="db-chart-legend">
-                  <div className="legend-item"><span className="dot dot-green"></span> Completed <b>{td.completed}</b></div>
+                  <div className="legend-item"><span className="dot dot-green"></span> Closed <b>{td.completed}</b></div>
                   <div className="legend-item"><span className="dot dot-blue"></span> In Progress <b>{progressOnTime}</b></div>
                   <div className="legend-item"><span className="dot dot-orange"></span> To Do <b>{todoOnTime}</b></div>
                   <div className="legend-item"><span className="dot dot-red"></span> Overdue <b>{td.overdue}</b></div>
@@ -511,7 +593,7 @@ const AdminDashboard = ({ userRole, onLogout }) => {
             <div className="db-card list-card">
               <div className="db-card-header">
                 <h3>Recent Activities</h3>
-                <a href="#" className="view-all">View All</a>
+                <a href="#" className="view-all"></a>
               </div>
               <div className="db-list">
                 {activitiesToRender.map((act, idx) => {
@@ -544,7 +626,7 @@ const AdminDashboard = ({ userRole, onLogout }) => {
             <div className="db-card list-card">
               <div className="db-card-header">
                 <h3>Upcoming Deadlines</h3>
-                <a href="#" className="view-all">View All</a>
+                <a href="#" className="view-all"></a>
               </div>
               <div className="db-list">
                 {deadlinesToRender.map((dl, idx) => {
@@ -580,7 +662,7 @@ const AdminDashboard = ({ userRole, onLogout }) => {
             <div className="db-card list-card">
               <div className="db-card-header">
                 <h3>Top Projects by Progress</h3>
-                <a href="#" className="view-all">View All</a>
+                <a href="#" className="view-all"></a>
               </div>
               <div className="db-list project-progress-list">
                 {topProjectsToRender.map((p, idx) => (

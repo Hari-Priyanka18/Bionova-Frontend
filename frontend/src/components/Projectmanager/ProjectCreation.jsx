@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Menu,
   ChevronRight,
@@ -15,13 +15,16 @@ import {
   MoreVertical,
   ChevronLeft,
   Search,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Calendar,
+  Copy
 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
-import Sidebar from "../Sidebar";
-import Header from "../Header";
-import AlertModal from "../AlertModal";
-import GoLiveCalendar from "./GoLiveCalendar";
+import { useNavigate, useLocation } from "react-router-dom";
+import Sidebar from "../Sidebar.jsx";
+import Header from "../Header.jsx";
+import AlertModal from "../AlertModal.jsx";
+import { getScreenPermission } from "../../utils/permissions";
+import GoLiveCalendar from "./GoLiveCalendar.jsx";
 import "../../styles/projectCreation.css";
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL;
@@ -48,6 +51,17 @@ const getLoggedInUser = () => {
   return "Admin";
 };
 
+const formatListDate = (dateString) => {
+  if (!dateString) return "N/A";
+  const d = new Date(dateString);
+  if (isNaN(d.getTime())) return dateString;
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const year = d.getFullYear();
+  return `${day}/${month}/${year}`;
+};
+
+// ========== Searchable Select (unchanged) ==========
 const SearchableSelect = ({ options, value, onChange, placeholder, name, style, disabled }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -127,8 +141,205 @@ const SearchableSelect = ({ options, value, onChange, placeholder, name, style, 
   );
 };
 
+// ========== Custom DatePicker (with calendar icon) ==========
+const DatePicker = ({ value, onChange, placeholder, name }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [displayValue, setDisplayValue] = useState('');
+  const [viewDate, setViewDate] = useState(new Date());
+  const wrapperRef = useRef(null);
+
+  useEffect(() => {
+    if (value) {
+      const parts = value.split('-');
+      if (parts.length === 3) {
+        setDisplayValue(`${parts[2]}/${parts[1]}/${parts[0]}`);
+        setViewDate(new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10)));
+      }
+    } else {
+      setDisplayValue('');
+      setViewDate(new Date());
+    }
+  }, [value]);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleDateSelect = (date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const formatted = `${year}-${month}-${day}`;
+    onChange({ target: { name, value: formatted } });
+    setIsOpen(false);
+  };
+
+  const handleClear = () => {
+    onChange({ target: { name, value: '' } });
+    setDisplayValue('');
+  };
+
+  const daysInMonth = (date) => {
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    return new Date(year, month + 1, 0).getDate();
+  };
+
+  const firstDayOfMonth = (date) => {
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    return new Date(year, month, 1).getDay();
+  };
+
+  const generateCalendar = () => {
+    const year = viewDate.getFullYear();
+    const month = viewDate.getMonth();
+    const totalDays = daysInMonth(viewDate);
+    const firstDay = firstDayOfMonth(viewDate);
+    const days = [];
+    for (let i = 0; i < firstDay; i++) {
+      days.push(null);
+    }
+    for (let i = 1; i <= totalDays; i++) {
+      days.push(new Date(year, month, i));
+    }
+    return days;
+  };
+
+  const isSelected = (date) => {
+    if (!value) return false;
+    const parts = value.split('-');
+    if (parts.length === 3) {
+      const year = parseInt(parts[0], 10);
+      const month = parseInt(parts[1], 10) - 1;
+      const day = parseInt(parts[2], 10);
+      return date.getFullYear() === year &&
+             date.getMonth() === month &&
+             date.getDate() === day;
+    }
+    return false;
+  };
+
+  const changeMonth = (delta) => {
+    const newDate = new Date(viewDate);
+    newDate.setMonth(newDate.getMonth() + delta);
+    setViewDate(newDate);
+  };
+
+  return (
+    <div ref={wrapperRef} style={{ position: 'relative', width: '100%' }}>
+      <div style={{ position: 'relative', width: '100%' }}>
+        <Calendar
+          size={18}
+          style={{
+            position: 'absolute',
+            left: '10px',
+            top: '50%',
+            transform: 'translateY(-50%)',
+            color: '#94a3b8',
+            pointerEvents: 'none'
+          }}
+        />
+        <input
+          type="text"
+          readOnly
+          value={displayValue}
+          placeholder={placeholder || "dd/mm/yyyy"}
+          onFocus={() => setIsOpen(true)}
+          style={{
+            width: '100%',
+            padding: '10px 34px 10px 36px',
+            border: '1px solid #cbd5e1',
+            borderRadius: '6px',
+            fontSize: '14px',
+            outline: 'none',
+            boxSizing: 'border-box',
+            backgroundColor: '#f9fafb',
+            cursor: 'pointer'
+          }}
+        />
+        {value && (
+          <button
+            type="button"
+            onClick={handleClear}
+            style={{
+              position: 'absolute',
+              right: '8px',
+              top: '50%',
+              transform: 'translateY(-50%)',
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              color: '#94a3b8',
+              padding: '4px'
+            }}
+          >
+            <X size={16} />
+          </button>
+        )}
+      </div>
+      {isOpen && (
+        <div style={{
+          position: 'absolute',
+          top: 'calc(100% + 4px)',
+          left: 0,
+          right: 0,
+          backgroundColor: 'white',
+          border: '1px solid #cbd5e1',
+          borderRadius: '6px',
+          boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)',
+          zIndex: 1000,
+          padding: '12px',
+          width: '280px'
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+            <button type="button" onClick={() => changeMonth(-1)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px' }}>&lt;</button>
+            <span style={{ fontWeight: '600' }}>{viewDate.toLocaleString('default', { month: 'long', year: 'numeric' })}</span>
+            <button type="button" onClick={() => changeMonth(1)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px' }}>&gt;</button>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '4px', textAlign: 'center' }}>
+            {['Su','Mo','Tu','We','Th','Fr','Sa'].map(d => <div key={d} style={{ fontSize: '12px', fontWeight: '600', color: '#64748b' }}>{d}</div>)}
+            {generateCalendar().map((date, idx) => (
+              <div key={idx} style={{ padding: '4px', fontSize: '14px' }}>
+                {date ? (
+                  <button
+                    type="button"
+                    onClick={() => handleDateSelect(date)}
+                    style={{
+                      background: isSelected(date) ? '#2563eb' : 'transparent',
+                      color: isSelected(date) ? 'white' : '#0f172a',
+                      border: 'none',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      width: '100%',
+                      padding: '4px 0'
+                    }}
+                    onMouseEnter={(e) => { if (!isSelected(date)) e.currentTarget.style.backgroundColor = '#f1f5f9'; }}
+                    onMouseLeave={(e) => { if (!isSelected(date)) e.currentTarget.style.backgroundColor = 'transparent'; }}
+                  >
+                    {date.getDate()}
+                  </button>
+                ) : <span></span>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ========== Main Component ==========
 const ProjectCreation = ({ userRole, onLogout }) => {
+  const screenPerm = getScreenPermission('PROJECT_CREATION');
   const navigate = useNavigate();
+  const location = useLocation();
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(false);
   const [companies, setCompanies] = useState([]);
@@ -153,10 +364,7 @@ const ProjectCreation = ({ userRole, onLogout }) => {
       setCompanies(coyData);
       setPlants(pltData);
       setDepartments(deptData);
-      const promotedDraftIds = new Set(live.map(l => l.drftPrjId).filter(Boolean));
-      const mappedDrafts = drafts
-        .filter(d => !promotedDraftIds.has(d.drftPrjId))
-        .map(d => ({
+      const mappedDrafts = drafts.map(d => ({
           id: d.drftPrjId,
           _type: "draft",
           projectCode: d.prjCd || "",
@@ -210,8 +418,14 @@ const ProjectCreation = ({ userRole, onLogout }) => {
           createdBy: getLoggedInUser()
         };
       });
-      // ✅ FIX: Merge both drafts and live projects
-      setProjects([...mappedDrafts, ...mappedLive]);
+      const allProjects = [...mappedDrafts, ...mappedLive];
+      setProjects(allProjects);
+      setForm(prev => {
+        if (!isEditing) {
+          return { ...prev, projectCode: generateNextProjectCode(allProjects) };
+        }
+        return prev;
+      });
     } catch (err) {
       console.error("Error fetching projects:", err);
     } finally {
@@ -219,9 +433,38 @@ const ProjectCreation = ({ userRole, onLogout }) => {
     }
   };
 
+  const generateNextProjectCode = (projectList = projects) => {
+    let maxNum = 0;
+    (projectList || []).forEach(p => {
+      const code = p.projectCode || p.prjCd || "";
+      const match = code.match(/^PRJ-(\d+)/i);
+      if (match && match[1]) {
+        const num = parseInt(match[1], 10);
+        if (num < 2000 && num > maxNum) {
+          maxNum = num;
+        }
+      }
+    });
+
+    if (maxNum === 0) {
+      (projectList || []).forEach(p => {
+        const code = p.projectCode || p.prjCd || "";
+        const match = code.match(/^PRJ[-_]?(\d+)/i);
+        if (match && match[1]) {
+          const num = parseInt(match[1], 10);
+          if (num < 2000 && num > maxNum) {
+            maxNum = num;
+          }
+        }
+      });
+    }
+
+    const nextNum = maxNum + 1;
+    return `PRJ-${String(nextNum).padStart(3, '0')}`;
+  };
+
   useEffect(() => { fetchAllData(); }, []);
 
-  // View toggle – default is "list", also handles "form", "golive"
   const [view, setView] = useState("list");
   const [isEditing, setIsEditing] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -238,7 +481,6 @@ const ProjectCreation = ({ userRole, onLogout }) => {
     setAlertConfig({ isOpen: true, type, title, message });
   };
 
-  // Form state
   const [form, setForm] = useState({
     projectCode: "",
     projectName: "",
@@ -257,42 +499,34 @@ const ProjectCreation = ({ userRole, onLogout }) => {
     priorityDetails: "",
     budget: "",
     remarks: "",
-    uploadImage: null
+    uploadImage: null,
+    organizationType: "company" // "company" or "plant"
   });
 
   const [imagePreview, setImagePreview] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
   const [success, setSuccess] = useState(false);
 
-  // Search Filter state
-  const [searchInputs, setSearchInputs] = useState({
-    projectName: '',
-    projectCode: '',
-    status: ''
-  });
-
+  // ─── Search state ──────────────────────────────────────────────
+  const [searchQuery, setSearchQuery] = useState('');
   const [activeFilters, setActiveFilters] = useState({
     projectName: '',
     projectCode: '',
     status: ''
   });
 
-  // Table action dropdown trigger state
   const [activeDropdown, setActiveDropdown] = useState(null);
 
-  // Deactivation confirmation modal state
   const [showDeactivateModal, setShowDeactivateModal] = useState(false);
   const [deactivateTargetId, setDeactivateTargetId] = useState(null);
 
-  // Sorting state
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
 
-  // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 8;
 
-  // ─── NEW: Status tab filter state ──────────────────────────────────────
-  const [statusTab, setStatusTab] = useState('All'); // 'All', 'Draft', 'Live'
+  // ─── Status tab filter state ──────────────────────────────────────
+  const [statusTab, setStatusTab] = useState('All'); // 'All', 'Draft', 'Live', 'Hold', 'Closed'
 
   // ─── Input Change Handler ──────────────────────────────────────────────────
   const handleChange = (e) => {
@@ -311,20 +545,35 @@ const ProjectCreation = ({ userRole, onLogout }) => {
     setForm((prev) => {
       const nextForm = { ...prev, [name]: newValue };
 
-      // Auto-calculate end date if start date and total days are present
       if ((name === 'startDate' || name === 'totalProjectDays') && nextForm.startDate && nextForm.totalProjectDays) {
-        const start = new Date(nextForm.startDate);
-        start.setDate(start.getDate() + parseInt(nextForm.totalProjectDays, 10));
-        nextForm.endDate = start.toISOString().split('T')[0];
+        const parts = nextForm.startDate.split('-');
+        if (parts.length === 3) {
+          const start = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+          const days = parseInt(nextForm.totalProjectDays, 10);
+          if (!isNaN(days) && days > 0) {
+            start.setDate(start.getDate() + days - 1);
+            const ey = start.getFullYear();
+            const em = String(start.getMonth() + 1).padStart(2, '0');
+            const ed = String(start.getDate()).padStart(2, '0');
+            nextForm.endDate = `${ey}-${em}-${ed}`;
+          }
+        }
       }
 
-      // Auto-calculate total days if both start and end dates are present (and totalProjectDays is not currently being edited)
       if ((name === 'startDate' || name === 'endDate') && nextForm.startDate && nextForm.endDate && name !== 'totalProjectDays') {
-        const start = new Date(nextForm.startDate);
-        const end = new Date(nextForm.endDate);
-        const diffTime = end - start;
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        nextForm.totalProjectDays = diffDays >= 0 ? String(diffDays) : "0";
+        const startParts = nextForm.startDate.split('-');
+        const endParts = nextForm.endDate.split('-');
+        if (startParts.length === 3 && endParts.length === 3) {
+          const start = new Date(parseInt(startParts[0], 10), parseInt(startParts[1], 10) - 1, parseInt(startParts[2], 10));
+          const end = new Date(parseInt(endParts[0], 10), parseInt(endParts[1], 10) - 1, parseInt(endParts[2], 10));
+          const diffTime = end - start;
+          if (diffTime >= 0) {
+            const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24)) + 1;
+            nextForm.totalProjectDays = diffDays >= 0 ? String(diffDays) : "0";
+          } else {
+            nextForm.totalProjectDays = "0";
+          }
+        }
       }
 
       return nextForm;
@@ -395,10 +644,10 @@ const ProjectCreation = ({ userRole, onLogout }) => {
 
       const before = value.substring(0, selectionStart);
       const after = value.substring(selectionEnd);
-      
+
       let insertion = "";
       let offset = 0;
-      
+
       if (e.key === "Enter") {
         insertion = "\n• ";
         offset = 3;
@@ -423,29 +672,9 @@ const ProjectCreation = ({ userRole, onLogout }) => {
     }
   };
 
-  // Date calculations are now handled in handleChange
-
-  // Filter input change handler
-  const handleFilterChange = (e) => {
-    const { name, value } = e.target;
-    setSearchInputs(prev => ({ ...prev, [name]: value }));
-  };
-
-  const applySearch = () => {
-    setActiveFilters({ ...searchInputs });
-    setCurrentPage(1);
-  };
-
-  const resetFilters = () => {
-    const cleared = { projectName: '', projectCode: '', status: '' };
-    setSearchInputs(cleared);
-    setActiveFilters(cleared);
-    setCurrentPage(1);
-  };
-
-  const handleResetForm = () => {
+  const handleResetForm = (projectList = projects) => {
     setForm({
-      projectCode: "",
+      projectCode: generateNextProjectCode(projectList),
       projectName: "",
       priority: "MEDIUM",
       status: "Draft",
@@ -462,15 +691,28 @@ const ProjectCreation = ({ userRole, onLogout }) => {
       priorityDetails: "",
       budget: "",
       remarks: "",
-      uploadImage: null
+      uploadImage: null,
+      organizationType: "company"
     });
     setImagePreview(null);
   };
 
+  useEffect(() => {
+    if (location.state?.createMode) {
+      setView("form");
+      setIsEditing(false);
+      handleResetForm();
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }, [location.state]);
+
   const handleSave = async () => {
+    // Validate based on organization type
     if (
       !form.projectName.trim() || !form.startDate || !form.endDate ||
-      !form.projectDescription.trim() || !form.companyName || !form.plantName || !form.department
+      !form.projectDescription.trim() || 
+      (form.organizationType === "company" ? !form.companyName : !form.plantName) ||
+      !form.department
     ) {
       triggerAlert("error", "Validation Error", "Please fill in all required fields marked with *");
       return;
@@ -478,15 +720,16 @@ const ProjectCreation = ({ userRole, onLogout }) => {
     setLoading(true);
     try {
       const isLive = form.status === "Live" || form.status === "LIVE";
+      const projectCodeVal = (form.projectCode || generateNextProjectCode(projects)).trim();
       const payload = {
-        prjCd: form.projectCode || `PRJ-${String(projects.length + 1).padStart(4, '0')}`,
+        prjCd: projectCodeVal,
         prjNm: (form.projectName || "").trim(),
         prjDesc: (form.projectDescription || "").trim(),
         prjObjtv: (form.projectObjective || "").trim() || "N/A",
         expDlvbls: (form.expectedDeliverables || "").trim() || null,
         prjPrty: form.priority,
-        coyId: parseInt(form.companyName),
-        pltId: parseInt(form.plantName),
+        coyId: form.organizationType === "company" ? parseInt(form.companyName) : null,
+        pltId: form.organizationType === "plant" ? parseInt(form.plantName) : null,
         deptId: parseInt(form.department),
         tentStDt: form.startDate,
         tentEndDt: form.endDate,
@@ -525,20 +768,41 @@ const ProjectCreation = ({ userRole, onLogout }) => {
       }
 
       if (response.ok) {
-        triggerAlert("success", "Success", isEditing ? "Project updated successfully!" : "Project saved successfully!");
+        let newId = editingId;
+        let pType = isEditing ? (projects.find(p => p.id === editingId)?._type || "live") : (isLive ? "live" : "draft");
+        if (!isEditing) {
+          try {
+            const data = await response.clone().json();
+            newId = isLive ? data.prjId : data.drftPrjId;
+          } catch (e) {
+            console.error("Error parsing response:", e);
+          }
+        }
         handleResetForm();
         setIsEditing(false);
         setEditingId(null);
-        setView("list");
-        fetchAllData();
+        if (newId) {
+          navigate("/milestone-creation", {
+            state: {
+              projectId: newId,
+              projectType: pType,
+              showSuccessAlert: true,
+              message: isEditing ? "Project updated successfully!" : "Project created successfully!"
+            }
+          });
+        } else {
+          triggerAlert("success", "Success", isEditing ? "Project updated successfully!" : "Project saved successfully!");
+          setView("list");
+          fetchAllData();
+        }
       } else {
         let msg = `Failed to save project. (Status: ${response.status})`;
-        try { 
-          const text = await response.text(); 
+        try {
+          const text = await response.text();
           if (text) {
             try {
-              const j = JSON.parse(text); 
-              if (j.message) msg = j.message; 
+              const j = JSON.parse(text);
+              if (j.message) msg = j.message;
             } catch (e) {
               msg = text;
             }
@@ -572,7 +836,8 @@ const ProjectCreation = ({ userRole, onLogout }) => {
       priorityDetails: "",
       budget: "",
       remarks: project.remarks || "",
-      uploadImage: null
+      uploadImage: null,
+      organizationType: project.companyId ? "company" : "plant"
     });
     if (project.logo) setImagePreview(project.logo);
     else setImagePreview(null);
@@ -580,6 +845,52 @@ const ProjectCreation = ({ userRole, onLogout }) => {
     setEditingId(project.id);
     setActiveDropdown(null);
     setView("form");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    const mainEl = document.querySelector(".main-content") || document.querySelector(".layout-content") || document.documentElement;
+    if (mainEl) mainEl.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handleDuplicate = async (project) => {
+    setActiveDropdown(null);
+    setLoading(true);
+    try {
+      const res = await fetch(`${apiBaseUrl}/api/project-drafts/${project.id}/duplicate`, {
+        method: "POST",
+        headers: getAuthHeaders()
+      });
+      if (res.ok) {
+        const newDraft = await res.json();
+        triggerAlert("success", "Project Duplicated", "Project draft copied successfully with all its milestones and tasks!");
+        await fetchAllData();
+        handleEdit({
+          id: newDraft.drftPrjId,
+          _type: "draft",
+          projectCode: newDraft.prjCd || "",
+          projectName: newDraft.prjNm || "",
+          projectDescription: newDraft.prjDesc || "",
+          projectObjective: newDraft.prjObjtv || "",
+          expectedDeliverables: newDraft.expDlvbls || "",
+          priority: newDraft.prjPrty || "MEDIUM",
+          status: "DRAFT",
+          startDate: newDraft.tentStDt || "",
+          endDate: newDraft.tentEndDt || "",
+          totalProjectDays: newDraft.noOfDays || "",
+          companyId: newDraft.coyId || "",
+          plantId: newDraft.pltId || "",
+          departmentId: newDraft.deptId || "",
+          remarks: newDraft.addlRem || "",
+          logo: newDraft.logo || null
+        });
+      } else {
+        const errText = await res.text();
+        triggerAlert("error", "Error", errText || "Failed to duplicate project draft.");
+      }
+    } catch (err) {
+      console.error("Error duplicating project draft:", err);
+      triggerAlert("error", "Error", `Duplicate failed: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const toggleDropdown = (id) => {
@@ -663,9 +974,9 @@ const ProjectCreation = ({ userRole, onLogout }) => {
           if (res.ok) {
             const text = await res.text();
             let result = {};
-            try { if(text) result = JSON.parse(text); } catch(e) {}
-            
-            const newLiveId = result?.prjId || result?.id || project.id; // fallback to project.id if not returned
+            try { if (text) result = JSON.parse(text); } catch (e) { }
+
+            const newLiveId = result?.prjId || result?.id || project.id;
             if (newLiveId) {
               if (newStatus === "HOLD" || newStatus === "CLOSED") {
                 try {
@@ -687,7 +998,7 @@ const ProjectCreation = ({ userRole, onLogout }) => {
             fetchAllData();
           } else {
             let errText = "Failed to promote project.";
-            try { errText = await res.text() || errText; } catch(e) {}
+            try { errText = await res.text() || errText; } catch (e) { }
             triggerAlert("error", "Error", errText);
           }
         }
@@ -754,15 +1065,15 @@ const ProjectCreation = ({ userRole, onLogout }) => {
       if (res.ok) {
         const text = await res.text();
         let result = {};
-        try { if(text) result = JSON.parse(text); } catch(e) {}
-        
+        try { if (text) result = JSON.parse(text); } catch (e) { }
+
         triggerAlert("success", "Success", "Project promoted to Live successfully!");
         setView("list");
         setGoLiveProject(null);
         fetchAllData();
       } else {
         let errText = "Failed to promote project.";
-        try { errText = await res.text() || errText; } catch(e) {}
+        try { errText = await res.text() || errText; } catch (e) { }
         triggerAlert("error", "Error", errText);
       }
     } catch (err) {
@@ -773,7 +1084,6 @@ const ProjectCreation = ({ userRole, onLogout }) => {
     }
   };
 
-  // Sorting calculation
   const handleSort = (key) => {
     let direction = 'asc';
     if (sortConfig.key === key && sortConfig.direction === 'asc') {
@@ -796,55 +1106,86 @@ const ProjectCreation = ({ userRole, onLogout }) => {
     return sortable;
   }, [projects, sortConfig]);
 
-  // ─── Filter calculations with statusTab ──────────────────────────────────
+  // ─── Filtering logic (including search) ─────────────────────────
   const filteredProjects = sortedProjects.filter(p => {
-    const matchName = !activeFilters.projectName ||
-      p.projectName?.toLowerCase().includes(activeFilters.projectName.toLowerCase());
-    const matchCode = !activeFilters.projectCode ||
-      p.projectCode?.toLowerCase().includes(activeFilters.projectCode.toLowerCase());
-    const matchStatus = !activeFilters.status || p.status === activeFilters.status;
+    // Search filter (project name or code)
+    const searchLower = searchQuery.toLowerCase().trim();
+    const matchSearch = !searchLower ||
+      p.projectName?.toLowerCase().includes(searchLower) ||
+      p.projectCode?.toLowerCase().includes(searchLower);
 
-    // Tab filter
+    // Status tab filter
     let tabMatch = true;
     if (statusTab === 'Draft') {
       tabMatch = p.status.toUpperCase() === 'DRAFT';
     } else if (statusTab === 'Live') {
       tabMatch = p.status.toUpperCase() === 'LIVE';
+    } else if (statusTab === 'Hold') {
+      tabMatch = p.status.toUpperCase() === 'HOLD';
+    } else if (statusTab === 'Closed') {
+      tabMatch = p.status.toUpperCase() === 'CLOSED';
     }
     // 'All' – no filter
 
-    return matchName && matchCode && matchStatus && tabMatch;
+    return matchSearch && tabMatch;
   });
 
-  // Pagination removed
   const currentItems = filteredProjects;
-  const indexOfFirstItem = 0; // Preserved for S.NO index rendering
+  const indexOfFirstItem = 0;
 
-  const formatListText = (text) => {
-    if (!text) return "N/A";
-    let result = text;
-    // Force bullets onto new lines
-    if (result.includes("•")) {
-      result = result.split("•").filter(Boolean).map(s => "• " + s.trim()).join("\n");
-    }
-    // Dots mean new sentence
-    result = result.replace(/\.\s+/g, '.\n');
-    // Commas mean separation
-    result = result.replace(/,\s+/g, ',\n');
-    return result;
+  // ─── Search handler ──────────────────────────────────────────────
+  const handleSearchChange = (e) => {
+    setSearchQuery(e.target.value);
+    setCurrentPage(1);
+  };
+
+  const handleTabChange = (status) => {
+    // 1. Scroll to top/left BEFORE the state update so the browser doesn't try to clamp the scroll position
+    window.scrollTo(0, 0);
+    document.documentElement.scrollTop = 0;
+    document.documentElement.scrollLeft = 0;
+    document.body.scrollTop = 0;
+    document.body.scrollLeft = 0;
+    const elementsToScroll = document.querySelectorAll('.proj-shell, .proj-shell-container, .proj-main, .proj-table-container, #root');
+    elementsToScroll.forEach(el => { 
+      el.scrollTop = 0; 
+      el.scrollLeft = 0; 
+    });
+
+    // 2. Trigger the state updates
+    setStatusTab(status);
+    setCurrentPage(1);
+
+    // 3. Scroll to top/left AFTER the state update in the next animation frame and a short timeout
+    requestAnimationFrame(() => {
+      window.scrollTo(0, 0);
+      elementsToScroll.forEach(el => { 
+        el.scrollTop = 0; 
+        el.scrollLeft = 0; 
+      });
+      
+      setTimeout(() => {
+        window.scrollTo(0, 0);
+        document.documentElement.scrollTop = 0;
+        document.documentElement.scrollLeft = 0;
+        document.body.scrollTop = 0;
+        document.body.scrollLeft = 0;
+        elementsToScroll.forEach(el => { 
+          el.scrollTop = 0; 
+          el.scrollLeft = 0; 
+        });
+      }, 50);
+    });
   };
 
   const vibrantBlue = "#2563eb";
 
   return (
     <div className="proj-shell-container">
-      {/* Sidebar Navigation */}
       <Sidebar userRole={userRole} onLogout={onLogout} />
 
-      {/* Main Container Viewport */}
       <div className="proj-shell">
 
-        {/* ======================= DYNAMIC HEADER ======================= */}
         <Header
           title="Project Creation"
           showSearch={false}
@@ -855,14 +1196,10 @@ const ProjectCreation = ({ userRole, onLogout }) => {
 
         <main className="proj-main" style={{ padding: '24px' }}>
 
-
-
           {view === "form" ? (
-            /* ================= VIEW: ADD NEW PROJECT FORM ================= */
             <>
               <div className="proj-content" style={{ paddingBottom: '80px', maxWidth: '1280px', margin: '0 auto' }}>
 
-                {/* Form Card */}
                 <div className="proj-form-card" style={{
                   backgroundColor: 'white',
                   borderRadius: '8px',
@@ -871,7 +1208,6 @@ const ProjectCreation = ({ userRole, onLogout }) => {
                   boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
                 }}>
 
-                  {/* Form Header with Title and Back Button */}
                   <div style={{
                     display: 'flex',
                     justifyContent: 'space-between',
@@ -902,7 +1238,6 @@ const ProjectCreation = ({ userRole, onLogout }) => {
                     </button>
                   </div>
 
-                  {/* Form Body */}
                   <div style={{ padding: '24px' }}>
                     {success && (
                       <div className="proj-success-alert" style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px 16px', backgroundColor: '#dcfce7', borderRadius: '6px', color: '#166534', marginBottom: '20px', border: '1px solid #86efac' }}>
@@ -911,46 +1246,25 @@ const ProjectCreation = ({ userRole, onLogout }) => {
                       </div>
                     )}
 
-                    {/* 1. Project Information */}
                     <section className="proj-panel" style={{ backgroundColor: 'white', padding: 0, border: 'none', marginBottom: '32px' }}>
 
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
                         <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#1e293b', margin: 0 }}>
                           Project Information
                         </h3>
-
-                        {/* Status Toggle Bar */}
-                        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                          <span style={{ fontSize: "14px", fontWeight: "600", color: "#475569" }}>Status:</span>
-
-                          <label style={{ position: "relative", display: "inline-block", width: "46px", height: "26px", margin: 0 }}>
-                            <input
-                              type="checkbox"
-                              checked={form.status === "Live"}
-                              onChange={handleToggleStatus}
-                              style={{ opacity: 0, width: 0, height: 0 }}
-                            />
-                            <span style={{
-                              position: "absolute", cursor: "pointer", top: 0, left: 0, right: 0, bottom: 0,
-                              backgroundColor: form.status === "Live" ? "#10b981" : "#cbd5e1",
-                              transition: ".4s", borderRadius: "34px"
-                            }}>
-                              <span style={{
-                                position: "absolute", height: "20px", width: "20px",
-                                left: form.status === "Live" ? "23px" : "3px", bottom: "3px",
-                                backgroundColor: "white", transition: ".4s", borderRadius: "50%",
-                                boxShadow: "0 2px 4px rgba(0,0,0,0.1)"
-                              }}></span>
-                            </span>
-                          </label>
-
-                          <span style={{
-                            fontSize: "14px", fontWeight: "600", minWidth: "60px",
-                            color: form.status === "Live" ? "#16a34a" : "#dc2626"
-                          }}>
-                            {form.status}
-                          </span>
-                        </div>
+                        
+                        <span style={{
+                          backgroundColor: '#f1f5f9',
+                          padding: '6px 18px',           
+                          borderRadius: '24px',
+                          fontSize: '14px',              
+                          fontWeight: '700',
+                          color: '#475569',
+                          border: '1px solid #e2e8f0',
+                          letterSpacing: '0.3px'
+                        }}>
+                          Draft
+                        </span>
                       </div>
 
                       <div className="proj-form-layout-row columns-4">
@@ -1002,37 +1316,61 @@ const ProjectCreation = ({ userRole, onLogout }) => {
                       </div>
                     </section>
 
-                    {/* 2. Organization Details */}
                     <section className="proj-panel" style={{ backgroundColor: 'white', padding: 0, border: 'none', marginBottom: '32px' }}>
                       <h3 className="proj-section-title" style={{ fontSize: '16px', fontWeight: '700', color: '#1e293b', marginBottom: '20px', borderBottom: '1px solid #e2e8f0', paddingBottom: '12px' }}>Organization Details</h3>
 
+                      {/* ─── Radio Buttons for Company / Plant ─── */}
+                      <div style={{ marginBottom: '16px' }}>
+                        <label style={{ marginRight: '20px', fontSize: '14px', fontWeight: '500', color: '#334155' }}>
+                          <input
+                            type="radio"
+                            name="organizationType"
+                            value="company"
+                            checked={form.organizationType === 'company'}
+                            onChange={() => setForm(prev => ({ ...prev, organizationType: 'company', companyName: '', plantName: '' }))}
+                          /> Company
+                        </label>
+                        <label style={{ fontSize: '14px', fontWeight: '500', color: '#334155' }}>
+                          <input
+                            type="radio"
+                            name="organizationType"
+                            value="plant"
+                            checked={form.organizationType === 'plant'}
+                            onChange={() => setForm(prev => ({ ...prev, organizationType: 'plant', companyName: '', plantName: '' }))}
+                          /> Plant
+                        </label>
+                      </div>
+
                       <div className="proj-form-layout-row columns-4">
-                        <label className="proj-field-item">
-                          <span>Company <b style={{ color: '#ef4444' }}>*</b></span>
-                          <SearchableSelect 
-                            name="companyName" 
-                            value={form.companyName} 
-                            onChange={handleChange} 
-                            placeholder="Select Company"
-                            options={companies.map(c => ({ value: c.coyId, label: c.coyNm }))}
-                          />
-                        </label>
-                        <label className="proj-field-item">
-                          <span>Plant <b style={{ color: '#ef4444' }}>*</b></span>
-                          <SearchableSelect 
-                            name="plantName" 
-                            value={form.plantName} 
-                            onChange={handleChange} 
-                            placeholder="Select Plant"
-                            options={plants.filter(p => !form.companyName || String(p.coyId) === String(form.companyName)).map(p => ({ value: p.pltId, label: p.pltNm }))}
-                          />
-                        </label>
+                        {form.organizationType === 'company' ? (
+                          <label className="proj-field-item">
+                            <span>Company <b style={{ color: '#ef4444' }}>*</b></span>
+                            <SearchableSelect
+                              name="companyName"
+                              value={form.companyName}
+                              onChange={handleChange}
+                              placeholder="Select Company"
+                              options={companies.map(c => ({ value: c.coyId, label: c.coyNm }))}
+                            />
+                          </label>
+                        ) : (
+                          <label className="proj-field-item">
+                            <span>Plant <b style={{ color: '#ef4444' }}>*</b></span>
+                            <SearchableSelect
+                              name="plantName"
+                              value={form.plantName}
+                              onChange={handleChange}
+                              placeholder="Select Plant"
+                              options={plants.map(p => ({ value: p.pltId, label: p.pltNm }))}
+                            />
+                          </label>
+                        )}
                         <label className="proj-field-item">
                           <span>Department <b style={{ color: '#ef4444' }}>*</b></span>
-                          <SearchableSelect 
-                            name="department" 
-                            value={form.department} 
-                            onChange={handleChange} 
+                          <SearchableSelect
+                            name="department"
+                            value={form.department}
+                            onChange={handleChange}
                             placeholder="Select Department"
                             options={departments.map(d => ({ value: d.deptId, label: d.deptNm }))}
                           />
@@ -1047,20 +1385,29 @@ const ProjectCreation = ({ userRole, onLogout }) => {
                         <label className="proj-field-item">
                           <span>Total Project Days <b style={{ color: '#ef4444' }}>*</b></span>
                           <input type="text" name="totalProjectDays" value={form.totalProjectDays} onChange={handleChange} placeholder="Enter total days" />
-                          <small style={{ color: '#64748b', fontSize: '12px', marginTop: '4px' }}>Auto calculates end date</small>
+                          <small style={{ color: '#64748b', fontSize: '12px', marginTop: '4px' }}>Auto calculates end date (inclusive)</small>
                         </label>
                         <label className="proj-field-item">
                           <span>Tentative Start Date <b style={{ color: '#ef4444' }}>*</b></span>
-                          <input type="date" name="startDate" value={form.startDate} onChange={handleChange} />
+                          <DatePicker
+                            name="startDate"
+                            value={form.startDate}
+                            onChange={handleChange}
+                            placeholder="dd/mm/yyyy"
+                          />
                         </label>
                         <label className="proj-field-item">
                           <span>Tentative End Date <b style={{ color: '#ef4444' }}>*</b></span>
-                          <input type="date" name="endDate" value={form.endDate} onChange={handleChange} />
+                          <DatePicker
+                            name="endDate"
+                            value={form.endDate}
+                            onChange={handleChange}
+                            placeholder="dd/mm/yyyy"
+                          />
                         </label>
                       </div>
                     </section>
 
-                    {/* 3. Information */}
                     <section className="proj-panel" style={{ backgroundColor: 'white', padding: 0, border: 'none', marginBottom: '32px' }}>
                       <h3 className="proj-section-title" style={{ fontSize: '16px', fontWeight: '700', color: '#1e293b', marginBottom: '20px', borderBottom: '1px solid #e2e8f0', paddingBottom: '12px' }}> Information</h3>
 
@@ -1073,7 +1420,6 @@ const ProjectCreation = ({ userRole, onLogout }) => {
                     </section>
                   </div>
 
-                  {/* Form Footer Buttons */}
                   <div className="proj-form-footer" style={{
                     display: 'flex',
                     justifyContent: 'flex-end',
@@ -1085,9 +1431,7 @@ const ProjectCreation = ({ userRole, onLogout }) => {
                     <button type="button" className="proj-btn primary" onClick={handleSave}>
                       <Save size={14} /> {isEditing ? "Update Project" : "Save Project"}
                     </button>
-                    <button type="button" className="proj-btn tertiary" onClick={handleResetForm}>
-                      <RefreshCcw size={14} /> Reset
-                    </button>
+
                     <button type="button" className="proj-btn secondary" onClick={() => {
                       setView("list");
                       handleResetForm();
@@ -1101,19 +1445,19 @@ const ProjectCreation = ({ userRole, onLogout }) => {
               </div>
             </>
           ) : (
-            /* ================= VIEW: PROJECT LIST ================= */
             <div className="proj-content" style={{ maxWidth: '1280px', margin: '0 auto' }}>
 
-              {/* INTEGRATED CARD FOR FILTERS AND TABLE */}
               <div className="proj-table-panel" style={{ backgroundColor: 'white', borderRadius: '8px', border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
 
-                {/* Header with Title and Add New Button - Inside Card */}
+                {/* ─── Header with Title, Search, and Add Button ─── */}
                 <div style={{
                   display: 'flex',
                   justifyContent: 'space-between',
                   alignItems: 'center',
                   padding: '20px 24px',
-                  borderBottom: '1px solid #e2e8f0'
+                  borderBottom: '1px solid #e2e8f0',
+                  flexWrap: 'wrap',
+                  gap: '12px'
                 }}>
                   <div>
                     <h2 style={{ fontSize: '18px', fontWeight: '700', color: '#0f172a', margin: 0 }}>
@@ -1123,20 +1467,69 @@ const ProjectCreation = ({ userRole, onLogout }) => {
                       View and manage all project records
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    className="proj-btn-add-new"
-                    onClick={() => {
-                      handleResetForm();
-                      setIsEditing(false);
-                      setView("form");
-                    }}
-                  >
-                    <Plus size={16} /> Add New Project
-                  </button>
+                  <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+                    {/* Search Bar */}
+                    <div style={{ position: 'relative', width: '240px' }}>
+                      <input
+                        type="text"
+                        placeholder="Search projects..."
+                        value={searchQuery}
+                        onChange={handleSearchChange}
+                        style={{
+                          width: '100%',
+                          padding: '8px 12px 8px 36px',
+                          border: '1px solid #cbd5e1',
+                          borderRadius: '6px',
+                          fontSize: '14px',
+                          outline: 'none',
+                          boxSizing: 'border-box'
+                        }}
+                      />
+                      <Search
+                        size={18}
+                        style={{
+                          position: 'absolute',
+                          left: '10px',
+                          top: '50%',
+                          transform: 'translateY(-50%)',
+                          color: '#94a3b8'
+                        }}
+                      />
+                      {searchQuery && (
+                        <button
+                          type="button"
+                          onClick={() => setSearchQuery('')}
+                          style={{
+                            position: 'absolute',
+                            right: '8px',
+                            top: '50%',
+                            transform: 'translateY(-50%)',
+                            background: 'none',
+                            border: 'none',
+                            cursor: 'pointer',
+                            color: '#94a3b8',
+                            padding: '2px'
+                          }}
+                        >
+                          <X size={16} />
+                        </button>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      className="proj-btn-add-new"
+                      onClick={() => {
+                        handleResetForm(projects);
+                        setIsEditing(false);
+                        setView("form");
+                      }}
+                    >
+                      <Plus size={16} /> Add New Project
+                    </button>
+                  </div>
                 </div>
 
-                {/* ─── NEW: Status filter tabs ────────────────────────── */}
+                {/* ─── Status filter tabs ────────────────────────── */}
                 <div style={{
                   padding: '8px 24px',
                   borderBottom: '1px solid #e2e8f0',
@@ -1145,7 +1538,7 @@ const ProjectCreation = ({ userRole, onLogout }) => {
                   backgroundColor: '#fafbfc'
                 }}>
                   <button
-                    onClick={() => setStatusTab('All')}
+                    onClick={() => handleTabChange('All')}
                     style={{
                       padding: '6px 16px',
                       borderRadius: '20px',
@@ -1161,7 +1554,7 @@ const ProjectCreation = ({ userRole, onLogout }) => {
                     All
                   </button>
                   <button
-                    onClick={() => setStatusTab('Draft')}
+                    onClick={() => handleTabChange('Draft')}
                     style={{
                       padding: '6px 16px',
                       borderRadius: '20px',
@@ -1177,7 +1570,7 @@ const ProjectCreation = ({ userRole, onLogout }) => {
                     Draft
                   </button>
                   <button
-                    onClick={() => setStatusTab('Live')}
+                    onClick={() => handleTabChange('Live')}
                     style={{
                       padding: '6px 16px',
                       borderRadius: '20px',
@@ -1192,211 +1585,319 @@ const ProjectCreation = ({ userRole, onLogout }) => {
                   >
                     Live
                   </button>
+                  <button
+                    onClick={() => handleTabChange('Hold')}
+                    style={{
+                      padding: '6px 16px',
+                      borderRadius: '20px',
+                      border: '1px solid #cbd5e1',
+                      backgroundColor: statusTab === 'Hold' ? '#2563eb' : 'white',
+                      color: statusTab === 'Hold' ? 'white' : '#334155',
+                      cursor: 'pointer',
+                      fontSize: '13px',
+                      fontWeight: '600',
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    Hold
+                  </button>
+                  <button
+                    onClick={() => handleTabChange('Closed')}
+                    style={{
+                      padding: '6px 16px',
+                      borderRadius: '20px',
+                      border: '1px solid #cbd5e1',
+                      backgroundColor: statusTab === 'Closed' ? '#2563eb' : 'white',
+                      color: statusTab === 'Closed' ? 'white' : '#334155',
+                      cursor: 'pointer',
+                      fontSize: '13px',
+                      fontWeight: '600',
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    Closed
+                  </button>
                 </div>
 
-                {/* Data Table Section Inside the Card */}
                 <div className="proj-table-container" style={{ overflowX: 'auto', paddingBottom: '140px' }}>
-                  <table className="proj-list-table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '2800px' }}>
-                    <thead style={{ backgroundColor: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
-                      <tr>
-                        <th style={{ width: "50px", padding: '14px 20px', fontSize: '11px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>S.NO</th>
-                        <th style={{ padding: '14px 20px', fontSize: '11px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>LOGO</th>
-                        <th
-                          className="sortable"
-                          onClick={() => handleSort("projectCode")}
-                          style={{ padding: '14px 20px', fontSize: '11px', color: '#64748b', fontWeight: '700', cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.5px' }}
-                        >
-                          PROJECT CODE{" "}
-                          {sortConfig.key === "projectCode" &&
-                            (sortConfig.direction === "asc" ? "▲" : "▼")}
-                        </th>
-                        <th
-                          className="sortable"
-                          onClick={() => handleSort("projectName")}
-                          style={{ padding: '14px 20px', fontSize: '11px', color: '#64748b', fontWeight: '700', cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.5px' }}
-                        >
-                          PROJECT NAME{" "}
-                          {sortConfig.key === "projectName" &&
-                            (sortConfig.direction === "asc" ? "▲" : "▼")}
-                        </th>
-                        <th style={{ padding: '14px 20px', fontSize: '11px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>COMPANY</th>
-                        <th style={{ padding: '14px 20px', fontSize: '11px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>PLANT</th>
-                        <th style={{ padding: '14px 20px', fontSize: '11px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>DEPARTMENT</th>
-                        <th style={{ padding: '14px 20px', fontSize: '11px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>DESCRIPTION</th>
-                        <th style={{ padding: '14px 20px', fontSize: '11px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>OBJECTIVE</th>
-                        <th style={{ padding: '14px 20px', fontSize: '11px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>DELIVERABLES</th>
-                        <th style={{ padding: '14px 20px', fontSize: '11px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>PRIORITY</th>
-                        <th style={{ padding: '14px 20px', fontSize: '11px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>START DATE</th>
-                        <th style={{ padding: '14px 20px', fontSize: '11px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>END DATE</th>
-                        <th style={{ padding: '14px 20px', fontSize: '11px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>TOTAL DAYS</th>
-                        <th style={{ padding: '14px 20px', fontSize: '11px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>REMARKS</th>
-                        <th style={{ padding: '14px 20px', fontSize: '11px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>STATUS</th>
-                        <th style={{ textAlign: "center", width: "100px", padding: '14px 20px', fontSize: '11px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                          ACTIONS
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {currentItems.length > 0 ? (
-                        currentItems.map((project, index) => (
-                          <tr key={project.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                            <td data-label="S.NO" style={{ padding: '14px 20px', fontSize: '14px', color: '#334155' }}>{indexOfFirstItem + index + 1}</td>
-                            <td data-label="LOGO" style={{ padding: '14px 20px' }}>
-                              {project.logo ? (
-                                <img src={project.logo} alt="Logo" style={{ width: '32px', height: '32px', borderRadius: '4px', objectFit: 'cover', border: '1px solid #e2e8f0' }} />
-                              ) : (
-                                <div style={{ width: '32px', height: '32px', borderRadius: '4px', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #e2e8f0' }}>
-                                  <ImageIcon size={16} style={{ color: '#94a3b8' }} />
-                                </div>
-                              )}
-                            </td>
-                            <td data-label="PROJECT CODE" style={{ padding: '14px 20px', fontSize: '14px', color: '#334155' }}>
-                              <span style={{ backgroundColor: '#f1f5f9', padding: '4px 10px', borderRadius: '4px', fontWeight: '600', color: '#0f172a', border: '1px solid #e2e8f0', fontSize: '13px' }}>
-                                {project.projectCode}
-                              </span>
-                            </td>
-                            <td data-label="PROJECT NAME" style={{ padding: '14px 20px', fontSize: '14px', color: '#334155' }}><strong>{project.projectName}</strong></td>
-                            <td data-label="COMPANY" style={{ padding: '14px 20px', fontSize: '14px', color: '#334155' }}>{project.companyName || "N/A"}</td>
-                            <td data-label="PLANT" style={{ padding: '14px 20px', fontSize: '14px', color: '#334155' }}>{project.plantName || "N/A"}</td>
-                            <td data-label="DEPARTMENT" style={{ padding: '14px 20px', fontSize: '14px', color: '#334155' }}>{project.department || "N/A"}</td>
-                            <td data-label="DESCRIPTION" style={{ padding: '14px 20px', fontSize: '14px', color: '#334155' }}>{project.projectDescription || "N/A"}</td>
-                            <td data-label="OBJECTIVE" style={{ padding: '14px 20px', fontSize: '13px', color: '#334155', whiteSpace: 'pre-wrap', lineHeight: '1.6' }}>{formatListText(project.projectObjective)}</td>
-                            <td data-label="DELIVERABLES" style={{ padding: '14px 20px', fontSize: '13px', color: '#334155', whiteSpace: 'pre-wrap', lineHeight: '1.6' }}>{formatListText(project.expectedDeliverables)}</td>
-                            <td data-label="PRIORITY" style={{ padding: '14px 20px', fontSize: '14px', color: '#334155' }}>
-                              <span style={{
-                                padding: '4px 10px',
-                                borderRadius: '4px',
-                                fontSize: '12px',
-                                fontWeight: '600',
-                                display: 'inline-block',
-                                backgroundColor: project.priority === 'HIGH' ? '#fef2f2' :
-                                  project.priority === 'NORMAL' ? '#eff6ff' :
-                                    project.priority === 'MEDIUM' ? '#fefce8' : '#f0fdf4',
-                                color: project.priority === 'HIGH' ? '#dc2626' :
-                                  project.priority === 'NORMAL' ? '#2563eb' :
-                                    project.priority === 'MEDIUM' ? '#ca8a04' : '#16a34a'
-                              }}>
-                                {project.priority}
-                              </span>
-                            </td>
-                            <td data-label="START DATE" style={{ padding: '14px 20px', fontSize: '14px', color: '#334155' }}>{project.startDate || "N/A"}</td>
-                            <td data-label="END DATE" style={{ padding: '14px 20px', fontSize: '14px', color: '#334155' }}>{project.endDate || "N/A"}</td>
-                            <td data-label="TOTAL DAYS" style={{ padding: '14px 20px', fontSize: '14px', color: '#334155' }}>{project.totalProjectDays || "N/A"}</td>
-                            <td data-label="REMARKS" style={{ padding: '14px 20px', fontSize: '14px', color: '#334155' }}>{project.remarks || "N/A"}</td>
-                             <td data-label="STATUS" style={{ padding: '14px 20px', fontSize: '14px', color: '#334155' }}>
-                              <select
-                                value={project.status}
-                                onChange={(e) => handleStatusChange(project, e.target.value)}
-                                style={{
-                                  padding: '6px 12px',
-                                  borderRadius: '8px',
-                                  fontSize: '13px',
-                                  fontWeight: '600',
-                                  border: '1px solid #cbd5e1',
-                                  outline: 'none',
-                                  cursor: 'pointer',
-                                  backgroundColor: project.status === 'LIVE' || project.status === 'Live' ? '#dcfce7' :
-                                                   project.status === 'DRAFT' || project.status === 'Draft' ? '#fefce8' :
-                                                   project.status === 'IN_PROGRESS' || project.status === 'In Progress' ? '#eff6ff' :
-                                                   project.status === 'HOLD' || project.status === 'Hold' ? '#fef3c7' : '#fee2e2',
-                                  color: project.status === 'LIVE' || project.status === 'Live' ? '#166534' :
-                                         project.status === 'DRAFT' || project.status === 'Draft' ? '#854d0e' :
-                                         project.status === 'IN_PROGRESS' || project.status === 'In Progress' ? '#1e40af' :
-                                         project.status === 'HOLD' || project.status === 'Hold' ? '#92400e' : '#991b1b'
-                                }}
-                              >
-                                {project.status === "DRAFT" || project.status === "Draft" ? (
-                                  <>
-                                    <option value="DRAFT" disabled style={{ display: 'none' }}>Draft</option>
-                                    <option value="LIVE">Live</option>
-                                    <option value="HOLD">Hold</option>
-                                    <option value="CLOSED">Closed</option>
-                                  </>
+                  {/* ─── Loading Spinner ─────────────────────────────── */}
+                  {loading ? (
+                    <div style={{ textAlign: 'center', padding: '60px 20px', color: '#64748b' }}>
+                      <div style={{ display: 'inline-block', width: '40px', height: '40px', border: '4px solid #e2e8f0', borderTop: '4px solid #2563eb', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                      <p style={{ marginTop: '12px', fontSize: '14px' }}>Loading projects...</p>
+                    </div>
+                  ) : (
+                    <table className="proj-list-table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '2800px' }}>
+                      <thead style={{ backgroundColor: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
+                        <tr>
+                          <th style={{ width: "50px", padding: '14px 20px', fontSize: '11px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>S.NO</th>
+                          <th style={{ padding: '14px 20px', fontSize: '11px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>LOGO</th>
+                          <th
+                            className="sortable"
+                            onClick={() => handleSort("projectCode")}
+                            style={{ padding: '14px 20px', fontSize: '11px', color: '#64748b', fontWeight: '700', cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.5px' }}
+                          >
+                            PROJECT CODE{" "}
+                            {sortConfig.key === "projectCode" &&
+                              (sortConfig.direction === "asc" ? "▲" : "▼")}
+                          </th>
+                          <th
+                            className="sortable"
+                            onClick={() => handleSort("projectName")}
+                            style={{ padding: '14px 20px', fontSize: '11px', color: '#64748b', fontWeight: '700', cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.5px' }}
+                          >
+                            PROJECT NAME{" "}
+                            {sortConfig.key === "projectName" &&
+                              (sortConfig.direction === "asc" ? "▲" : "▼")}
+                          </th>
+                          <th style={{ padding: '14px 20px', fontSize: '11px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>COMPANY</th>
+                          <th style={{ padding: '14px 20px', fontSize: '11px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>PLANT</th>
+                          <th style={{ padding: '14px 20px', fontSize: '11px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>DEPARTMENT</th>
+                          <th style={{ padding: '14px 20px', fontSize: '11px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>DESCRIPTION</th>
+                          <th style={{ padding: '14px 20px', fontSize: '11px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>OBJECTIVE</th>
+                          <th style={{ padding: '14px 20px', fontSize: '11px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>DELIVERABLES</th>
+                          <th style={{ padding: '14px 20px', fontSize: '11px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>PRIORITY</th>
+                          <th style={{ padding: '14px 20px', fontSize: '11px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>START DATE</th>
+                          <th style={{ padding: '14px 20px', fontSize: '11px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>END DATE</th>
+                          <th style={{ padding: '14px 20px', fontSize: '11px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>TOTAL DAYS</th>
+                          <th style={{ padding: '14px 20px', fontSize: '11px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>REMARKS</th>
+                          <th style={{ padding: '14px 20px', fontSize: '11px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>STATUS</th>
+                          <th style={{ textAlign: "center", width: "100px", padding: '14px 20px', fontSize: '11px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                            ACTIONS
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {currentItems.length > 0 ? (
+                          currentItems.map((project, index) => (
+                            <tr key={`${project._type}-${project.id}`} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                              <td data-label="S.NO" style={{ padding: '14px 20px', fontSize: '14px', color: '#334155' }}>{indexOfFirstItem + index + 1}</td>
+                              <td data-label="LOGO" style={{ padding: '14px 20px' }}>
+                                {project.logo ? (
+                                  <img src={project.logo} alt="Logo" style={{ width: '32px', height: '32px', borderRadius: '4px', objectFit: 'cover', border: '1px solid #e2e8f0' }} />
                                 ) : (
+                                  <div style={{ width: '32px', height: '32px', borderRadius: '4px', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #e2e8f0' }}>
+                                    <ImageIcon size={16} style={{ color: '#94a3b8' }} />
+                                  </div>
+                                )}
+                              </td>
+                              <td data-label="PROJECT CODE" style={{ padding: '14px 20px', fontSize: '14px', color: '#334155' }}>
+                                <span style={{ backgroundColor: '#f1f5f9', padding: '4px 10px', borderRadius: '4px', fontWeight: '600', color: '#0f172a', border: '1px solid #e2e8f0', fontSize: '13px' }}>
+                                  {project.projectCode}
+                                </span>
+                              </td>
+                              <td data-label="PROJECT NAME" style={{ padding: '14px 20px', fontSize: '14px', color: '#334155' }}><strong>{project.projectName}</strong></td>
+                              <td data-label="COMPANY" style={{ padding: '14px 20px', fontSize: '14px', color: '#334155' }}>{project.companyName || "N/A"}</td>
+                              <td data-label="PLANT" style={{ padding: '14px 20px', fontSize: '14px', color: '#334155' }}>{project.plantName || "N/A"}</td>
+                              <td data-label="DEPARTMENT" style={{ padding: '14px 20px', fontSize: '14px', color: '#334155' }}>{project.department || "N/A"}</td>
+                              <td data-label="DESCRIPTION" style={{ 
+                                padding: '14px 20px', 
+                                fontSize: '14px', 
+                                color: '#334155',
+                                whiteSpace: 'nowrap',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                maxWidth: '150px'
+                              }}>
+                                {project.projectDescription || "N/A"}
+                              </td>
+                              <td data-label="OBJECTIVE" style={{ 
+                                padding: '14px 20px', 
+                                fontSize: '13px', 
+                                color: '#334155',
+                                whiteSpace: 'nowrap',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                maxWidth: '150px'
+                              }}>
+                                {project.projectObjective || "N/A"}
+                              </td>
+                              <td data-label="DELIVERABLES" style={{ 
+                                padding: '14px 20px', 
+                                fontSize: '13px', 
+                                color: '#334155',
+                                whiteSpace: 'nowrap',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                maxWidth: '150px'
+                              }}>
+                                {project.expectedDeliverables || "N/A"}
+                              </td>
+                              <td data-label="PRIORITY" style={{ padding: '14px 20px', fontSize: '14px', color: '#334155' }}>
+                                <span style={{
+                                  padding: '4px 10px',
+                                  borderRadius: '4px',
+                                  fontSize: '12px',
+                                  fontWeight: '600',
+                                  display: 'inline-block',
+                                  backgroundColor: project.priority === 'HIGH' ? '#fef2f2' :
+                                    project.priority === 'NORMAL' ? '#eff6ff' :
+                                      project.priority === 'MEDIUM' ? '#fefce8' : '#f0fdf4',
+                                  color: project.priority === 'HIGH' ? '#dc2626' :
+                                    project.priority === 'NORMAL' ? '#2563eb' :
+                                      project.priority === 'MEDIUM' ? '#ca8a04' : '#16a34a'
+                                }}>
+                                  {project.priority}
+                                </span>
+                              </td>
+                              <td data-label="START DATE" style={{ padding: '14px 20px', fontSize: '14px', color: '#334155' }}>{formatListDate(project.startDate)}</td>
+                              <td data-label="END DATE" style={{ padding: '14px 20px', fontSize: '14px', color: '#334155' }}>{formatListDate(project.endDate)}</td>
+                              <td data-label="TOTAL DAYS" style={{ padding: '14px 20px', fontSize: '14px', color: '#334155' }}>{project.totalProjectDays || "N/A"}</td>
+                              <td data-label="REMARKS" style={{ 
+                                padding: '14px 20px', 
+                                fontSize: '14px', 
+                                color: '#334155',
+                                whiteSpace: 'nowrap',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                maxWidth: '150px'
+                              }}>
+                                {project.remarks || "N/A"}
+                              </td>
+                              <td data-label="STATUS" style={{ padding: '14px 20px', fontSize: '14px', color: '#334155' }}>
+                                {project.status.toUpperCase() === 'CLOSED' ? (
+                                  <span style={{
+                                    padding: '6px 12px',
+                                    borderRadius: '8px',
+                                    fontSize: '13px',
+                                    fontWeight: '600',
+                                    backgroundColor: '#fee2e2',
+                                    color: '#991b1b',
+                                    display: 'inline-block',
+                                    border: '1px solid #fecaca'
+                                  }}>
+                                    Closed
+                                  </span>
+                                ) : (
+                                  <select
+                                    value={project.status}
+                                    onChange={(e) => handleStatusChange(project, e.target.value)}
+                                    style={{
+                                      padding: '6px 12px',
+                                      borderRadius: '8px',
+                                      fontSize: '13px',
+                                      fontWeight: '600',
+                                      border: '1px solid #cbd5e1',
+                                      outline: 'none',
+                                      cursor: 'pointer',
+                                      backgroundColor: project.status === 'LIVE' || project.status === 'Live' ? '#dcfce7' :
+                                        project.status === 'DRAFT' || project.status === 'Draft' ? '#fefce8' :
+                                          project.status === 'IN_PROGRESS' || project.status === 'In Progress' ? '#eff6ff' :
+                                            project.status === 'HOLD' || project.status === 'Hold' ? '#fef3c7' : '#fee2e2',
+                                      color: project.status === 'LIVE' || project.status === 'Live' ? '#166534' :
+                                        project.status === 'DRAFT' || project.status === 'Draft' ? '#854d0e' :
+                                          project.status === 'IN_PROGRESS' || project.status === 'In Progress' ? '#1e40af' :
+                                            project.status === 'HOLD' || project.status === 'Hold' ? '#92400e' : '#991b1b'
+                                    }}
+                                  >
+                                    {(() => {
+                                      const upper = project.status.toUpperCase();
+                                      if (upper === "DRAFT") {
+                                        return (
+                                          <>
+                                            <option value={project.status} disabled style={{ display: 'none' }}>Draft</option>
+                                            <option value="LIVE">Live</option>
+                                          </>
+                                        );
+                                      } else {
+                                        return (
+                                          <>
+                                            {upper !== "LIVE" && <option value="LIVE">Live</option>}
+                                            {upper !== "HOLD" && <option value="HOLD">Hold</option>}
+                                            {upper !== "CLOSED" && <option value="CLOSED">Closed</option>}
+                                            <option value={project.status} disabled style={{ display: 'none' }}>
+                                              {project.status === "LIVE" ? "Live" : project.status === "HOLD" ? "Hold" : "Closed"}
+                                            </option>
+                                          </>
+                                        );
+                                      }
+                                    })()}
+                                  </select>
+                                )}
+                              </td>
+                              <td data-label="ACTIONS" style={{ position: "relative", padding: '14px 20px', textAlign: 'center' }}>
+                                <button
+                                  type="button"
+                                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', padding: '4px 8px', borderRadius: '4px' }}
+                                  onClick={() => toggleDropdown(`${project._type}-${project.id}`)}
+                                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f1f5f9'}
+                                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                                >
+                                  <MoreVertical size={18} />
+                                </button>
+
+                                {activeDropdown === `${project._type}-${project.id}` && (
                                   <>
-                                    {project.status !== "LIVE" && project.status !== "Live" && (
-                                      <option value="LIVE">Live</option>
-                                    )}
-                                    {project.status !== "HOLD" && project.status !== "Hold" && (
-                                      <option value="HOLD">Hold</option>
-                                    )}
-                                    {project.status !== "CLOSED" && project.status !== "Closed" && (
-                                      <option value="CLOSED">Closed</option>
-                                    )}
-                                    <option value={project.status} disabled style={{ display: 'none' }}>
-                                      {project.status === "LIVE" ? "Live" : project.status === "HOLD" ? "Hold" : "Closed"}
-                                    </option>
+                                    <div
+                                      className="proj-actions-dropdown-backdrop"
+                                      onClick={() => setActiveDropdown(null)}
+                                      style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9 }}
+                                    />
+                                    <div className="proj-actions-dropdown-menu" style={{ position: 'absolute', right: '30px', top: '8px', backgroundColor: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', zIndex: 10, display: 'flex', flexDirection: 'column', padding: '4px 0', minWidth: '170px' }}>
+                                      <button
+                                        type="button"
+                                        style={{ padding: '10px 16px', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', color: '#334155', borderRadius: '4px', margin: '2px 4px' }}
+                                        onClick={() => {
+                                          if (project._type === 'live') {
+                                            navigate(`/project-details/${project.id}`, { state: { viewMode: 'live' } });
+                                          } else {
+                                            navigate(`/project-details/${project.id}`, { state: { viewMode: 'milestones_only' } });
+                                          }
+                                          setActiveDropdown(null);
+                                        }}
+                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f1f5f9'}
+                                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                                      >
+                                        <Eye size={15} /> View
+                                      </button>
+                                      {project._type !== 'live' && (
+                                        <>
+                                          <button
+                                            type="button"
+                                            style={{ padding: '10px 16px', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', color: '#2563eb', borderRadius: '4px', margin: '2px 4px' }}
+                                            onClick={() => handleDuplicate(project)}
+                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#eff6ff'}
+                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                                          >
+                                            <Copy size={15} /> Duplicate (Template)
+                                          </button>
+                                          <button
+                                            type="button"
+                                            style={{ padding: '10px 16px', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', color: '#334155', borderRadius: '4px', margin: '2px 4px' }}
+                                            onClick={() => handleEdit(project)}
+                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f1f5f9'}
+                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                                          >
+                                            <Edit size={15} /> Edit
+                                          </button>
+                                          <button
+                                            type="button"
+                                            style={{ padding: '10px 16px', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', color: '#ef4444', borderRadius: '4px', margin: '2px 4px' }}
+                                            onClick={() => handleDelete(project.id)}
+                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#fef2f2'}
+                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                                          >
+                                            <Trash2 size={15} /> Delete
+                                          </button>
+                                        </>
+                                      )}
+                                    </div>
                                   </>
                                 )}
-                              </select>
-                            </td>
-                            <td data-label="ACTIONS" style={{ position: "relative", padding: '14px 20px', textAlign: 'center' }}>
-                              <button
-                                type="button"
-                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', padding: '4px 8px', borderRadius: '4px' }}
-                                onClick={() => toggleDropdown(project.id)}
-                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f1f5f9'}
-                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                              >
-                                <MoreVertical size={18} />
-                              </button>
-
-                              {/* Actions Dropdown menu */}
-                              {activeDropdown === project.id && (
-                                <>
-                                  <div
-                                    className="proj-actions-dropdown-backdrop"
-                                    onClick={() => setActiveDropdown(null)}
-                                    style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9 }}
-                                  />
-                                  <div className="proj-actions-dropdown-menu" style={{ position: 'absolute', right: '30px', top: '8px', backgroundColor: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', zIndex: 10, display: 'flex', flexDirection: 'column', padding: '4px 0', minWidth: '140px' }}>
-                                    <button
-                                      type="button"
-                                      style={{ padding: '10px 16px', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', color: '#334155', borderRadius: '4px', margin: '2px 4px' }}
-                                      onClick={() => {
-                                        navigate(`/project-details/${project.id}`, { state: { viewMode: 'milestones_only' } });
-                                        setActiveDropdown(null);
-                                      }}
-                                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f1f5f9'}
-                                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                                    >
-                                      <Eye size={15} /> View
-                                    </button>
-                                    <button
-                                      type="button"
-                                      style={{ padding: '10px 16px', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', color: '#334155', borderRadius: '4px', margin: '2px 4px' }}
-                                      onClick={() => handleEdit(project)}
-                                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f1f5f9'}
-                                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                                    >
-                                      <Edit size={15} /> Edit
-                                    </button>
-                                    <button
-                                      type="button"
-                                      style={{ padding: '10px 16px', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', color: '#ef4444', borderRadius: '4px', margin: '2px 4px' }}
-                                      onClick={() => handleDelete(project.id)}
-                                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#fef2f2'}
-                                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                                    >
-                                      <Trash2 size={15} /> Delete
-                                    </button>
-                                  </div>
-                                </>
-                              )}
+                              </td>
+                            </tr>
+                          ))
+                        ) : (
+                          <tr>
+                            <td colSpan="17" style={{ textAlign: "center", padding: "60px 20px", color: '#64748b', fontSize: '14px' }}>
+                              No project records found. Add a new project using the button above.
                             </td>
                           </tr>
-                        ))
-                      ) : (
-                        <tr>
-                          <td colSpan="17" style={{ textAlign: "center", padding: "60px 20px", color: '#64748b', fontSize: '14px' }}>
-                            No project records found. Add a new project using the button above.
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
+                        )}
+                      </tbody>
+                    </table>
+                  )}
                 </div>
-
 
               </div>
             </div>
@@ -1404,7 +1905,6 @@ const ProjectCreation = ({ userRole, onLogout }) => {
         </main>
       </div>
 
-      {/* Deactivation Confirmation Modal */}
       {showDeactivateModal && (
         <div className="proj-modal-overlay" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 99, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div className="proj-modal" style={{ backgroundColor: 'white', borderRadius: '8px', width: '400px', maxWidth: '90%', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)' }}>
@@ -1455,7 +1955,6 @@ const ProjectCreation = ({ userRole, onLogout }) => {
         confirmText={alertConfig.confirmText}
         cancelText={alertConfig.cancelText}
       />
-      {/* ── Go Live Calendar Modal (overlay) ── */}
       {goLiveProject && (
         <GoLiveCalendar
           project={goLiveProject}
@@ -1464,6 +1963,12 @@ const ProjectCreation = ({ userRole, onLogout }) => {
         />
       )}
 
+      <style>{`
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   );
 };

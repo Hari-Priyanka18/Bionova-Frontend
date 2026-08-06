@@ -4,10 +4,11 @@
 /* ===== SHELL LAYOUT ===== */
 .mp-shell-container {
   display: flex;
-  width: 100vw;
+  width: 100%;
   min-height: 100vh;
   background: #f4f7fc;
   font-family: 'Inter', sans-serif;
+  overflow-x: hidden;
 }
 
 .mp-shell-container .sidebar {
@@ -20,15 +21,20 @@
 .mp-shell {
   flex: 1;
   margin-left: 260px;
+  width: calc(100% - 260px);
+  max-width: calc(100% - 260px);
   display: flex;
   flex-direction: column;
   min-height: 100vh;
   background: #f4f7fc;
-  transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1), max-width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-sizing: border-box;
 }
 
 body.sidebar-collapsed .mp-shell {
   margin-left: 76px;
+  width: calc(100% - 76px);
+  max-width: calc(100% - 76px);
 }
 
 /* ===== BODY SPLIT ===== */
@@ -37,6 +43,8 @@ body.sidebar-collapsed .mp-shell {
   flex: 1;
   min-height: 0;
   overflow: hidden;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 /* ===== LEFT PANEL ===== */
@@ -57,6 +65,9 @@ body.sidebar-collapsed .mp-shell {
   border-right: none;
   background: #f8f9fc;
   padding: 24px 32px;
+  overflow-x: hidden;
+  box-sizing: border-box;
+  min-width: 0;
 }
 
 .mp-list-toolbar {
@@ -339,8 +350,20 @@ body.sidebar-collapsed .mp-shell {
   flex-direction: column;
   height: calc(100vh - 64px);
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 20px 28px;
   background: #f8f9fc;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.mp-right-panel.full-width {
+  width: 100%;
+  height: calc(100vh - 64px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 24px 32px;
+  box-sizing: border-box;
 }
 
 .mp-detail-topbar {

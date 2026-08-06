@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
-import Sidebar from "../Sidebar";
-import Header from "../Header";
+import Sidebar from "../Sidebar.jsx";
+import Header from "../Header.jsx";
 import { 
   User, 
   Camera, 
@@ -43,18 +43,56 @@ const authHeaders = () => {
   };
 };
 
+const formatDate = (dateString) => {
+  if (!dateString) return "-";
+  const d = new Date(dateString);
+  if (isNaN(d.getTime())) return dateString;
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const year = d.getFullYear();
+  return `${day}/${month}/${year}`;
+};
+
 const Profile = ({ userRole, onLogout }) => {
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  // Login Activity Mock Data (will be replaced with real API data later)
-  const loginActivity = [
-    { id: 1, device: "Chrome - Windows", time: "29-May-2025 09:00 AM", location: "Kolkata, India", status: "Active", type: "desktop" },
-    { id: 2, device: "Android App", time: "28-May-2025 06:30 PM", location: "Kolkata, India", status: "Logged Out", type: "mobile" },
-    { id: 3, device: "Chrome - Windows", time: "27-May-2025 08:15 AM", location: "Kolkata, India", status: "Logged Out", type: "desktop" },
-    { id: 4, device: "Edge - Windows", time: "26-May-2025 07:45 PM", location: "Kolkata, India", status: "Logged Out", type: "desktop" }
-  ];
+  // Login Activity State (fetched from backend)
+  const [loginActivity, setLoginActivity] = useState([]);
+  const [showAllLoginActivity, setShowAllLoginActivity] = useState(false);
+
+  const getDeviceType = (deviceInfo = "") => {
+    const info = deviceInfo.toLowerCase();
+    if (info.includes("android") || info.includes("ios") || info.includes("mobile") || info.includes("phone")) {
+      return "mobile";
+    }
+    if (info.includes("windows") || info.includes("mac") || info.includes("chrome") || info.includes("firefox") || info.includes("safari") || info.includes("edge")) {
+      return "desktop";
+    }
+    return "other";
+  };
+
+  const formatDateTime = (dateStr) => {
+    if (!dateStr) return "N/A";
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return dateStr;
+      const day = String(d.getDate()).padStart(2, '0');
+      const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      const month = months[d.getMonth()];
+      const year = d.getFullYear();
+      let hours = d.getHours();
+      const minutes = String(d.getMinutes()).padStart(2, '0');
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+      hours = hours % 12;
+      hours = hours ? hours : 12;
+      const strTime = String(hours).padStart(2, '0') + ':' + minutes + ' ' + ampm;
+      return `${day}-${month}-${year} ${strTime}`;
+    } catch (e) {
+      return dateStr;
+    }
+  };
 
   const getDeviceIcon = (type) => {
     switch (type) {
@@ -234,25 +272,36 @@ const Profile = ({ userRole, onLogout }) => {
     } catch (err) { console.error("Error fetching departments:", err); }
 
     try {
-      const res = await fetch(`${API_BASE}/employees`, { headers });
+      const res = await fetch(`${API_BASE}/profile`, { headers });
       if (res.ok) {
-        const empData = await res.json();
-        setEmployees(empData);
-        const loggedInEmail = sessionStorage.getItem("userEmail") || localStorage.getItem("userEmail");
-        if (loggedInEmail) {
-          const matchedProfile = empData.find(
-            (emp) => emp.email && emp.email.toLowerCase().trim() === loggedInEmail.toLowerCase().trim()
-          );
-          if (matchedProfile) {
-            setProfile(matchedProfile);
-            // Load existing photo from DB
-            if (matchedProfile.photoUrl) {
-              setProfilePhoto(matchedProfile.photoUrl);
-            }
-          }
+        const matchedProfile = await res.json();
+        setProfile(matchedProfile);
+        const isInactive = matchedProfile.sts === false || matchedProfile.sts === "INACTIVE" || matchedProfile.sts === 0 || matchedProfile.sts === "false" || matchedProfile.status === "Inactive" || matchedProfile.status === false;
+        sessionStorage.setItem("userAccountStatus", isInactive ? "Inactive" : "Active");
+        if (matchedProfile.photoUrl) {
+          setProfilePhoto(matchedProfile.photoUrl);
         }
       }
+    } catch (err) { console.error("Error fetching profile:", err); }
+
+    try {
+      const res = await fetch(`${API_BASE}/employees`, { headers });
+      if (res.ok) {
+        setEmployees(await res.json());
+      }
     } catch (err) { console.error("Error fetching employees:", err); }
+
+    try {
+      const res = await fetch(`${API_BASE}/settings`, { headers });
+      if (res.ok) {
+        const settingsData = await res.json();
+        if (settingsData && settingsData.loginActivity) {
+          setLoginActivity(settingsData.loginActivity);
+        }
+      }
+    } catch (err) {
+      console.error("Error fetching settings/login activity:", err);
+    }
   };
 
   useEffect(() => {
@@ -284,13 +333,23 @@ const Profile = ({ userRole, onLogout }) => {
   const profileDetails = profile ? {
     employeeCode: profile.empCode || "N/A",
     employeeName: `${profile.fstNm || ""} ${profile.lstNm || ""}`.trim() || "N/A",
+    gender: profile.gndr || profile.gender || "N/A",
+    dateOfBirth: profile.dob || "N/A",
     email: profile.email || "N/A",
     mobileNumber: profile.mobNum || "N/A",
+    address: profile.add || profile.address || "N/A",
     // Show plant name if plant exists, else company name
     companyName: profile.pltId 
       ? getPlantName(profile.pltId) 
       : (profile.coyId ? getCompanyName(profile.coyId) : "N/A"),
     department: profile.deptId ? getDeptName(profile.deptId) : "N/A",
+    employeeType: (function() {
+      const et = profile.empTyp || profile.empType || profile.employeeType || "";
+      if (et === "FTE") return "Full Time Employee (FTE)";
+      if (et === "CON") return "Contract Employee";
+      if (et === "RET") return "Retainer";
+      return et || "N/A";
+    })(),
     role: profile.role || "N/A",
     bloodGroup: profile.bldGrp || profile.bloodGroup || "N/A",
     reportingManager: profile.repManId ? getManagerName(profile.repManId) : "None",
@@ -300,10 +359,14 @@ const Profile = ({ userRole, onLogout }) => {
   } : {
     employeeCode: "Loading...",
     employeeName: "Loading...",
+    gender: "Loading...",
+    dateOfBirth: "Loading...",
     email: "Loading...",
     mobileNumber: "Loading...",
+    address: "Loading...",
     companyName: "Loading...",
     department: "Loading...",
+    employeeType: "Loading...",
     role: "Loading...",
     bloodGroup: "Loading...",
     reportingManager: "Loading...",
@@ -314,6 +377,9 @@ const Profile = ({ userRole, onLogout }) => {
 
   // Determine organization label based on profile
   const orgLabel = profile?.pltId ? "Plant" : "Company";
+
+  // Determine which login activities to display
+  const displayedActivities = showAllLoginActivity ? loginActivity : loginActivity.slice(0, 3);
 
   return (
     <div className="pf-shell-container">
@@ -395,6 +461,18 @@ const Profile = ({ userRole, onLogout }) => {
                   </div>
 
                   <div className="pf-detail-row">
+                    <div className="pf-detail-label"><User size={16} />Gender</div>
+                    <span className="pf-detail-separator">:</span>
+                    <div className="pf-detail-value">{profileDetails.gender}</div>
+                  </div>
+
+                  <div className="pf-detail-row">
+                    <div className="pf-detail-label"><Calendar size={16} />Date of Birth</div>
+                    <span className="pf-detail-separator">:</span>
+                    <div className="pf-detail-value">{profileDetails.dateOfBirth !== "N/A" && profileDetails.dateOfBirth !== "Loading..." ? formatDate(profileDetails.dateOfBirth) : profileDetails.dateOfBirth}</div>
+                  </div>
+
+                  <div className="pf-detail-row">
                     <div className="pf-detail-label"><Mail size={16} />Email</div>
                     <span className="pf-detail-separator">:</span>
                     <div className="pf-detail-value">{profileDetails.email}</div>
@@ -404,6 +482,12 @@ const Profile = ({ userRole, onLogout }) => {
                     <div className="pf-detail-label"><Phone size={16} />Mobile Number</div>
                     <span className="pf-detail-separator">:</span>
                     <div className="pf-detail-value">{profileDetails.mobileNumber}</div>
+                  </div>
+
+                  <div className="pf-detail-row">
+                    <div className="pf-detail-label"><MapPin size={16} />Address</div>
+                    <span className="pf-detail-separator">:</span>
+                    <div className="pf-detail-value">{profileDetails.address}</div>
                   </div>
 
                   {/* ─── Dynamic label for Company/Plant ─── */}
@@ -417,6 +501,12 @@ const Profile = ({ userRole, onLogout }) => {
                     <div className="pf-detail-label"><Briefcase size={16} />Department</div>
                     <span className="pf-detail-separator">:</span>
                     <div className="pf-detail-value">{profileDetails.department}</div>
+                  </div>
+
+                  <div className="pf-detail-row">
+                    <div className="pf-detail-label"><Briefcase size={16} />Employee Type</div>
+                    <span className="pf-detail-separator">:</span>
+                    <div className="pf-detail-value">{profileDetails.employeeType}</div>
                   </div>
 
                   <div className="pf-detail-row">
@@ -446,14 +536,14 @@ const Profile = ({ userRole, onLogout }) => {
                   <div className="pf-detail-row">
                     <div className="pf-detail-label"><Calendar size={16} />Date of Joining</div>
                     <span className="pf-detail-separator">:</span>
-                    <div className="pf-detail-value">{profileDetails.dateOfJoining}</div>
+                    <div className="pf-detail-value">{formatDate(profileDetails.dateOfJoining)}</div>
                   </div>
 
                   <div className="pf-detail-row">
                     <div className="pf-detail-label"><Clock size={16} />Status</div>
                     <span className="pf-detail-separator">:</span>
                     <div className="pf-detail-value">
-                      <span className="pf-status-badge">
+                      <span className={`pf-status-badge ${profileDetails.status === 'Inactive' ? 'inactive' : 'active'}`}>
                         <span className="pf-status-dot"></span>
                         {profileDetails.status}
                       </span>
@@ -614,31 +704,40 @@ const Profile = ({ userRole, onLogout }) => {
                   </tr>
                 </thead>
                 <tbody>
-                  {loginActivity.map((log) => (
-                    <tr key={log.id}>
-                      <td>
-                        <div className="pf-device-cell">
-                          <span style={{ color: getDeviceColor(log.type) }}>
-                            {getDeviceIcon(log.type)}
-                          </span>
-                          {log.device}
-                        </div>
-                      </td>
-                      <td>{log.time}</td>
-                      <td>{log.location}</td>
-                      <td>
-                        <span className={`pf-status-badge-sm ${log.status === 'Active' ? 'active' : 'logged-out'}`}>
-                          {log.status}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
+                   {displayedActivities.map((log, index) => {
+                     const devType = getDeviceType(log.deviceInfo);
+                     return (
+                       <tr key={log.activityId || index}>
+                         <td>
+                           <div className="pf-device-cell">
+                             <span style={{ color: getDeviceColor(devType) }}>
+                               {getDeviceIcon(devType)}
+                             </span>
+                             {log.deviceInfo || "Unknown Device"}
+                           </div>
+                         </td>
+                         <td>{formatDateTime(log.loginDt)}</td>
+                         <td>India</td>
+                         <td>
+                           <span className={`pf-status-badge-sm ${log.status === 'Active' ? 'active' : 'logged-out'}`}>
+                             {log.status || "Logged Out"}
+                           </span>
+                         </td>
+                       </tr>
+                     );
+                   })}
                 </tbody>
               </table>
               
-              <button className="pf-link" style={{ marginTop: "16px" }}>
-                View full login activity <ArrowRight size={14} />
-              </button>
+              {loginActivity.length > 3 && (
+                <button 
+                  className="pf-link" 
+                  style={{ marginTop: "16px", background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px", color: "#1d4ed8", fontWeight: "500" }}
+                  onClick={() => setShowAllLoginActivity(!showAllLoginActivity)}
+                >
+                  {showAllLoginActivity ? "Show Less" : "View All"} <ArrowRight size={14} />
+                </button>
+              )}
             </div>
 
             {/* Support Items */}

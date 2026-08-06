@@ -25,15 +25,58 @@ export default function ProjectForecasting({ project }) {
   const isDraft = project?.status === "DRAFT" || project?.status === "Draft" || project?._type === "draft";
 
   const fetchForecast = async () => {
-    if (!project?.id || isDraft) {
+    if (isDraft) {
       setLoading(false);
+      return;
+    }
+    if (!project?.id) {
+      setLoading(true);
       return;
     }
     setLoading(true);
     setError(null);
     try {
       const data = await apiGet(`/api/project-forecasting/${project.id}`);
-      setForecastData(data);
+      
+      let tasksData = { onTime: 0, ahead: 0, delayed: 0, total: 0 };
+      try {
+        const projMilestones = await apiGet(`/api/milestone-live/by-project/${project.id}`);
+        
+        const taskPromises = (projMilestones || []).map(m => {
+          const mId = m.mId || m.mid || m.id || m.m_id;
+          return apiGet(`/api/task-live/by-milestone/${mId}`).catch(() => []);
+        });
+        const taskResults = await Promise.all(taskPromises);
+        const projTasks = taskResults.flat().filter(Boolean);
+        
+        tasksData.total = projTasks.length;
+        
+        const today = new Date();
+        today.setHours(0,0,0,0);
+        
+        projTasks.forEach(t => {
+           let endDt = t.endDt || t.tentEndDt;
+           if (!endDt) return;
+           const [y,m,d] = endDt.split('-');
+           const endDate = new Date(y, m-1, d);
+           endDate.setHours(0,0,0,0);
+           
+           if (t.taskSts === 'COMPLETED') {
+              let actCmp = t.actCmpDt ? new Date(t.actCmpDt) : today;
+              actCmp.setHours(0,0,0,0);
+              if (actCmp.getTime() < endDate.getTime()) tasksData.ahead++;
+              else if (actCmp.getTime() === endDate.getTime()) tasksData.onTime++;
+              else tasksData.delayed++;
+           } else {
+              if (today.getTime() > endDate.getTime()) tasksData.delayed++;
+              else tasksData.onTime++;
+           }
+        });
+      } catch (err) {
+        console.error("Error calculating task accuracy", err);
+      }
+      
+      setForecastData({ ...data, tasksData });
     } catch (err) {
       console.error("Failed to load forecast data:", err);
       setError("Failed to load project forecasting from backend.");
@@ -62,23 +105,11 @@ export default function ProjectForecasting({ project }) {
     );
   }
 
-  if (loading) {
+  if (loading || !forecastData) {
     return (
-      <div className="fc-container" style={{ padding: '80px 20px', textAlign: 'center', color: '#64748b' }}>
-        <RefreshCw size={32} className="animate-spin" style={{ margin: '0 auto 12px auto' }} />
-        <p>Calculating project forecasting from database tables...</p>
-      </div>
-    );
-  }
-
-  if (error || !forecastData) {
-    return (
-      <div className="fc-container" style={{ padding: '40px 20px', textAlign: 'center' }}>
-        <div className="fc-panel" style={{ maxWidth: '600px', margin: '0 auto', padding: '30px', borderColor: '#fee2e2' }}>
-          <AlertTriangle size={48} color="#ef4444" style={{ margin: '0 auto 16px auto' }} />
-          <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#991b1b', marginBottom: '8px' }}>Calculation Error</h3>
-          <p style={{ color: '#b91c1c', fontSize: '14px' }}>{error || "Project data could not be computed."}</p>
-        </div>
+      <div className="fc-container" style={{ padding: '80px 20px', textAlign: 'center', color: '#2563eb', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '300px' }}>
+        <RefreshCw size={36} style={{ margin: '0 auto 14px auto', animation: 'spin 0.8s linear infinite' }} />
+        <p style={{ fontSize: '15px', fontWeight: '600', color: '#334155' }}>Calculating project forecasting...</p>
       </div>
     );
   }
@@ -96,12 +127,24 @@ export default function ProjectForecasting({ project }) {
 
   const todayStr = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/ /g, '-');
 
+  const td = forecastData.tasksData || { onTime: 0, ahead: 0, delayed: 0, total: 0 };
+  const totalAnalyzed = td.total || 0;
+  
+  let accuracyPct = 0;
+  if (totalAnalyzed > 0) {
+    accuracyPct = Math.round(((td.onTime + td.ahead) / totalAnalyzed) * 100);
+  }
+
   // Accuracy Pie Chart Data
-  const accuracyData = [
-    { name: 'On Time', value: 7, color: '#10b981' },
-    { name: 'Ahead', value: 3, color: '#3b82f6' },
-    { name: 'Delayed', value: 2, color: '#f59e0b' }
-  ];
+  let accuracyData = [
+    { name: 'On Time', value: td.onTime, color: '#10b981' },
+    { name: 'Ahead', value: td.ahead, color: '#3b82f6' },
+    { name: 'Delayed', value: td.delayed, color: '#f59e0b' }
+  ].filter(d => d.value > 0);
+  
+  if (accuracyData.length === 0) {
+     accuracyData = [{ name: 'No Data', value: 1, color: '#e2e8f0' }];
+  }
 
   return (
     <div className="fc-container">
@@ -253,7 +296,7 @@ export default function ProjectForecasting({ project }) {
 
         {/* ACCURACY PANEL */}
         <div className="fc-panel fc-accuracy">
-          <h3 className="fc-panel-title">Forecast Accuracy (Historical)</h3>
+          <h3 className="fc-panel-title">Forecast Accuracy</h3>
           <div className="fc-acc-content">
             <div className="fc-acc-chart">
               <ResponsiveContainer width="100%" height="100%">
@@ -266,20 +309,20 @@ export default function ProjectForecasting({ project }) {
                 </PieChart>
               </ResponsiveContainer>
               <div className="fc-acc-center">
-                <span className="fc-acc-num">92%</span>
+                <span className="fc-acc-num">{accuracyData.length === 1 && accuracyData[0].name === 'No Data' ? 'N/A' : `${accuracyPct}%`}</span>
                 <span className="fc-acc-lbl">Accuracy</span>
               </div>
             </div>
             
             <div className="fc-acc-legend">
               <div className="fc-acc-row bold">
-                <span>Projects Analyzed</span>
-                <span>12</span>
+                <span>Tasks Analyzed</span>
+                <span>{totalAnalyzed}</span>
               </div>
               {accuracyData.map((d, i) => (
                 <div key={i} className="fc-acc-row">
                   <span><CheckCircle2 size={12} color={d.color} style={{marginRight:4}}/> {d.name}</span>
-                  <span style={{color:d.color}}>{d.value} <span className="fc-acc-pct">({((d.value/12)*100).toFixed(0)}%)</span></span>
+                  <span style={{color:d.color}}>{d.name === 'No Data' ? '-' : d.value} {d.name !== 'No Data' && <span className="fc-acc-pct">({((d.value/totalAnalyzed)*100).toFixed(0)}%)</span>}</span>
                 </div>
               ))}
             </div>

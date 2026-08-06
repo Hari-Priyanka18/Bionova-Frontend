@@ -2,6 +2,10 @@ import React, { useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import '../styles/login.css';
 
+// Import background image and icon
+import loginBg from '/login bg.png';
+import resetIcon from '/BioNova.png';
+
 const ResetPassword = () => {
   const [searchParams] = useSearchParams();
   const token = searchParams.get('token');
@@ -10,6 +14,7 @@ const ResetPassword = () => {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
   const [loading, setLoading] = useState(false);
@@ -25,6 +30,10 @@ const ResetPassword = () => {
     }
     if (!password) {
       setError("Please enter a new password");
+      return;
+    }
+    if (!confirmPassword) {
+      setError("Please fill confirm password also");
       return;
     }
     if (password.length < 8) {
@@ -72,26 +81,26 @@ const ResetPassword = () => {
     }
   };
 
+  // Background image style
+  const backgroundStyle = {
+    backgroundImage: `url(${loginBg})`,
+    backgroundSize: 'cover',
+    backgroundPosition: 'center',
+    backgroundRepeat: 'no-repeat'
+  };
+
   return (
-    <div className="login-container">
-      <div className="login-fullscreen-split">
+    <div className="login-container" style={backgroundStyle}>
+      <div className="login-overlay">
+        <div className="login-card-wrapper">
+          <div className="login-card">
 
-        <div className="login-left">
-          <img src="/icon3.png" alt="Login Background" className="left-side-image" />
-        </div>
-
-        <div className="login-right">
-          <div className="login-body">
-
-            <div className="brand-header-large">
-              <div className="login-left">
-                <img src="/icon3.png" alt="Login Background" className="left-side-image" />
+            <div className="reset-header">
+              <div className="reset-icon-wrapper">
+                <img src={resetIcon} alt="Reset Icon" className="header-icon" />
               </div>
-            </div>
-
-            <div className="welcome-text" style={{ marginBottom: '20px', textAlign: 'center' }}>
-              <h2 style={{ color: '#1e293b', fontSize: '22px', fontWeight: '600', marginBottom: '8px' }}>Create New Password</h2>
-              <p style={{ color: '#64748b', fontSize: '14px' }}>Please choose a strong password</p>
+              <h2 className="reset-title">Create New Password</h2>
+              <p className="reset-subtitle">Please choose a strong password</p>
             </div>
 
             {error && (
@@ -130,14 +139,22 @@ const ResetPassword = () => {
 
               <div className="input-group">
                 <label>Confirm Password</label>
-                <div className="input-wrapper">
+                <div className="input-wrapper password-wrapper">
                   <i className="fas fa-lock input-icon"></i>
                   <input
-                    type="password"
+                    type={showConfirmPassword ? 'text' : 'password'}
                     value={confirmPassword}
                     onChange={(e) => { setConfirmPassword(e.target.value); setError(''); }}
                     placeholder="Confirm new password"
+                    className="password-input"
                   />
+                  <button
+                    type="button"
+                    className="password-toggle-btn"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  >
+                    <i className={showConfirmPassword ? 'far fa-eye-slash' : 'far fa-eye'}></i>
+                  </button>
                 </div>
               </div>
 
@@ -152,7 +169,6 @@ const ResetPassword = () => {
 
           </div>
         </div>
-
       </div>
     </div>
   );

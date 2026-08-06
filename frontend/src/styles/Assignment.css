@@ -83,6 +83,18 @@
   background-color: #f0fdf4;
   color: #16a34a;
 }
+.cit-badge.priority-normal {
+  background-color: #f1f5f9;
+  color: #475569;
+}
+.cit-badge.priority-critical {
+  background-color: #fef2f2;
+  color: #dc2626;
+}
+.cit-badge.priority-atmost-critical {
+  background-color: #7f1d1d;
+  color: #fef2f2;
+}
 
 /* Action Buttons */
 .cit-action-btn {

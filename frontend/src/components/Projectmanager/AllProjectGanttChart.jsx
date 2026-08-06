@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Download, Filter, Search, ChevronDown, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Calendar, SlidersHorizontal, ArrowLeft, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import "../../styles/AllProjectGanttChart.css";
-import Sidebar from "../Sidebar";
-import Header from "../Header";
-import { useNavigate } from "react-router-dom";
+import Sidebar from "../Sidebar.jsx";
+import Header from "../Header.jsx";
+import { useNavigate, useLocation } from "react-router-dom";
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL) + "/api";
 const getAuthToken = () => sessionStorage.getItem("authToken") || "";
@@ -24,6 +24,7 @@ const ROW_H_BASELINE = 72;
 
 export default function AllProjectGanttChart({ userRole, onLogout }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const [zoom, setZoom] = useState(100);
   const [activeTab, setActiveTab] = useState("Gantt Chart");
   const [baseline, setBaseline] = useState(false);
@@ -34,7 +35,7 @@ export default function AllProjectGanttChart({ userRole, onLogout }) {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("All Status");
-  const [projectFilter, setProjectFilter] = useState("All Projects");
+  const [projectFilter, setProjectFilter] = useState(location.state?.projectFilter || "All Projects");
   const [startDateFilter, setStartDateFilter] = useState("");
   const [endDateFilter, setEndDateFilter] = useState("");
   const [departmentsList, setDepartmentsList] = useState([]);
@@ -56,12 +57,23 @@ export default function AllProjectGanttChart({ userRole, onLogout }) {
   const ROW_H = baseline ? ROW_H_BASELINE : ROW_H_NORMAL;
 
   // Resizable Table Setup
-  const [tableWidth, setTableWidth] = useState(380);
+  const [tableWidth, setTableWidth] = useState(300);
   const dragState = useRef({ isDragging: false, startX: 0, startW: 0 });
 
   useEffect(() => {
-    setTableWidth(baseline ? 440 : 380);
+    setTableWidth(baseline ? 360 : 300);
   }, [baseline]);
+
+  useEffect(() => {
+    if (projectFilter !== "All Projects" && ganttRows.length > 0 && !singleProjectView) {
+      const projRow = ganttRows.find(r => r.type === 'project' && String(r.id) === String(projectFilter));
+      if (projRow) {
+        setSingleProjectView(projRow);
+        setTableCollapsed(true);
+        setExpandedProjects(prev => new Set([...prev, projRow.id]));
+      }
+    }
+  }, [ganttRows, projectFilter, singleProjectView]);
 
   const handleDragStart = (e) => {
     dragState.current = { isDragging: true, startX: e.clientX, startW: tableWidth };
@@ -75,7 +87,7 @@ export default function AllProjectGanttChart({ userRole, onLogout }) {
     if (!dragState.current.isDragging) return;
     const diff = e.clientX - dragState.current.startX;
     let newW = dragState.current.startW + diff;
-    if (newW < 450) newW = 450; 
+    if (newW < 250) newW = 250; 
     if (newW > 1200) newW = 1200; 
     setTableWidth(newW);
   };
@@ -106,10 +118,23 @@ export default function AllProjectGanttChart({ userRole, onLogout }) {
     });
   };
 
+  const parseLocalDate = (dateStr) => {
+    if (!dateStr) return null;
+    try {
+      const dateOnly = String(dateStr).split('T')[0];
+      const [year, month, day] = dateOnly.split('-');
+      const d = new Date(parseInt(year, 10), parseInt(month, 10) - 1, parseInt(day, 10));
+      d.setHours(0, 0, 0, 0);
+      return d;
+    } catch (e) {
+      return new Date(dateStr);
+    }
+  };
+
   const formatDateString = (dateStr) => {
     if (!dateStr) return 'N/A';
-    const d = new Date(dateStr);
-    if (isNaN(d.getTime())) return dateStr;
+    const d = parseLocalDate(dateStr);
+    if (!d || isNaN(d.getTime())) return dateStr;
     const day = String(d.getDate()).padStart(2, '0');
     const month = d.toLocaleDateString('en-GB', { month: 'short' });
     const year = String(d.getFullYear()).slice(-2);
@@ -119,8 +144,8 @@ export default function AllProjectGanttChart({ userRole, onLogout }) {
   // Returns exact day offset from timeline start (month boundary aligned)
   const getDayOffset = (dateStr, tStart) => {
     if (!dateStr || !tStart) return 0;
-    const d = new Date(dateStr);
-    if (isNaN(d.getTime())) return 0;
+    const d = parseLocalDate(dateStr);
+    if (!d || isNaN(d.getTime())) return 0;
     // Count exact calendar days from tStart (1st of first month) to the target date
     const tStartMid = new Date(tStart.getFullYear(), tStart.getMonth(), 1);
     const dTargetMid = new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -131,9 +156,9 @@ export default function AllProjectGanttChart({ userRole, onLogout }) {
 
   const getDurationDays = (startStr, endStr) => {
     if (!startStr || !endStr) return 1;
-    const s = new Date(startStr);
-    const e = new Date(endStr);
-    if (isNaN(s.getTime()) || isNaN(e.getTime())) return 1;
+    const s = parseLocalDate(startStr);
+    const e = parseLocalDate(endStr);
+    if (!s || !e || isNaN(s.getTime()) || isNaN(e.getTime())) return 1;
     const sMid = new Date(s.getFullYear(), s.getMonth(), s.getDate());
     const eMid = new Date(e.getFullYear(), e.getMonth(), e.getDate());
     const diffMs = eMid - sMid;
@@ -181,8 +206,8 @@ export default function AllProjectGanttChart({ userRole, onLogout }) {
 
         const updateMinMax = (dateStr) => {
           if (!dateStr) return;
-          const d = new Date(dateStr);
-          if (isNaN(d.getTime())) return;
+          const d = parseLocalDate(dateStr);
+          if (!d || isNaN(d.getTime())) return;
           if (!minDate || d < minDate) minDate = d;
           if (!maxDate || d > maxDate) maxDate = d;
         };
@@ -195,8 +220,8 @@ export default function AllProjectGanttChart({ userRole, onLogout }) {
           else if (s === 'HOLD') label = 'Not Started';
           
           if (label !== 'Completed' && endDate) {
-            const end = new Date(endDate);
-            if (!isNaN(end.getTime()) && end < today) {
+            const end = parseLocalDate(endDate);
+            if (end && !isNaN(end.getTime()) && end < today) {
               label = 'Overdue';
             }
           }
@@ -360,12 +385,6 @@ export default function AllProjectGanttChart({ userRole, onLogout }) {
       if (String(rProjectId) !== String(projectFilter)) match = false;
     }
 
-    // In single project view: still respect expand/collapse state
-    if (singleProjectView) {
-      if (r.type === 'milestone') return expandedProjects.has(r.parentId);
-      if (r.type === 'task') return expandedProjects.has(r.grandParentId) && expandedMilestones.has(r.parentId);
-    }
-
     if (startDateFilter && match) {
       if (!r.rawStart) match = false;
       else if (new Date(r.rawStart) < new Date(startDateFilter)) match = false;
@@ -438,7 +457,7 @@ export default function AllProjectGanttChart({ userRole, onLogout }) {
           progressPercent={singleProjectView ? singleProjectView.prog : undefined}
         />
 
-        <div className="gantt-main" style={{ display: 'flex', flexDirection: 'column' }}>
+        <div className="gantt-main">
           
           <div className="gantt-header-row" style={{ flexShrink: 0, justifyContent: 'space-between', alignItems: 'center' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -544,95 +563,97 @@ export default function AllProjectGanttChart({ userRole, onLogout }) {
                 </div>
               )}
 
-            <div className="gantt-chart-container" ref={timelineRef} style={{ flexGrow: 1, overflow: 'auto', display: 'flex' }}>
+            <div className="gantt-chart-container" ref={timelineRef} style={{ flexGrow: 1, overflow: 'auto', display: 'flex', minHeight: 0 }}>
               
+              {(() => {
+                const totalTimelineHeight = 60 + visibleRows.length * ROW_H;
+                return (
+                  <>
                   {/* Left Table Section with Collapse */}
-              {!tableCollapsed && (
-                <div className="gantt-table-section" style={{ width: tableWidth, flexShrink: 0, position: 'relative' }}>
-                  <div className="gantt-thead">
-                    <div className="gantt-th" style={{ flex: 1, minWidth: '180px' }}>Project / Task</div>
-                    <div className="gantt-th" style={{ width: '95px' }}>Status</div>
-
-                    {baseline && <div className="gantt-th" style={{ width: '60px' }}>Act%</div>}
-                  </div>
-                  <div style={{ overflowY: 'hidden' }}>
-                    {visibleRows.map((row, i) => (
-                      <div 
-                        key={row.id} 
-                        className="gantt-row" 
-                        style={{ height: ROW_H, cursor: 'pointer', background: activeRow === row.id ? '#f1f5f9' : 'transparent' }}
-                        onClick={() => {
-                          setActiveRow(row.id);
-                          if (row.type === 'project') toggleProjectExpand(row.id);
-                          if (row.type === 'milestone') toggleMilestoneExpand(row.id);
-                        }}
-                      >
-                        <div className="gantt-td" style={{ flex: 1, minWidth: '200px', fontWeight: row.type !== 'task' ? '600' : '400', paddingLeft: row.type === 'milestone' ? '24px' : (row.type === 'task' ? '48px' : '12px'), display: 'flex', alignItems: 'center', gap: '8px', color: '#1e293b' }}>
-                          {row.type === 'project' && (
-                            <span style={{ cursor: 'pointer', paddingRight: 4 }}>
-                              {expandedProjects.has(row.id) ? <ChevronDown size={14} color="#64748b"/> : <span style={{display:'inline-block', transform:'rotate(-90deg)'}}><ChevronDown size={14} color="#64748b"/></span>}
-                            </span>
-                          )}
-                          {row.type === 'milestone' && (
-                            <span style={{ cursor: 'pointer', paddingRight: 4 }}>
-                              {expandedMilestones.has(row.id) ? <ChevronDown size={14} color="#64748b"/> : <span style={{display:'inline-block', transform:'rotate(-90deg)'}}><ChevronDown size={14} color="#64748b"/></span>}
-                            </span>
-                          )}
-                          {row.type !== 'task' && <span style={{width: 8, height: 8, borderRadius: '50%', background: SC[row.status]?.bar || '#94a3b8', flexShrink: 0}}></span>}
-                          
-                          <span 
-                            style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: row.type !== 'task' ? 'pointer' : 'default', padding: '4px 0' }} 
-                            title={row.name}
-                          >
-                            {row.displayId ? `${row.displayId}. ` : ''}{row.name}
-                          </span>
-                        </div>
-                        <div className="gantt-td" style={{ width: '95px', fontSize: '11px' }}>
-                          <span style={{ padding: '2px 7px', borderRadius: '10px', fontWeight: 600, fontSize: '10px', background: SC[row.status]?.bg || '#f1f5f9', color: SC[row.status]?.bar || '#64748b', whiteSpace: 'nowrap' }}>
-                            {row.status || '-'}
-                          </span>
-                        </div>
-
-                        {baseline && <div className="gantt-td" style={{ width: '60px', fontWeight: 600, color: '#64748b' }}>{row.aProg}%</div>}
+                  {!tableCollapsed && (
+                    <div className="gantt-table-section" style={{ width: tableWidth, flexShrink: 0, position: 'sticky', left: 0, zIndex: 40, background: '#fff', minHeight: totalTimelineHeight }}>
+                      <div className="gantt-thead" style={{ position: 'sticky', top: 0, zIndex: 50, background: '#fff', borderBottom: '1px solid #e2e8f0', display: 'flex' }}>
+                        <div className="gantt-th" style={{ flex: 1, minWidth: '180px' }}>Project / Task / Status</div>
+                        {baseline && <div className="gantt-th" style={{ width: '60px' }}>Act%</div>}
                       </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+                      <div style={{ overflowY: 'hidden' }}>
+                        {visibleRows.map((row, i) => (
+                          <div 
+                            key={row.id} 
+                            className="gantt-row" 
+                            style={{ height: ROW_H, cursor: 'pointer', background: activeRow === row.id ? '#f1f5f9' : 'transparent' }}
+                            onClick={() => {
+                              setActiveRow(row.id);
+                              if (row.type === 'project') toggleProjectExpand(row.id);
+                              if (row.type === 'milestone') toggleMilestoneExpand(row.id);
+                            }}
+                          >
+                            <div className="gantt-td" style={{ flex: 1, minWidth: '200px', fontWeight: row.type !== 'task' ? '600' : '400', paddingLeft: row.type === 'milestone' ? '24px' : (row.type === 'task' ? '48px' : '12px'), display: 'flex', alignItems: 'center', gap: '8px', color: '#1e293b' }}>
+                              {row.type === 'project' && (
+                                <span style={{ cursor: 'pointer', paddingRight: 4 }}>
+                                  {expandedProjects.has(row.id) ? <ChevronDown size={14} color="#64748b"/> : <span style={{display:'inline-block', transform:'rotate(-90deg)'}}><ChevronDown size={14} color="#64748b"/></span>}
+                                </span>
+                              )}
+                              {row.type === 'milestone' && (
+                                <span style={{ cursor: 'pointer', paddingRight: 4 }}>
+                                  {expandedMilestones.has(row.id) ? <ChevronDown size={14} color="#64748b"/> : <span style={{display:'inline-block', transform:'rotate(-90deg)'}}><ChevronDown size={14} color="#64748b"/></span>}
+                                </span>
+                              )}
+                              {row.type !== 'task' && <span style={{width: 8, height: 8, borderRadius: '50%', background: SC[row.status]?.bar || '#94a3b8', flexShrink: 0}}></span>}
+                              
+                              <span 
+                                style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: row.type !== 'task' ? 'pointer' : 'default', padding: '4px 0' }} 
+                                title={row.name}
+                              >
+                                {row.displayId ? `${row.displayId}. ` : ''}{row.name}
+                              </span>
+                              <span style={{ padding: '2px 7px', borderRadius: '10px', fontWeight: 600, fontSize: '10px', background: SC[row.status]?.bg || '#f1f5f9', color: SC[row.status]?.bar || '#64748b', whiteSpace: 'nowrap', marginLeft: '8px', flexShrink: 0 }}>
+                                {row.status || '-'}
+                              </span>
+                            </div>
 
-                {/* Expand button when table collapsed */}
-                {tableCollapsed && (
-                  <div style={{ flexShrink: 0, position: 'relative', width: 32, zIndex: 30, background: 'white', borderRight: '1px solid #e2e8f0' }}>
-                    <button
-                      onClick={() => setTableCollapsed(false)}
-                      title="Expand table"
-                      style={{ position: 'absolute', top: 12, right: 0, width: 24, height: 28, borderRadius: '14px 0 0 14px', background: '#3b82f6', color: 'white', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, boxShadow: '-2px 2px 4px rgba(0,0,0,0.1)' }}
-                    >
-                      <PanelLeftOpen size={16} />
-                    </button>
-                  </div>
-                )}
+                            {baseline && <div className="gantt-td" style={{ width: '60px', fontWeight: 600, color: '#64748b' }}>{row.aProg}%</div>}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
-                {/* Resizer Handle - only when table visible */}
-                {!tableCollapsed && (
-                  <div 
-                    onMouseDown={handleDragStart}
-                    style={{
-                      width: 6,
-                      cursor: 'col-resize',
-                      background: '#e2e8f0',
-                      zIndex: 30,
-                      position: 'relative',
-                      flexShrink: 0
-                    }}
-                    title="Drag to resize table"
-                  >
+                    {/* Expand button when table collapsed */}
+                    {tableCollapsed && (
+                      <div style={{ flexShrink: 0, position: 'sticky', left: 0, width: 32, zIndex: 40, background: 'white', borderRight: '1px solid #e2e8f0', minHeight: totalTimelineHeight }}>
+                        <button
+                          onClick={() => setTableCollapsed(false)}
+                          title="Expand table"
+                          style={{ position: 'sticky', top: 18, marginLeft: '4px', width: 24, height: 28, borderRadius: '14px 0 0 14px', background: '#3b82f6', color: 'white', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, boxShadow: '-2px 2px 4px rgba(0,0,0,0.1)' }}
+                        >
+                          <PanelLeftOpen size={16} />
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Resizer Handle - only when table visible */}
+                    {!tableCollapsed && (
+                      <div 
+                        onMouseDown={handleDragStart}
+                        style={{
+                          width: 6,
+                          cursor: 'col-resize',
+                          background: '#e2e8f0',
+                          zIndex: 41,
+                          position: 'sticky',
+                          left: tableWidth,
+                          flexShrink: 0,
+                          minHeight: totalTimelineHeight
+                        }}
+                        title="Drag to resize table"
+                      >
                     {/* Collapse button */}
                     <button
                       onMouseDown={(e) => e.stopPropagation()} 
                       onClick={() => setTableCollapsed(true)}
                       title="Collapse table"
-                      style={{ position: 'absolute', top: 8, left: -24, zIndex: 31, width: 24, height: 24, borderRadius: '50%', background: '#3b82f6', color: 'white', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, boxShadow: '0 2px 6px rgba(0,0,0,0.2)' }}
+                      style={{ position: 'sticky', top: 18, left: -24, zIndex: 31, width: 24, height: 24, borderRadius: '50%', background: '#3b82f6', color: 'white', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, boxShadow: '0 2px 6px rgba(0,0,0,0.2)' }}
                     >
                       <PanelLeftClose size={16} />
                     </button>
@@ -643,6 +664,9 @@ export default function AllProjectGanttChart({ userRole, onLogout }) {
                     </div>
                   </div>
                 )}
+                  </>
+                );
+              })()}
 
                 {/* Right Timeline Section */}
                 <div className="gantt-timeline-section" onClick={(e) => {
@@ -652,7 +676,7 @@ export default function AllProjectGanttChart({ userRole, onLogout }) {
                   setMarkerOff(snappedX);
                 }}>
                   <div style={{ width: timelineW, position: 'relative' }}>
-                    <div className="gantt-timeline-header">
+                    <div className="gantt-timeline-header" style={{ position: 'sticky', top: 0, zIndex: 10, background: '#fff', borderBottom: '1px solid #e2e8f0' }}>
                       {/* Month row */}
                       <div className="gantt-months-row">
                         {months.map((m, i) => {
@@ -687,7 +711,7 @@ export default function AllProjectGanttChart({ userRole, onLogout }) {
                                 {/* Day number — every day */}
                                 <span style={{
                                   position: 'absolute',
-                                  left: leftPx + 1,
+                                  left: leftPx + 2,
                                   top: 1,
                                   fontSize: 9,
                                   lineHeight: '11px',
@@ -695,9 +719,9 @@ export default function AllProjectGanttChart({ userRole, onLogout }) {
                                   fontWeight: isToday ? 800 : isMajor ? 700 : 400,
                                   userSelect: 'none',
                                   whiteSpace: 'nowrap',
-                                  width: `${DW - 1}px`,
+                                  width: `${DW - 2}px`,
                                   overflow: 'hidden',
-                                  textAlign: 'center',
+                                  textAlign: 'left',
                                 }}>
                                   {String(dayNum).padStart(2, '0')}
                                 </span>
@@ -763,25 +787,12 @@ export default function AllProjectGanttChart({ userRole, onLogout }) {
                               {/* Background track */}
                               <div style={{ position: 'absolute', inset: 0, background: isActive ? '#fed7aa' : barBg }} />
                               {/* Progress fill */}
-                              <div style={{ position: 'absolute', top: 0, left: 0, width: progWidth, height: '100%', background: highlightColor, transition: 'width 0.3s ease' }} />
-                              {/* Label inside bar (only if bar wide enough) */}
-                              {barWidth > 60 && (
-                                <span style={{ position: 'absolute', top: 0, left: 6, right: 6, height: '100%', display: 'flex', alignItems: 'center', zIndex: 2, fontSize: row.type === 'project' ? 11 : 10, fontWeight: 700, color: row.prog > 45 ? 'white' : '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', pointerEvents: 'none' }}>
-                                  {row.name}
-                                </span>
-                              )}
+                              <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', background: highlightColor, transition: 'width 0.3s ease' }} />
                             </div>
 
-                            {/* Label outside bar (when bar too narrow) */}
-                            {barWidth <= 60 && (
-                              <span style={{ position: 'absolute', top: barTop, left: barLeft + barWidth + 4, fontSize: 10, fontWeight: 600, color: '#475569', whiteSpace: 'nowrap', lineHeight: `${barH}px`, pointerEvents: 'none' }}>
-                                {row.name}
-                              </span>
-                            )}
-
-                            {/* Progress % badge at right edge of bar */}
+                            {/* Progress % badge */}
                             {barWidth > 30 && (
-                              <span style={{ position: 'absolute', top: barTop + barH + 2, left: barLeft, fontSize: 9, color: barColor, fontWeight: 600, pointerEvents: 'none' }}>
+                              <span style={{ position: 'absolute', top: baseline ? barTop + barH + 14 : barTop + barH + 2, left: barLeft, fontSize: 9, color: barColor, fontWeight: 600, pointerEvents: 'none' }}>
                                 {row.prog}%
                               </span>
                             )}
@@ -789,12 +800,12 @@ export default function AllProjectGanttChart({ userRole, onLogout }) {
                             {/* ── Baseline Actual Bar (only when baseline ON) ── */}
                             {baseline && (
                               <div
-                                style={{ position: 'absolute', top: barTop + barH + 10, left: row.aOff * DW, width: Math.max(row.aW * DW, 8), height: 10, borderRadius: 2, overflow: 'hidden', cursor: 'pointer', zIndex: 4 }}
-                                title={`Actual: ${row.aProg || 0}%`}
+                                style={{ position: 'absolute', top: barTop + barH + 2, left: barLeft, width: barWidth, height: 10, borderRadius: 2, overflow: 'hidden', cursor: 'pointer', zIndex: 4 }}
+                                title={`Progress: ${row.prog || 0}%`}
                                 onClick={(e) => { e.stopPropagation(); setActiveRow(row.id); if (row.type === 'project') toggleProjectExpand(row.id); if (row.type === 'milestone') toggleMilestoneExpand(row.id); }}
                               >
                                 <div style={{ position: 'absolute', inset: 0, background: '#e2e8f0' }} />
-                                <div style={{ position: 'absolute', top: 0, left: 0, width: `${Math.min(row.aProg || 0, 100)}%`, height: '100%', background: isActive ? '#f97316' : '#64748b', transition: 'width 0.3s ease' }} />
+                                <div style={{ position: 'absolute', top: 0, left: 0, width: progWidth, height: '100%', background: isActive ? '#f97316' : '#64748b', transition: 'width 0.3s ease' }} />
                               </div>
                             )}
                           </div>

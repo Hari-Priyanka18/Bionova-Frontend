@@ -529,6 +529,16 @@
   color: #ef4444;
 }
 
+.pac-status-purple {
+  background: #f3e8ff;
+  color: #9333ea;
+}
+
+.pac-status-blue {
+  background: #dbeafe;
+  color: #2563eb;
+}
+
 /* ── Permission Cells ── */
 .pac-permission-cells {
   display: flex;
@@ -4358,4 +4368,48 @@
     flex-direction: column;
     align-items: flex-start;
   }
+}
+
+/* ── Custom styles for assignment select dropdown & buttons ── */
+.pac-assign-select {
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid #cbd5e1;
+  background-color: white;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.2s ease;
+  max-width: 140px;
+}
+
+.pac-assign-select:hover {
+  border-color: #2563eb;
+  background-color: #f8fafc;
+}
+
+.pac-person-wrapper {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pac-remove-person-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 50%;
+  transition: all 0.2s ease;
+}
+
+.pac-remove-person-btn:hover {
+  background-color: #fee2e2;
+  color: #ef4444;
 }

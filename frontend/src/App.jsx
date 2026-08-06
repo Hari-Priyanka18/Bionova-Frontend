@@ -12,6 +12,7 @@ import CompanyCreation from "./components/Admin/CompanyMaster";
 import PlantCreation from "./components/Admin/PlantMaster";
 import AgriLandAllocation from "./components/Admin/LandMaster";
 import DepartmentMapping from "./components/Admin/DepartmentMapping";
+import DesignationCreation from "./components/Admin/DesignationMaster";
 import Projects from "./components/User/Projects";
 import Calendar from "./components/User/Calendar";
 import UserTaskBoard from "./components/User/UserTaskBoard";
@@ -33,9 +34,13 @@ import AllProjectGanttChart from "./components/Projectmanager/AllProjectGanttCha
 
 const AppContent = () => {
   const navigate = useNavigate();
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [userRole, setUserRole] = useState("user");
+  const [isLoggedIn, setIsLoggedIn] = useState(() => {
+    return localStorage.getItem("isLoggedIn") === "true" || sessionStorage.getItem("isLoggedIn") === "true";
+  });
+  const [loading, setLoading] = useState(false);
+  const [userRole, setUserRole] = useState(() => {
+    return localStorage.getItem("userRole") || sessionStorage.getItem("userRole") || "user";
+  });
 
   useEffect(() => {
     const loggedIn = localStorage.getItem("isLoggedIn") === "true" || sessionStorage.getItem("isLoggedIn") === "true";
@@ -45,16 +50,28 @@ const AppContent = () => {
     setLoading(false);
   }, []);
 
+  const getDashboardRoute = (role) => {
+    const lowerRole = role?.toLowerCase() || '';
+    if (lowerRole === 'admin' || lowerRole === 'full_access') {
+      return '/dashboard';
+    } else if (lowerRole === 'project_manager' || lowerRole === 'pm' || lowerRole === 'manager') {
+      return '/pm-dashboard';
+    } else {
+      return '/user-dashboard';
+    }
+  };
+
   const handleLogin = (status, role) => {
     setIsLoggedIn(status);
     setUserRole(role);
-    navigate("/dashboard", { replace: true });
+    navigate(getDashboardRoute(role), { replace: true });
   };
 
   const handleLogout = () => {
     localStorage.clear();
     sessionStorage.clear();
     setIsLoggedIn(false);
+    setUserRole("user");
     navigate("/", { replace: true });
   };
 
@@ -62,7 +79,7 @@ const AppContent = () => {
 
   return (
     <Routes>
-      <Route path="/" element={!isLoggedIn ? <Login onLogin={handleLogin} /> : <Navigate to="/dashboard" replace />} />
+      <Route path="/" element={!isLoggedIn ? <Login onLogin={handleLogin} /> : <Navigate to={getDashboardRoute(userRole)} replace />} />
 
       {/* Dashboards */}
       <Route path="/dashboard" element={isLoggedIn ? <AdminDashboard userRole={userRole} onLogout={handleLogout} /> : <Navigate to="/" replace />} />
@@ -80,6 +97,7 @@ const AppContent = () => {
       <Route path="/plant-creation" element={isLoggedIn ? <PlantCreation userRole={userRole} onLogout={handleLogout} /> : <Navigate to="/" replace />} />
       <Route path="/agriland-allocation" element={isLoggedIn ? <AgriLandAllocation userRole={userRole} onLogout={handleLogout} /> : <Navigate to="/" replace />} />
       <Route path="/department-mapping" element={isLoggedIn ? <DepartmentMapping userRole={userRole} onLogout={handleLogout} /> : <Navigate to="/" replace />} />
+      <Route path="/designation-creation" element={isLoggedIn ? <DesignationCreation userRole={userRole} onLogout={handleLogout} /> : <Navigate to="/" replace />} />
 
       {/* Project Manager Features */}
       <Route path="/project-creation" element={isLoggedIn ? <ProjectCreation userRole={userRole} onLogout={handleLogout} /> : <Navigate to="/" replace />} />

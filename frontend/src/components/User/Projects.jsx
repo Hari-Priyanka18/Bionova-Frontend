@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import {
-  Search, Download, ArrowLeft, ChevronLeft, ChevronRight,
+  Search, ArrowLeft, ChevronLeft, ChevronRight,
   ChevronDown, Calendar, Clock, CheckCircle2, BarChart2,
-  PlayCircle, Users, Menu
+  PlayCircle, Users, Menu, AlertCircle
 } from "lucide-react";
 import Sidebar from "../Sidebar";
 import Header from "../Header";
@@ -10,31 +11,67 @@ import UserOverview from "./UserOverview";
 import UserMilestone from "./UserMilestone";
 import UserMyTask from "./UserMyTask";
 import ProjectGanttChart from "./ProjectGanttChart";
+import DocsAndReports from "../Projectmanager/DocsAndReports";
 import "../../styles/my-project.css";
 
-// Circular Progress SVG
-const CircularProgress = ({ pct, color = "#10b981", size = 52, stroke = 5 }) => {
-  const r = (size - stroke) / 2;
-  const circ = 2 * Math.PI * r;
-  const offset = circ - (pct / 100) * circ;
+// Pipeline Progress Bar
+const PipelineProgress = ({ pct, color = "#10b981" }) => {
   return (
-    <svg width={size} height={size} style={{ transform: "rotate(-90deg)" }}>
-      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#e9ecef" strokeWidth={stroke} />
-      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={stroke}
-        strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round" />
-      <text x="50%" y="50%" textAnchor="middle" dominantBaseline="middle"
-        style={{ transform: "rotate(90deg)", transformOrigin: "center", fontSize: size < 56 ? "11px" : "14px", fontWeight: 700, fill: "#0d1126" }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: '100px', height: '19px' }}>
+      <div style={{ flex: 1, height: '8px', backgroundColor: '#e9ecef', borderRadius: '4px', overflow: 'hidden' }}>
+        <div style={{ width: `${pct}%`, height: '100%', backgroundColor: color, borderRadius: '4px', transition: 'width 0.3s ease' }} />
+      </div>
+      <span style={{ fontSize: '13px', fontWeight: 700, color: '#0d1126', minWidth: '32px' }}>{pct}%</span>
+    </div>
+  );
+};
+
+// Circular Progress Bar
+const CircularProgress = ({ pct, color = "#10b981", size = 44, strokeWidth = 4 }) => {
+  const radius = (size - strokeWidth) / 2;
+  const circumference = radius * 2 * Math.PI;
+  const offset = circumference - (pct / 100) * circumference;
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', width: size, height: size }}>
+      <svg width={size} height={size}>
+        <circle stroke="#e9ecef" fill="transparent" strokeWidth={strokeWidth} r={radius} cx={size/2} cy={size/2} />
+        <circle 
+          stroke={color} 
+          fill="transparent" 
+          strokeWidth={strokeWidth} 
+          strokeDasharray={circumference + ' ' + circumference} 
+          style={{ strokeDashoffset: offset, transition: 'stroke-dashoffset 0.5s ease-in-out' }} 
+          r={radius} 
+          cx={size/2} 
+          cy={size/2} 
+          strokeLinecap="round" 
+          transform={`rotate(-90 ${size/2} ${size/2})`} 
+        />
+      </svg>
+      <div style={{ position: 'absolute', fontSize: '11px', fontWeight: 700, color: '#0d1126' }}>
         {pct}%
-      </text>
-    </svg>
+      </div>
+    </div>
   );
 };
 
 import { safeFetch } from "../../utils/api";
 
-const TABS = ["Overview", "Milestones", "My Tasks", "Gantt Chart", "Documents"];
+const getLoggedInUser = () => {
+  const storedName = sessionStorage.getItem("userName");
+  if (storedName) return storedName;
+  const email = sessionStorage.getItem("userEmail") || "";
+  if (email) {
+    const namePart = email.split("@")[0];
+    return namePart.split(/[._]/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+  }
+  return "Admin";
+};
+
+const TABS = ["Overview", "Milestones & Tasks", "Gantt Chart", "Documents"];
 
 const MyProjects = ({ userRole, onLogout }) => {
+  const location = useLocation();
   const [selectedProject, setSelectedProject] = useState(null);
   const [activeTab, setActiveTab] = useState("Overview");
   const [searchQuery, setSearchQuery] = useState("");
@@ -44,6 +81,8 @@ const MyProjects = ({ userRole, onLogout }) => {
   const [projects, setProjects] = useState([]);
   const [milestones, setMilestones] = useState([]);
   const [tasks, setTasks] = useState([]);
+  const [allTasks, setAllTasks] = useState([]);
+  const [employees, setEmployees] = useState([]);
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -53,103 +92,227 @@ const MyProjects = ({ userRole, onLogout }) => {
     const fetchData = async () => {
       try {
         setLoading(true);
-        const [profRes, projRes, msRes, taskRes, coyRes, pltRes, deptRes] = await Promise.all([
+        const [profRes, projRes, msRes, taskRes, coyRes, pltRes, deptRes, empRes, dashRes] = await Promise.all([
           safeFetch('/api/profile'),
           safeFetch('/api/project-live', []),
           safeFetch('/api/milestone-live', []),
           safeFetch('/api/task-live', []),
           safeFetch('/api/companies', []),
           safeFetch('/api/plants', []),
-          safeFetch('/api/departments', [])
+          safeFetch('/api/departments', []),
+          safeFetch('/api/employees', []),
+          safeFetch('/api/user-dashboard')
         ]);
 
         setProfile(profRes);
+        const allProjects = projRes.data || projRes;
+        const projMilestones = msRes.data || msRes;
+        const allSystemTasks = taskRes.data || taskRes;
+        
+        setEmployees(empRes || []);
         const empId = profRes?.empId;
-        const isAdmin = profRes?.email === 'vsv.vempati@gmail.com';
 
-        // Filter tasks to only user tasks (personal view filters by employee ID)
-        const userTasks = (taskRes || []).filter(t => (t.empId || t.empid) === empId);
-        setTasks(userTasks);
+        // Filter tasks to only those assigned to the logged-in user (Executor, Reviewer, or Approver)
+        const userAssignedTasks = (taskRes || []).filter(t => 
+          (t.empId || t.empid) === empId || 
+          (t.reviewer) === empId || 
+          (t.approver) === empId
+        );
+        setTasks(userAssignedTasks);
+        setMilestones(msRes || []);
+        setAllTasks(taskRes || []);
 
-        // Filter milestones: keep milestones that have at least one task assigned to the user
-        const userMilestones = (msRes || []).filter(m => {
-          const mId = m.mId || m.mid || m.id;
-          return userTasks.some(t => (t.mId || t.mid || t.milestoneId || t.drftMId || t.drft_m_id) === mId);
-        });
-        setMilestones(userMilestones);
+        // Filter projects: show all the projects that are shown on user dashboard
+        const dashboardProjects = dashRes?.myProjects || [];
 
-        // Filter projects: keep projects that have at least one milestone in userMilestones
-        const userProjects = (projRes || []).filter(p => {
-          const prjId = p.prjId || p.prjid || p.id;
-          return userMilestones.some(m => (m.prjId || m.prjid) === prjId);
-        });
+        const formatDisplayDate = (d) => {
+          if (!d || d === "No Start Date" || d === "No Target Date" || d === "N/A") return null;
+          try {
+            const dt = new Date(d);
+            if (isNaN(dt.getTime())) return String(d);
+            return dt.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+          } catch (e) {
+            return String(d);
+          }
+        };
 
-        // Map projects to match the page expectations
-        const mapped = userProjects.map(proj => {
-          const companyName = coyRes?.find(c => (c.coyId || c.coyid) === (proj.coyId || proj.coyid))?.coyNm || (proj.coyNm || proj.coynm) || `Company ${proj.coyId || proj.coyid}`;
-          const plantName = pltRes?.find(pl => (pl.pltId || pl.pltid) === (proj.pltId || proj.pltid))?.pltNm || (proj.pltNm || proj.pltnm) || `Plant ${proj.pltId || proj.pltid}`;
-          const deptName = deptRes?.find(d => (d.deptId || d.deptid) === (proj.deptId || proj.deptid))?.deptNm || (proj.deptNm || proj.deptnm) || `Dept ${proj.deptId || proj.deptid}`;
+        // Map projects directly from dashboard projects to match exactly what is on the dashboard
+        const mapped = dashboardProjects.map(dashP => {
+          const dashId = String(dashP.projectId || dashP.id);
+          const allProjs = Array.isArray(projRes) ? projRes : (projRes?.data || []);
+          const proj = allProjs.find(p => String(p.prjId || p.prjid || p.id) === dashId) || {};
 
-          const projId = proj.prjId || proj.prjid || proj.id;
-          const projMilestones = userMilestones.filter(m => (m.prjId || m.prjid) === projId);
-          const projTasks = userTasks.filter(t => {
-            const tMId = t.mId || t.mid || t.milestoneId || t.drftMId || t.drft_m_id;
-            return projMilestones.some(m => (m.mId || m.mid || m.id) === tMId);
+          const coyId = proj.coyId || proj.coyid;
+          const pltId = proj.pltId || proj.pltid;
+          const deptId = proj.deptId || proj.deptid;
+
+          const companyName = coyRes?.find(c => String(c.coyId || c.coyid) === String(coyId))?.coyNm || (proj.coyNm || proj.coynm) || dashP.clientName || dashP.companyName || `Company`;
+          const plantName = pltRes?.find(pl => String(pl.pltId || pl.pltid) === String(pltId))?.pltNm || (proj.pltNm || proj.pltnm) || dashP.location || `Plant`;
+          const deptName = deptRes?.find(d => String(d.deptId || d.deptid) === String(deptId))?.deptNm || (proj.deptNm || proj.deptnm) || `Dept`;
+
+          // All milestones for this project
+          const projMilestones = (msRes || []).filter(m => String(m.prjId || m.prjid || m.projectId || m.prj_id) === dashId);
+          
+          // All tasks for this project
+          const projTasksAll = (taskRes || []).filter(t => {
+            const tPrjId = String(t.prjId || t.prjid || t.projectId || t.prj_id || "");
+            if (tPrjId && tPrjId === dashId) return true;
+            const tMId = String(t.mId || t.mid || t.milestoneId || t.drftMId || t.drft_m_id || "");
+            return projMilestones.some(m => String(m.mId || m.mid || m.id) === tMId);
           });
 
+          // Tasks specifically assigned to user
+          const projUserTasks = projTasksAll.filter(t => 
+            (t.empId || t.empid) === empId || 
+            (t.reviewer) === empId || 
+            (t.approver) === empId
+          );
+
+          // Effective tasks to display (Only tasks assigned to user)
+          const projTasks = projUserTasks;
+
+          // User-specific / Project counts
           const totalTasksCount = projTasks.length;
-          const completedTasksCount = projTasks.filter(t => (t.taskSts || t.tasksts || "").toUpperCase() === 'COMPLETED').length;
+          const completedTasksCount = projTasks.filter(t => {
+            const s = (t.taskSts || t.tasksts || t.status || "").toUpperCase();
+            return s === 'COMPLETED' || s === 'CLOSED' || s === 'DONE' || s === '4' || t.progress === 100 || Boolean(t.actCmpDt || t.actcmpdt);
+          }).length;
           const wipTasksCount = projTasks.filter(t => {
-            const s = (t.taskSts || t.tasksts || "").toUpperCase();
+            const s = (t.taskSts || t.tasksts || t.status || "").toUpperCase();
             return s === 'WIP' || s === 'IN_PROGRESS';
           }).length;
           const openTasksCount = projTasks.filter(t => {
-            const s = (t.taskSts || t.tasksts || "").toUpperCase();
-            return s === 'OPEN' || s === 'REWORK';
+            const s = (t.taskSts || t.tasksts || t.status || "").toUpperCase();
+            return s === 'OPEN' || s === 'REWORK' || s === 'OVER_DUE' || s === 'OVERDUE' || s === 'DRAFT' || s === 'REASSIGN';
           }).length;
           const reviewTasksCount = projTasks.filter(t => {
-            const s = (t.taskSts || t.tasksts || "").toUpperCase();
+            const s = (t.taskSts || t.tasksts || t.status || "").toUpperCase();
             return s === 'SUBMIT_REVIEW' || s === 'UNDER_REVIEW';
           }).length;
 
+          // Calculate progress from effective tasks
           let progressPct = 0;
           if (totalTasksCount > 0) {
-            progressPct = Math.round(((completedTasksCount + reviewTasksCount * 0.8 + wipTasksCount * 0.5) / totalTasksCount) * 100);
+            progressPct = Math.round((completedTasksCount / totalTasksCount) * 100);
+          } else {
+            const extractProgress = (obj) => {
+              if (obj.status && (obj.status.toUpperCase() === 'COMPLETED' || obj.status.toUpperCase() === 'CLOSED')) return 100;
+              const keys = ['progress', 'completionPercentage', 'completion', 'percentage', 'progressPercent', 'percentComplete'];
+              for (const key of keys) {
+                if (obj[key] !== undefined && obj[key] !== null) {
+                  let val = obj[key];
+                  if (typeof val === 'string') val = parseFloat(val.replace('%', ''));
+                  if (!isNaN(val) && val >= 0 && val <= 100) return Number(val);
+                }
+              }
+              return 0;
+            };
+            progressPct = extractProgress(dashP);
+          }
+
+          const actualManager = proj.createdByName || proj.createdBy || getLoggedInUser();
+
+          const rawStart = proj.stDt || proj.stdt || proj.startDate || proj.st_dt || dashP.stDt || dashP.startDate || dashP.st_dt;
+          const rawEnd = proj.endDt || proj.enddt || proj.endDate || proj.end_dt || proj.targetDate || dashP.endDt || dashP.dueDate || dashP.end_dt;
+
+          // Check if all assigned tasks for this user in this project are closed
+          const isUserClosed = totalTasksCount > 0 && completedTasksCount === totalTasksCount;
+          const userProjectStatus = isUserClosed ? "CLOSED" : (proj.prjSts || proj.prjsts || dashP.status || "LIVE").toUpperCase();
+
+          // Calculate Lead / Lag / On Time schedule status for user's completed tasks
+          let userLeadLagLabel = null;
+          let userLeadLagColor = null;
+
+          if (isUserClosed && projTasks.length > 0) {
+            let maxTargetEnd = null;
+            let maxActualEnd = null;
+
+            for (const t of projTasks) {
+              const endStr = t.endDt || t.enddt || t.endDate || t.end_dt;
+              const actStr = t.actCmpDt || t.actcmpdt || t.act_cmp_dt || endStr;
+              if (endStr) {
+                const d = new Date(endStr);
+                if (!isNaN(d.getTime()) && (!maxTargetEnd || d > maxTargetEnd)) {
+                  maxTargetEnd = d;
+                }
+              }
+              if (actStr) {
+                const d = new Date(actStr);
+                if (!isNaN(d.getTime()) && (!maxActualEnd || d > maxActualEnd)) {
+                  maxActualEnd = d;
+                }
+              }
+            }
+
+            if (!maxTargetEnd && rawEnd) {
+              const d = new Date(rawEnd);
+              if (!isNaN(d.getTime())) maxTargetEnd = d;
+            }
+
+            if (maxTargetEnd && maxActualEnd) {
+              const diffMs = maxTargetEnd.getTime() - maxActualEnd.getTime();
+              const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+
+              if (diffDays > 0) {
+                userLeadLagLabel = `LEAD (-${diffDays} DAYS)`;
+                userLeadLagColor = "#10b981";
+              } else if (diffDays < 0) {
+                userLeadLagLabel = `LAG (+${Math.abs(diffDays)} DAYS)`;
+                userLeadLagColor = "#ef4444";
+              } else {
+                userLeadLagLabel = "ON TIME";
+                userLeadLagColor = "#3b82f6";
+              }
+            } else {
+              userLeadLagLabel = "ON TIME";
+              userLeadLagColor = "#3b82f6";
+            }
           }
 
           return {
-            id: projId,
-            prjId: projId,
-            name: proj.prjNm || proj.prjnm,
+            id: dashId,
+            prjId: dashId,
+            name: dashP.projectName || proj.prjNm || proj.prjnm || dashP.name || `Project ${dashId}`,
             company: companyName,
             plant: plantName,
+            priority: typeof proj.prjPrty === 'string' ? proj.prjPrty : (proj.prjPrty?.priorityNm || proj.prjprty || "NORMAL"),
             role: profRes?.firstName ? `${profRes.firstName} ${profRes.lastName || ''}` : "Team Member",
-            tasksAssigned: totalTasksCount,
-            openTasks: openTasksCount + wipTasksCount + reviewTasksCount,
-            status: proj.prjSts || proj.prjsts || "In Progress",
-            progress: progressPct,
-            image: proj.logo || "https://images.unsplash.com/photo-1504328345606-18bbc8c9d7d1?w=200&h=120&fit=crop",
-            manager: "Siva Kumar",
-            startDate: proj.stDt || proj.stdt || "N/A",
-            targetDate: proj.endDt || proj.enddt || "N/A",
-            code: proj.prjCd || proj.prjcd || `PRJ-${projId}`,
+            tasksAssigned: totalTasksCount > 0 ? totalTasksCount : (dashP.tasksAssigned || 0),
+            openTasks: openTasksCount,
+            closedTasks: completedTasksCount,
+            status: userProjectStatus,
+            isUserClosed: isUserClosed,
+            userLeadLagLabel: userLeadLagLabel,
+            userLeadLagColor: userLeadLagColor,
+            progress: isUserClosed ? 100 : progressPct,
+            image: dashP.logo || proj.logo || null,
+            manager: actualManager,
+            startDate: formatDisplayDate(rawStart) || "No Start Date",
+            targetDate: formatDisplayDate(rawEnd) || "No Target Date",
+            code: proj.prjCd || proj.prjcd || `PRJ-${dashId}`,
             type: "Construction",
-            location: "N/A",
+            location: dashP.location || proj.location || "Not Specified",
             client: companyName,
             department: deptName,
-            reportingTo: "Siva Kumar",
+            reportingTo: actualManager,
             description: proj.prjDesc || proj.prjdesc || "",
-            milestones: projMilestones.map(m => {
+            milestones: projMilestones.filter(m => {
+              const mId = String(m.mId || m.mid || m.id);
+              return projUserTasks.some(t => String(t.mId || t.mid || t.milestoneId || t.drftMId || t.drft_m_id) === mId);
+            }).map(m => {
               const mId = m.mId || m.mid || m.id;
+              const rawMStart = m.stDt || m.stdt || m.startDate || m.st_dt;
+              const rawMEnd = m.endDt || m.enddt || m.endDate || m.end_dt;
               return {
                 id: mId,
                 mId: mId,
                 name: m.mlstnTtl || m.mlstnttl,
-                date: m.endDt || m.enddt || "N/A",
-                start: m.stDt || m.stdt || "N/A",
+                date: formatDisplayDate(rawMEnd) || "No End Date",
+                start: formatDisplayDate(rawMStart) || "No Start Date",
                 desc: m.mlstnDesc || m.mlstndesc || "",
                 status: m.mlstnSts || m.mlstnsts || "Not Started",
-                days: m.mlstnDays || m.mlstndays || 0
+                days: m.mlstnDays || m.mlstndays || 0,
+                code: m.mlstnCd || m.mlstncd || ""
               };
             }),
             taskSummary: {
@@ -162,6 +325,13 @@ const MyProjects = ({ userRole, onLogout }) => {
         });
 
         setProjects(mapped);
+        if (location.state && location.state.selectedProjectId) {
+          const targetId = String(location.state.selectedProjectId);
+          const targetProject = mapped.find(p => String(p.id) === targetId || String(p.prjId) === targetId);
+          if (targetProject) {
+            setSelectedProject(targetProject);
+          }
+        }
       } catch (err) {
         console.error("Error fetching projects data:", err);
       } finally {
@@ -182,6 +352,28 @@ const MyProjects = ({ userRole, onLogout }) => {
   const paged = filtered.slice((currentPage - 1) * projectsPerPage, currentPage * projectsPerPage);
 
   const progressColor = (pct) => pct >= 70 ? "#10b981" : pct >= 40 ? "#3b82f6" : "#f59e0b";
+  
+  const priorityColor = (p) => {
+    switch (p?.toUpperCase()) {
+      case "HIGH": return "#ef4444";
+      case "CRITICAL": return "#991b1b";
+      case "MEDIUM": return "#f59e0b";
+      case "NORMAL": return "#3b82f6";
+      case "LOW": return "#10b981";
+      default: return "#64748b";
+    }
+  };
+
+  const statusColor = (s) => {
+    switch (s?.toUpperCase()) {
+      case "LIVE": return "#10b981"; // Green
+      case "HOLD": return "#f59e0b"; // Orange
+      case "CLOSED": return "#6b7280"; // Gray
+      case "COMPLETED": return "#10b981";
+      case "IN PROGRESS": return "#3b82f6";
+      default: return "#3b82f6";
+    }
+  };
 
   if (loading) {
     return (
@@ -219,7 +411,7 @@ const MyProjects = ({ userRole, onLogout }) => {
                   </button>
                   {showFilterDrop && (
                     <div className="mp-filter-dropdown">
-                      {["All Projects", "In Progress", "Completed", "On Hold"].map(s => (
+                      {["All Projects", "LIVE", "HOLD", "CLOSED"].map(s => (
                         <div key={s} className={`mp-filter-item ${statusFilter === s ? "active" : ""}`}
                           onClick={() => { setStatusFilter(s); setShowFilterDrop(false); setCurrentPage(1); }}>
                           {s}
@@ -236,30 +428,83 @@ const MyProjects = ({ userRole, onLogout }) => {
                   <div
                     key={proj.id}
                     className={`mp-project-card ${selectedProject?.id === proj.id ? "selected" : ""}`}
-                    onClick={() => { setSelectedProject(proj); setActiveTab("Overview"); }}
+                    onClick={() => { setSelectedProject(proj); setActiveTab("Overview"); setShowFilterDrop(false); }}
                   >
-                    <img src={proj.image} alt={proj.name} className="mp-card-img" />
-                    <div className="mp-card-info">
-                      <div className="mp-card-header-row">
-                        <div>
-                          <div className="mp-card-name">{proj.name}</div>
-                          <div className="mp-card-sub">{proj.company} | {proj.plant}</div>
-                          <div className="mp-card-role">Role: <strong>{proj.role}</strong></div>
+                    {proj.image ? (
+                      <img src={proj.image} alt={proj.name} className="mp-card-img" style={{ objectFit: 'contain', alignSelf: 'flex-start', height: 'auto', maxHeight: '140px', background: 'transparent', borderRadius: '8px' }} />
+                    ) : (
+                      <div className="mp-card-img" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '110px', minWidth: '110px', height: '80px', borderRadius: '8px', background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)', flexShrink: 0, alignSelf: 'flex-start' }}>
+                        <span style={{ fontSize: '32px', fontWeight: '800', color: '#fff', textTransform: 'uppercase', letterSpacing: '-1px' }}>{(proj.name || 'P').charAt(0)}</span>
+                      </div>
+                    )}
+                    <div className="mp-card-info" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '16px', flex: 1 }}>
+                      <div className="mp-card-header-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
+                        <div style={{ flex: 1, paddingRight: '12px' }}>
+                          <div className="mp-card-name" style={{ fontSize: '16px', fontWeight: '700', color: '#0f172a', marginBottom: '4px' }}>{proj.name}</div>
+                          <div className="mp-card-sub" style={{ fontSize: '12px', color: '#64748b', marginBottom: '12px', lineHeight: '1.4' }}>{proj.company} | {proj.plant}</div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            {proj.isUserClosed && proj.userLeadLagLabel ? (
+                              <>
+                                <span style={{ fontSize: '12px', color: '#64748b', fontWeight: '500' }}>Schedule:</span>
+                                <span style={{ 
+                                  backgroundColor: proj.userLeadLagColor + '15', 
+                                  color: proj.userLeadLagColor,
+                                  padding: '2px 8px',
+                                  borderRadius: '12px',
+                                  fontSize: '10px',
+                                  fontWeight: '700',
+                                  letterSpacing: '0.3px',
+                                  textTransform: 'uppercase'
+                                }}>{proj.userLeadLagLabel}</span>
+                              </>
+                            ) : (
+                              <>
+                                <span style={{ fontSize: '12px', color: '#64748b', fontWeight: '500' }}>Priority:</span>
+                                <span style={{ 
+                                  backgroundColor: priorityColor(proj.priority) + '15', 
+                                  color: priorityColor(proj.priority),
+                                  padding: '2px 8px',
+                                  borderRadius: '12px',
+                                  fontSize: '10px',
+                                  fontWeight: '700',
+                                  letterSpacing: '0.3px',
+                                  textTransform: 'uppercase'
+                                }}>{proj.priority}</span>
+                              </>
+                            )}
+                          </div>
                         </div>
-                        <div className="mp-card-circle">
+                        <div className="mp-card-circle" style={{ flexShrink: 0, display: 'flex', justifyContent: 'flex-end', width: '100px' }}>
                           <CircularProgress pct={proj.progress} color={progressColor(proj.progress)} />
                         </div>
                       </div>
-                      <div className="mp-card-footer">
-                        <div className="mp-card-stat">
-                          <span className="mp-stat-label">Tasks Assigned</span>
-                          <span className="mp-stat-value">{proj.tasksAssigned}</span>
+                      
+                      <div className="mp-card-footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #f1f5f9', paddingTop: '12px', marginTop: 'auto' }}>
+                        <div style={{ display: 'flex', gap: '20px' }}>
+                          <div className="mp-card-stat" style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                            <span className="mp-stat-label" style={{ fontSize: '11px', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Tasks</span>
+                            <span className="mp-stat-value" style={{ fontSize: '15px', fontWeight: '700', color: '#1e293b' }}>{proj.tasksAssigned}</span>
+                          </div>
+                          <div className="mp-card-stat" style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                            <span className="mp-stat-label" style={{ fontSize: '11px', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Open</span>
+                            <span className="mp-stat-value" style={{ fontSize: '15px', fontWeight: '700', color: '#1e293b' }}>{proj.openTasks}</span>
+                          </div>
+                          <div className="mp-card-stat" style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                            <span className="mp-stat-label" style={{ fontSize: '11px', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Closed</span>
+                            <span className="mp-stat-value" style={{ fontSize: '15px', fontWeight: '700', color: '#1e293b' }}>{proj.closedTasks}</span>
+                          </div>
                         </div>
-                        <div className="mp-card-stat">
-                          <span className="mp-stat-label">Open Tasks</span>
-                          <span className="mp-stat-value">{proj.openTasks}</span>
-                        </div>
-                        <span className={`mp-status-badge mp-status-${proj.status.toLowerCase().replace(/ /g, "-")}`}>
+                        <span style={{
+                          backgroundColor: statusColor(proj.status) + '15',
+                          color: statusColor(proj.status),
+                          padding: '6px 12px',
+                          borderRadius: '16px',
+                          fontSize: '11px',
+                          fontWeight: '700',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.3px',
+                          display: 'inline-block'
+                        }}>
                           {proj.status}
                         </span>
                       </div>
@@ -285,17 +530,40 @@ const MyProjects = ({ userRole, onLogout }) => {
             <div className="mp-right-panel full-width">
               {/* Back + Download */}
               <div className="mp-detail-topbar">
-                <button className="mp-back-btn" onClick={() => setSelectedProject(null)}>
+                <button 
+                  className="mp-back-btn" 
+                  onClick={() => setSelectedProject(null)}
+                  style={{
+                    backgroundColor: '#195dfa',
+                    color: '#ffffff',
+                    padding: '8px 16px',
+                    borderRadius: '8px',
+                    border: 'none',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    fontSize: '13px',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    boxShadow: '0 2px 4px rgba(25, 93, 250, 0.15)',
+                    transition: 'opacity 0.2s'
+                  }}
+                  onMouseOver={(e) => e.currentTarget.style.opacity = '0.9'}
+                  onMouseOut={(e) => e.currentTarget.style.opacity = '1'}
+                >
                   <ArrowLeft size={16} /> Back to Projects
-                </button>
-                <button className="mp-download-btn">
-                  <Download size={14} /> Download Report
                 </button>
               </div>
 
               {/* Project Hero */}
               <div className="mp-detail-hero">
-                <img src={selectedProject.image} alt={selectedProject.name} className="mp-detail-img" />
+                {selectedProject.image ? (
+                  <img src={selectedProject.image} alt={selectedProject.name} className="mp-detail-img" style={{ objectFit: 'contain', alignSelf: 'flex-start', height: 'auto', maxHeight: '200px', background: 'transparent', borderRadius: '12px' }} />
+                ) : (
+                  <div className="mp-detail-img" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '120px', minWidth: '120px', height: '120px', borderRadius: '12px', background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)', flexShrink: 0, alignSelf: 'flex-start' }}>
+                    <span style={{ fontSize: '48px', fontWeight: '800', color: '#fff', textTransform: 'uppercase', letterSpacing: '-2px' }}>{(selectedProject.name || 'P').charAt(0)}</span>
+                  </div>
+                )}
                 <div className="mp-detail-hero-info">
                   <div className="mp-detail-hero-row">
                     <div>
@@ -304,17 +572,61 @@ const MyProjects = ({ userRole, onLogout }) => {
                         {selectedProject.company} &nbsp;|&nbsp; {selectedProject.plant}
                       </div>
                     </div>
-                    <span className={`mp-status-badge mp-status-${selectedProject.status.toLowerCase().replace(/ /g, "-")}`}>
+                    <span style={{
+                      backgroundColor: statusColor(selectedProject.status) + '15',
+                      color: statusColor(selectedProject.status),
+                      padding: '4px 12px',
+                      borderRadius: '12px',
+                      fontSize: '11px',
+                      fontWeight: '700',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.3px',
+                      display: 'inline-block'
+                    }}>
                       {selectedProject.status}
                     </span>
                   </div>
                   <div className="mp-detail-meta">
                     <div className="mp-meta-item">
-                      <Users size={14} style={{ color: "#10b981" }} />
-                      <div>
-                        <span className="mp-meta-label">Project Manager</span>
-                        <span className="mp-meta-value bold">{selectedProject.manager}</span>
-                      </div>
+                      {selectedProject.isUserClosed && selectedProject.userLeadLagLabel ? (
+                        <>
+                          <Clock size={14} style={{ color: selectedProject.userLeadLagColor }} />
+                          <div>
+                            <span className="mp-meta-label">Schedule Status</span>
+                            <span className="mp-meta-value bold" style={{ 
+                              color: selectedProject.userLeadLagColor, 
+                              backgroundColor: selectedProject.userLeadLagColor + '15',
+                              padding: '5px 14px',
+                              borderRadius: '14px',
+                              fontSize: '12px',
+                              textTransform: 'uppercase',
+                              display: 'inline-block',
+                              marginTop: '3px'
+                            }}>
+                              {selectedProject.userLeadLagLabel}
+                            </span>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <AlertCircle size={14} style={{ color: priorityColor(selectedProject.priority) }} />
+                          <div>
+                            <span className="mp-meta-label">Priority</span>
+                            <span className="mp-meta-value bold" style={{ 
+                              color: priorityColor(selectedProject.priority), 
+                              backgroundColor: priorityColor(selectedProject.priority) + '15',
+                              padding: '5px 14px',
+                              borderRadius: '14px',
+                              fontSize: '12px',
+                              textTransform: 'uppercase',
+                              display: 'inline-block',
+                              marginTop: '3px'
+                            }}>
+                              {selectedProject.priority}
+                            </span>
+                          </div>
+                        </>
+                      )}
                     </div>
                     <div className="mp-meta-item">
                       <Calendar size={14} style={{ color: "#3b82f6" }} />
@@ -326,15 +638,15 @@ const MyProjects = ({ userRole, onLogout }) => {
                     <div className="mp-meta-item">
                       <Clock size={14} style={{ color: "#f59e0b" }} />
                       <div>
-                        <span className="mp-meta-label">Target Date</span>
+                        <span className="mp-meta-label">End Date</span>
                         <span className="mp-meta-value">{selectedProject.targetDate}</span>
                       </div>
                     </div>
                     <div className="mp-meta-item">
-                      <div>
-                        <span className="mp-meta-label">Overall Progress</span>
-                        <div style={{ marginTop: 4 }}>
-                          <CircularProgress pct={selectedProject.progress} color={progressColor(selectedProject.progress)} size={64} stroke={6} />
+                      <div style={{ width: '160px' }}>
+                        <span className="mp-meta-label">Task Progress</span>
+                        <div>
+                          <PipelineProgress pct={selectedProject.progress} color={progressColor(selectedProject.progress)} />
                         </div>
                       </div>
                     </div>
@@ -357,20 +669,25 @@ const MyProjects = ({ userRole, onLogout }) => {
                 <UserOverview selectedProject={selectedProject} />
               )}
 
-              {activeTab === "Milestones" && (
-                <UserMilestone selectedProject={selectedProject} userTasks={tasks} />
-              )}
-              {activeTab === "My Tasks" && (
-                <UserMyTask selectedProject={selectedProject} userTasks={tasks} />
+              {activeTab === "Milestones & Tasks" && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+                  <UserMilestone selectedProject={selectedProject} userTasks={tasks} allTasks={allTasks} employees={employees} profile={profile} />
+                  <UserMyTask selectedProject={selectedProject} userTasks={tasks} />
+                </div>
               )}
               {activeTab === "Gantt Chart" && (
-                <ProjectGanttChart project={selectedProject} userRole="user" />
+                <div style={{
+                  borderRadius: '12px',
+                  border: '1px solid #e9ecef',
+                  background: '#fff',
+                  width: '100%',
+                  boxSizing: 'border-box',
+                }}>
+                  <ProjectGanttChart project={selectedProject} userRole="user" />
+                </div>
               )}
               {activeTab === "Documents" && (
-                <div className="mp-tab-placeholder">
-                  <Download size={40} color="#e2e8f0" />
-                  <p>Documents section coming soon.</p>
-                </div>
+                <DocsAndReports isTab={true} project={selectedProject} userRole={userRole} onLogout={onLogout} />
               )}
             </div>
           )}

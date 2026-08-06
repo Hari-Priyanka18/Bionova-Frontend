@@ -50,7 +50,27 @@ export default function ProjectGanttChart({ project, userRole, compact = false }
     }
   };
 
-  const [loading, setLoading] = useState(true);
+  // NEW: Expand / collapse all projects and milestones
+  const toggleExpandAll = () => {
+    // Collect all project and milestone IDs from the original rows (before filtering)
+    const allProjectIds = ganttRows.filter(r => r.type === 'project').map(r => r.id);
+    const allMilestoneIds = ganttRows.filter(r => r.type === 'milestone').map(r => r.id);
+
+    const allProjectsExpanded = allProjectIds.length === 0 || allProjectIds.every(id => expandedProjects.has(id));
+    const allMilestonesExpanded = allMilestoneIds.length === 0 || allMilestoneIds.every(id => expandedMilestones.has(id));
+
+    if (allProjectsExpanded && allMilestonesExpanded) {
+      // Collapse all
+      setExpandedProjects(new Set());
+      setExpandedMilestones(new Set());
+    } else {
+      // Expand all
+      setExpandedProjects(new Set(allProjectIds));
+      setExpandedMilestones(new Set(allMilestoneIds));
+    }
+  };
+
+  const [loading, setLoading] = useState(false);
   const [ganttRows, setGanttRows] = useState([]);
   const [ganttDeps, setGanttDeps] = useState([]);
   const [timelineStart, setTimelineStart] = useState(new Date());
@@ -66,11 +86,32 @@ export default function ProjectGanttChart({ project, userRole, compact = false }
   const DW = 14 * (zoom / 100);
   const ROW_H = baseline ? ROW_H_BASELINE : ROW_H_NORMAL;
 
+  const parseLocalDate = (dateStr) => {
+    if (!dateStr) return null;
+    if (dateStr instanceof Date) return new Date(dateStr.getFullYear(), dateStr.getMonth(), dateStr.getDate(), 12, 0, 0);
+    const s = String(dateStr).trim();
+    if (!s) return null;
+
+    const isoMatch = s.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+    if (isoMatch) {
+      return new Date(Number(isoMatch[1]), Number(isoMatch[2]) - 1, Number(isoMatch[3]), 12, 0, 0);
+    }
+
+    const dmyMatch = s.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
+    if (dmyMatch) {
+      return new Date(Number(dmyMatch[3]), Number(dmyMatch[2]) - 1, Number(dmyMatch[1]), 12, 0, 0);
+    }
+
+    const d = new Date(s);
+    if (isNaN(d.getTime())) return null;
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12, 0, 0);
+  };
+
   /* Helper to format Date string to DD-MMM-YY */
   const formatDateString = (dateStr) => {
     if (!dateStr) return 'N/A';
-    const d = new Date(dateStr);
-    if (isNaN(d.getTime())) return dateStr;
+    const d = parseLocalDate(dateStr);
+    if (!d) return dateStr;
     const day = String(d.getDate()).padStart(2, '0');
     const month = d.toLocaleDateString('en-GB', { month: 'short' });
     const year = String(d.getFullYear()).slice(-2);
@@ -80,25 +121,21 @@ export default function ProjectGanttChart({ project, userRole, compact = false }
   /* Helper to calculate day difference */
   const getDayOffset = (dateStr, tStart) => {
     if (!dateStr || !tStart) return 0;
-    const d = new Date(dateStr);
-    if (isNaN(d.getTime())) return 0;
-    // Set both to midnight to avoid DST hour mismatch issues
-    const dStart = new Date(tStart.getFullYear(), tStart.getMonth(), tStart.getDate());
-    const dTarget = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    const dTarget = parseLocalDate(dateStr);
+    if (!dTarget) return 0;
+    const dStart = new Date(tStart.getFullYear(), tStart.getMonth(), tStart.getDate(), 12, 0, 0);
     const diffTime = dTarget - dStart;
-    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
     return diffDays >= 0 ? diffDays : 0;
   };
 
   const getDurationDays = (startStr, endStr) => {
     if (!startStr || !endStr) return 1;
-    const s = new Date(startStr);
-    const e = new Date(endStr);
-    if (isNaN(s.getTime()) || isNaN(e.getTime())) return 1;
-    const sMid = new Date(s.getFullYear(), s.getMonth(), s.getDate());
-    const eMid = new Date(e.getFullYear(), e.getMonth(), e.getDate());
+    const sMid = parseLocalDate(startStr);
+    const eMid = parseLocalDate(endStr);
+    if (!sMid || !eMid) return 1;
     const diffTime = eMid - sMid;
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24)) + 1;
     return diffDays >= 1 ? diffDays : 1;
   };
 
@@ -119,24 +156,19 @@ export default function ProjectGanttChart({ project, userRole, compact = false }
 
     items.forEach(item => {
       if (item.startDate) {
-        const start = new Date(item.startDate);
-        if (!isNaN(start.getTime())) {
-          if (!minDate || start < minDate) minDate = start;
-        }
+        const start = parseLocalDate(item.startDate);
+        if (start && (!minDate || start < minDate)) minDate = start;
       }
       if (item.endDate) {
-        const end = new Date(item.endDate);
-        if (!isNaN(end.getTime())) {
-          if (!maxDate || end > maxDate) maxDate = end;
-        }
+        const end = parseLocalDate(item.endDate);
+        if (end && (!maxDate || end > maxDate)) maxDate = end;
       }
     });
 
     if (!minDate) minDate = new Date();
     if (!maxDate) maxDate = new Date(minDate.getTime() + 180 * 24 * 60 * 60 * 1000);
 
-    // Start timeline on the first of minDate's month
-    const tStart = new Date(minDate.getFullYear(), minDate.getMonth(), 1);
+    const tStart = new Date(minDate.getFullYear(), minDate.getMonth(), 1, 12, 0, 0);
 
     let monthCount = (maxDate.getFullYear() - tStart.getFullYear()) * 12 + (maxDate.getMonth() - tStart.getMonth()) + 2;
     if (monthCount < 6) monthCount = 6;
@@ -277,30 +309,58 @@ export default function ProjectGanttChart({ project, userRole, compact = false }
             fetch(`${API_BASE}/profile`, { headers: authHeaders() })
           ]);
           if (res.ok) {
-            rawItems = await res.json();
+            const rawGantt = await res.json();
+            rawItems = Array.isArray(rawGantt) ? rawGantt : (rawGantt?.data && Array.isArray(rawGantt.data) ? rawGantt.data : []);
           }
-          const userTasks = taskRes.ok ? await taskRes.json() : [];
+          const taskResData = taskRes.ok ? await taskRes.json() : [];
+          const userTasksRaw = Array.isArray(taskResData) ? taskResData : (taskResData?.data && Array.isArray(taskResData.data) ? taskResData.data : []);
           const profile = profileRes.ok ? await profileRes.json() : null;
           const isAdmin = profile?.email === 'vsv.vempati@gmail.com';
 
           if (userRole === 'user' && !isAdmin && profile) {
-            const userTaskIds = new Set(userTasks.map(t => `TSK-${t.taskId}`));
+            const loggedInEmpId = profile?.empId || profile?.empid || profile?.id;
+            
+            // Filter tasks to only include those assigned or involved to logged in user
+            const userTasks = userTasksRaw.filter(t => 
+              String(t.empId || t.empid) === String(loggedInEmpId) ||
+              String(t.reviewer) === String(loggedInEmpId) ||
+              String(t.approver) === String(loggedInEmpId)
+            );
+
+            // Build a broad set of IDs to match against gantt API item IDs
+            // which may be in formats like "TSK-123", "123", or task code
+            const userTaskIds = new Set([
+              ...userTasks.map(t => t.taskId ? `TSK-${t.taskId}` : ''),
+              ...userTasks.map(t => t.taskId ? String(t.taskId) : ''),
+              ...userTasks.map(t => t.taskCd || t.task_cd || ''),
+              ...userTasks.map(t => t.id ? `TSK-${t.id}` : ''),
+              ...userTasks.map(t => t.id ? String(t.id) : '')
+            ].filter(Boolean));
+
             const keptTaskIds = new Set();
             const keptMilestoneIds = new Set();
 
             rawItems.forEach(item => {
-              if (item.type === 'task' && userTaskIds.has(item.id)) {
-                keptTaskIds.add(item.id);
-                if (item.parent) {
-                  keptMilestoneIds.add(item.parent);
+              if ((item.type || '').toLowerCase() === 'task') {
+                const itemId = String(item.id || '');
+                const matches = userTaskIds.has(itemId) ||
+                  userTaskIds.has(itemId.replace(/^TSK-/i, '')) ||
+                  userTaskIds.has(`TSK-${itemId}`);
+                if (matches) {
+                  keptTaskIds.add(item.id);
+                  if (item.parent) {
+                    keptMilestoneIds.add(item.parent);
+                  }
                 }
               }
             });
 
+            // For users, hide the project row and only show their milestones and tasks
             rawItems = rawItems.filter(item => {
-              if (item.type === 'project') return true;
-              if (item.type === 'milestone') return keptMilestoneIds.has(item.id);
-              if (item.type === 'task') return keptTaskIds.has(item.id);
+              const iType = (item.type || '').toLowerCase();
+              if (iType === 'project') return false; // Hide the project row as requested
+              if (iType === 'milestone') return keptMilestoneIds.has(item.id);
+              if (iType === 'task') return keptTaskIds.has(item.id);
               return false;
             });
           }
@@ -319,7 +379,11 @@ export default function ProjectGanttChart({ project, userRole, compact = false }
           const isAdmin = profile?.email === 'vsv.vempati@gmail.com';
 
           if (userRole === 'user' && !isAdmin && profile) {
-            taskData = taskData.filter(t => t.empId === profile.empId);
+            taskData = taskData.filter(t => 
+              String(t.empId) === String(profile.empId) || 
+              String(t.reviewer) === String(profile.empId) || 
+              String(t.approver) === String(profile.empId)
+            );
           }
 
           const prjDto = {
@@ -392,6 +456,20 @@ export default function ProjectGanttChart({ project, userRole, compact = false }
           }
 
           rawItems = [prjDto, ...msDtos, ...taskDtos];
+
+          // For users, hide the project row and empty milestones (like LIVE)
+          if (userRole === 'user' && !isAdmin && profile) {
+            const draftKeptTasks = new Set(taskDtos.map(t => t.id));
+            const draftKeptMilestones = new Set(taskDtos.map(t => t.parent));
+            
+            rawItems = rawItems.filter(item => {
+              const iType = (item.type || '').toLowerCase();
+              if (iType === 'project') return false;
+              if (iType === 'milestone') return draftKeptMilestones.has(item.id);
+              if (iType === 'task') return draftKeptTasks.has(item.id);
+              return false;
+            });
+          }
         }
 
         if (rawItems.length === 0) {
@@ -406,6 +484,11 @@ export default function ProjectGanttChart({ project, userRole, compact = false }
 
         const mappedRows = mapItemsToGanttRows(rawItems, tStart);
         setGanttRows(mappedRows);
+
+        const allProjectIds = mappedRows.filter(r => r.type === 'project').map(r => r.id);
+        const allMilestoneIds = mappedRows.filter(r => r.type === 'milestone').map(r => r.id);
+        setExpandedProjects(new Set(allProjectIds));
+        setExpandedMilestones(new Set(allMilestoneIds));
 
         const deps = [];
         rawItems.forEach(item => {
@@ -463,15 +546,16 @@ export default function ProjectGanttChart({ project, userRole, compact = false }
     });
   }
 
-  // Filter based on expansion state
-  rows = rows.filter(r => {
-    if (r.type === 'project') return true;
-    if (r.type === 'milestone') return expandedProjects.has(r.parentPrj);
-    if (r.type === 'task') return expandedProjects.has(r.parentPrj) && expandedMilestones.has(r.parentMs);
-    return true;
-  });
-
-  if (compact) {
+  // Filter based on expansion state — in compact mode show all rows directly
+  const isFiltering = viewMode !== 'All' || filterSt !== 'All' || groupBy !== 'Milestone';
+  if (!isFiltering) {
+    rows = rows.filter(r => {
+      if (r.type === 'project') return compact ? false : true;
+      if (r.type === 'milestone') return r.parentPrj === 'unknown' || expandedProjects.has(r.parentPrj);
+      if (r.type === 'task') return (r.parentPrj === 'unknown' || expandedProjects.has(r.parentPrj)) && expandedMilestones.has(r.parentMs);
+      return true;
+    });
+  } else if (compact) {
     rows = rows.filter(r => r.type !== 'project');
   }
 
@@ -524,8 +608,8 @@ export default function ProjectGanttChart({ project, userRole, compact = false }
 
   /* ── render a bar (planned or actual) ── */
   const renderBar = (row, i, isActual = false) => {
-    const off = isActual ? row.aOff : row.off;
-    const w = isActual ? row.aW : row.w;
+    const off = row.off; // Always match planned bar's position
+    const w = row.w;     // Always match planned bar's width
     const prog = isActual ? row.aProg : row.prog;
     const col = SC[row.status] || { bar: '#94a3b8', bg: '#f1f5f9' };
 
@@ -542,7 +626,7 @@ export default function ProjectGanttChart({ project, userRole, compact = false }
     const bgColor = isActual ? '#e2e8f0' : cColor;
     const isActive = activeRow === row.id;
     const barW = Math.max(w * DW, 6);
-    const fillProg = 100; // Use solid bars universally based on user request
+    const fillProg = (baseline && isActual) ? prog : 100; // Show progress fill only on the Actual bar in baseline mode
 
     return (
       <div
@@ -560,7 +644,7 @@ export default function ProjectGanttChart({ project, userRole, compact = false }
           outlineOffset: 1,
         }}
         onClick={(e) => handleBarClick(e, row.id, i)}
-        title={`${row.name} — ${isActual ? 'Actual' : 'Planned'}: ${prog}%`}
+        title={`${row.name}\n${isActual ? 'Actual' : 'Planned'}: ${prog}%\nStart: ${row.start} | End: ${row.end}`}
       >
         {/* background */}
         <div style={{ position: 'absolute', inset: 0, borderRadius: 3, background: bgColor }} />
@@ -579,13 +663,13 @@ export default function ProjectGanttChart({ project, userRole, compact = false }
           )}
           {prog === 100 && <span style={{ color: 'white', fontSize: 8, fontWeight: 'bold' }}>✓</span>}
         </div>
-        {/* % label — only show on planned bar (right side) */}
-        {!isActual && (
-          <span style={{
-            position: 'absolute', left: `calc(100% + 4px)`, top: '50%', transform: 'translateY(-50%)',
-            fontSize: 10, fontWeight: 600, color: '#475569', whiteSpace: 'nowrap'
-          }}>{prog}%</span>
-        )}
+        {/* % label */}
+        <span style={{
+          position: 'absolute', left: `calc(100% + 4px)`, top: '50%', transform: 'translateY(-50%)',
+          fontSize: 10, fontWeight: 600, color: '#475569', whiteSpace: 'nowrap'
+        }}>
+          {isActual ? `${prog}%` : '100%'}
+        </span>
       </div>
     );
   };
@@ -593,8 +677,20 @@ export default function ProjectGanttChart({ project, userRole, compact = false }
   return (
     <div className={`gc-wrap ${compact ? 'gc-compact' : ''}`}>
 
+      {compact && (
+        <div className="gc-toolbar" style={{ justifyContent: 'flex-end', padding: '8px 16px', borderBottom: '1px solid #e2e8f0', background: '#fafbfc' }}>
+          <div className="gc-tb-right">
+            <span className="gc-lbl">Baseline Comparison</span>
+            <div className={`gc-tog ${baseline ? 'on' : ''}`} onClick={() => setBaseline(b => !b)}>
+              <div className="gc-tog-knob" />
+            </div>
+          </div>
+        </div>
+      )}
+
       {!compact && (
         <div className="gc-toolbar">
+
           <div className="gc-tb-left">
             <span className="gc-lbl">View</span>
             <select className="gc-sel" value={viewMode} onChange={e => setViewMode(e.target.value)}>
@@ -628,6 +724,14 @@ export default function ProjectGanttChart({ project, userRole, compact = false }
             }}>
               <Calendar size={13} /> Today
             </button>
+
+            {/* NEW: Expand / Collapse All button */}
+            <button className="gc-today-btn" onClick={toggleExpandAll}>
+              {expandedProjects.size === ganttRows.filter(r => r.type === 'project').length &&
+               expandedMilestones.size === ganttRows.filter(r => r.type === 'milestone').length
+                ? 'Collapse All'
+                : 'Expand All'}
+            </button>
           </div>
 
           <div className="gc-tb-right">
@@ -635,7 +739,6 @@ export default function ProjectGanttChart({ project, userRole, compact = false }
             <div className={`gc-tog ${baseline ? 'on' : ''}`} onClick={() => setBaseline(b => !b)}>
               <div className="gc-tog-knob" />
             </div>
-            <button className="gc-filter-btn"><SlidersHorizontal size={13} /> Filters</button>
           </div>
         </div>
       )}
@@ -667,11 +770,10 @@ export default function ProjectGanttChart({ project, userRole, compact = false }
       )}
 
       {/* ═══ BODY ═══ */}
-      <div className="gc-body" ref={scrollContainerRef} style={{ position: 'relative' }}>
-
+      <div className="gc-body" style={{ position: 'relative', display: 'flex', flex: 1, overflow: 'hidden' }}>
         {/* LEFT: sticky table */}
         <div className="gc-left" style={{ 
-          width: compact ? 340 : (tableCollapsed ? 212 : 422), 
+          width: tableCollapsed ? 0 : (compact ? 340 : 422), 
           borderRight: '2px solid #e2e8f0', 
           boxShadow: '2px 0 6px rgba(0,0,0,0.05)',
           transition: 'width 0.3s ease',
@@ -758,34 +860,33 @@ export default function ProjectGanttChart({ project, userRole, compact = false }
           </div>
         </div>
 
-        {!compact && (
-          <div 
-            onClick={() => setTableCollapsed(!tableCollapsed)}
-            style={{
-              position: 'absolute', 
-              left: tableCollapsed ? 212 + 8 : 422 - 24 - 8, 
-              top: 10, 
-              width: 24, 
-              height: 24,
-              background: 'white', 
-              border: '1px solid #cbd5e1', 
-              borderRadius: '50%',
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'center',
-              cursor: 'pointer', 
-              zIndex: 30, 
-              boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-              transition: 'left 0.3s ease'
-            }}
-            title={tableCollapsed ? "Expand Table" : "Collapse Table"}
-          >
-            {tableCollapsed ? <ChevronRight size={14} color="#3b82f6"/> : <ChevronLeft size={14} color="#3b82f6"/>}
+          <div style={{ position: 'relative', zIndex: 30, width: 0, alignSelf: 'stretch', overflow: 'visible' }}>
+            <div 
+              onClick={() => setTableCollapsed(!tableCollapsed)}
+              style={{
+                position: 'absolute', 
+                left: -12, 
+                top: 10, 
+                width: 24, 
+                height: 24,
+                background: 'white', 
+                border: '1px solid #cbd5e1', 
+                borderRadius: '50%',
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center',
+                cursor: 'pointer', 
+                boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                transition: 'left 0.3s ease'
+              }}
+              title={tableCollapsed ? "Expand Table" : "Collapse Table"}
+            >
+              {tableCollapsed ? <ChevronRight size={14} color="#3b82f6"/> : <ChevronLeft size={14} color="#3b82f6"/>}
+            </div>
           </div>
-        )}
 
         {/* RIGHT: scrollable timeline */}
-        <div className="gc-right">
+        <div className="gc-right" ref={scrollContainerRef} style={{ flex: 1, overflowX: 'auto', overflowY: 'hidden', position: 'relative' }}>
 
           {/* Sticky month/day header */}
           <div className="gc-right-hdr" style={{ width: timelineW }}>

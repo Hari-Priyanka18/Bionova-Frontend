@@ -1,12 +1,33 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { Menu, Search, Bell, User, ExternalLink, X, FolderOpen, CheckSquare, Flag } from "lucide-react";
+import { Menu, Search, Bell, User, ExternalLink, X, FolderOpen, CheckSquare, Flag, Trash2, CheckCheck } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 
 const STATUS_COLORS = {
+  'Closed':      { bar: '#10b981', bg: '#d1fae5' },
   'Completed':   { bar: '#10b981', bg: '#d1fae5' },
   'In Progress': { bar: '#3b82f6', bg: '#dbeafe' },
   'Not Started': { bar: '#f59e0b', bg: '#fef3c7' },
   'Overdue':     { bar: '#ef4444', bg: '#fee2e2' },
+};
+
+const getNotifPriorityInfo = (notif) => {
+  if (!notif) return { label: 'NORMAL', bg: '#f1f5f9', color: '#475569', border: '#e2e8f0' };
+  const priority = (notif.priority || '').toUpperCase();
+  const text = `${notif.title || ''} ${notif.message || ''}`.toUpperCase();
+
+  if (priority === 'CRITICAL' || text.includes('CRITICAL') || text.includes('OVERDUE') || text.includes('DEADLINE') || text.includes('IMMEDIATELY')) {
+    return { label: 'CRITICAL', bg: '#ffe4e6', color: '#e11d48', border: '#fecdd3' };
+  }
+  if (priority === 'HIGH' || text.includes('HIGH') || text.includes('URGENT') || text.includes('DELAY')) {
+    return { label: 'HIGH', bg: '#ffedd5', color: '#c2410c', border: '#fed7aa' };
+  }
+  if (priority === 'MEDIUM' || text.includes('MEDIUM') || text.includes('MILESTONE') || text.includes('UPDATE')) {
+    return { label: 'MEDIUM', bg: '#dbeafe', color: '#1d4ed8', border: '#bfdbfe' };
+  }
+  if (priority === 'LOW' || text.includes('LOW')) {
+    return { label: 'LOW', bg: '#f1f5f9', color: '#475569', border: '#e2e8f0' };
+  }
+  return { label: 'NORMAL', bg: '#f1f5f9', color: '#475569', border: '#e2e8f0' };
 };
 
 const Header = ({ title, subtitle, showSearch = false, statusBadge, progressPercent }) => {
@@ -21,9 +42,10 @@ const Header = ({ title, subtitle, showSearch = false, statusBadge, progressPerc
   const [isProfileHovered, setIsProfileHovered] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState([]);
-  const [companyLogo, setCompanyLogo] = useState(null);
+  const [companyLogo, setCompanyLogo] = useState(sessionStorage.getItem("companyLogo") || null);
   const [toastNotif, setToastNotif] = useState(location.state?.showToastNotif || null);
   const [toastExiting, setToastExiting] = useState(false);
+  const [userAccountStatus, setUserAccountStatus] = useState(sessionStorage.getItem("userAccountStatus") || "Active");
 
   useEffect(() => {
     // Fetch details dynamically from sessionStorage
@@ -31,12 +53,14 @@ const Header = ({ title, subtitle, showSearch = false, statusBadge, progressPerc
     const email = sessionStorage.getItem("userEmail") || "";
     let storedRole = sessionStorage.getItem("userDesignation") || sessionStorage.getItem("userRole") || "Super Admin";
     let storedPhoto = sessionStorage.getItem("userPhoto");
+    let storedStatus = sessionStorage.getItem("userAccountStatus");
     
     setUserEmail(email);
 
     if (storedName) setUserName(storedName);
     if (storedRole) setUserRole(storedRole);
     if (storedPhoto) setPhotoUrl(storedPhoto);
+    if (storedStatus) setUserAccountStatus(storedStatus);
 
     const updateInitials = (nameStr) => {
       if (!nameStr) return;
@@ -59,47 +83,80 @@ const Header = ({ title, subtitle, showSearch = false, statusBadge, progressPerc
     const fetchProfile = async () => {
       if (!email) return;
       try {
-        const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/employees`, {
+        const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/profile`, {
           headers: {
             "Content-Type": "application/json",
             "Authorization": `Bearer ${sessionStorage.getItem("authToken") || ""}`
           }
         });
         if (res.ok) {
-          const emps = await res.json();
-          const me = emps.find(e => e.email && e.email.toLowerCase() === email.toLowerCase());
+          const me = await res.json();
           if (me) {
             const fullName = `${me.fstNm || me.firstName || ""} ${me.lstNm || me.lastName || ""}`.trim();
             const designation = me.designation || me.role || "User";
             const photo = me.photoUrl || null;
 
+            const isInactive = me.sts === false || me.sts === "INACTIVE" || me.sts === 0 || me.sts === "false" || me.status === "Inactive" || me.status === false;
+            const statusStr = isInactive ? "Inactive" : "Active";
+
             setUserName(fullName);
             setUserRole(designation);
+            setUserAccountStatus(statusStr);
             setPhotoUrl(photo);
             updateInitials(fullName);
 
             sessionStorage.setItem("userName", fullName);
             localStorage.setItem("userName", fullName);
             sessionStorage.setItem("userDesignation", designation);
+            sessionStorage.setItem("userAccountStatus", statusStr);
             if (photo) sessionStorage.setItem("userPhoto", photo);
 
-            // Fetch company logo using coyId
-            if (me.coyId) {
-              try {
-                const coyRes = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/companies/${me.coyId}`, {
-                  headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": `Bearer ${sessionStorage.getItem("authToken") || ""}`
+            // Fetch logo using pltId or coyId
+            (async () => {
+              let logoUrl = null;
+              if (me.pltId) {
+                try {
+                  const pltRes = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/plants/${me.pltId}`, {
+                    headers: {
+                      "Content-Type": "application/json",
+                      "Authorization": `Bearer ${sessionStorage.getItem("authToken") || ""}`
+                    }
+                  });
+                  if (pltRes.ok) {
+                    const pltData = await pltRes.json();
+                    if (pltData.logo) {
+                      logoUrl = pltData.logo;
+                    }
                   }
-                });
-                if (coyRes.ok) {
-                  const coyData = await coyRes.json();
-                  if (coyData.logo) setCompanyLogo(coyData.logo);
+                } catch (err) {
+                  console.error("Failed to fetch plant logo", err);
                 }
-              } catch (err) {
-                console.error("Failed to fetch company logo", err);
               }
-            }
+
+              if (!logoUrl && me.coyId) {
+                try {
+                  const coyRes = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/companies/${me.coyId}`, {
+                    headers: {
+                      "Content-Type": "application/json",
+                      "Authorization": `Bearer ${sessionStorage.getItem("authToken") || ""}`
+                    }
+                  });
+                  if (coyRes.ok) {
+                    const coyData = await coyRes.json();
+                    if (coyData.logo) {
+                      logoUrl = coyData.logo;
+                    }
+                  }
+                } catch (err) {
+                  console.error("Failed to fetch company logo", err);
+                }
+              }
+
+              if (logoUrl) {
+                setCompanyLogo(logoUrl);
+                sessionStorage.setItem("companyLogo", logoUrl);
+              }
+            })();
           }
         }
       } catch (err) {
@@ -169,6 +226,19 @@ const Header = ({ title, subtitle, showSearch = false, statusBadge, progressPerc
       setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
     } catch (err) {
       console.error("Failed to mark all as read", err);
+    }
+  };
+
+  const clearAllNotifications = async () => {
+    try {
+      await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/notifications/clear-all`, {
+        method: "DELETE",
+        headers: authHeaders()
+      }).catch(() => {});
+      setNotifications([]);
+    } catch (err) {
+      console.error("Failed to clear notifications", err);
+      setNotifications([]);
     }
   };
 
@@ -433,14 +503,25 @@ const Header = ({ title, subtitle, showSearch = false, statusBadge, progressPerc
               {notifications.filter(n => !n.isRead).length > 0 && (
                 <span style={{
                   position: "absolute",
-                  top: "6px",
-                  right: "6px",
-                  width: "8px",
-                  height: "8px",
+                  top: "1px",
+                  right: "1px",
                   background: "#ef4444",
-                  borderRadius: "50%",
-                  border: "2px solid white"
-                }}></span>
+                  color: "white",
+                  fontSize: "10px",
+                  fontWeight: "700",
+                  borderRadius: "10px",
+                  padding: "1px 5px",
+                  minWidth: "16px",
+                  height: "16px",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  border: "2px solid white",
+                  boxShadow: "0 2px 4px rgba(239, 68, 68, 0.4)",
+                  lineHeight: 1
+                }}>
+                  {notifications.filter(n => !n.isRead).length > 9 ? '9+' : notifications.filter(n => !n.isRead).length}
+                </span>
               )}
             </button>
 
@@ -456,18 +537,55 @@ const Header = ({ title, subtitle, showSearch = false, statusBadge, progressPerc
                   border: "1px solid #e2e8f0",
                   borderRadius: "12px",
                   boxShadow: "0 10px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1)",
-                  width: "320px",
+                  width: "360px",
                   zIndex: 1000,
                   display: "flex",
                   flexDirection: "column",
                   overflow: "hidden"
                 }}
               >
-                <div style={{ padding: "16px", borderBottom: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center", background: "#f8fafc" }}>
-                  <h4 style={{ margin: 0, fontSize: "15px", fontWeight: "700", color: "#0f172a" }}>Notifications</h4>
-                  <span style={{ fontSize: "11px", color: "#3b82f6", fontWeight: "600", cursor: "pointer" }} onClick={markAllAsRead}>
-                    Mark all as read
-                  </span>
+                <div style={{ padding: "14px 16px", borderBottom: "1px solid #e2e8f0", background: "#f8fafc" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: notifications.filter(n => !n.isRead).length > 0 ? "8px" : "0px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <h4 style={{ margin: 0, fontSize: "15px", fontWeight: "700", color: "#0f172a" }}>Notifications</h4>
+                      {notifications.filter(n => !n.isRead).length > 0 && (
+                        <span style={{ fontSize: "11px", background: "#e0e7ff", color: "#4338ca", fontWeight: "700", padding: "2px 8px", borderRadius: "12px" }}>
+                          {notifications.filter(n => !n.isRead).length} Unread
+                        </span>
+                      )}
+                    </div>
+                    {notifications.length > 0 && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); clearAllNotifications(); }}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "4px",
+                          padding: "4px 10px",
+                          background: "#fef2f2",
+                          border: "1px solid #fecaca",
+                          borderRadius: "6px",
+                          color: "#dc2626",
+                          fontSize: "12px",
+                          fontWeight: "600",
+                          cursor: "pointer"
+                        }}
+                        title="Clear all notifications"
+                      >
+                        <Trash2 size={13} /> Clear
+                      </button>
+                    )}
+                  </div>
+                  {notifications.filter(n => !n.isRead).length > 0 && (
+                    <div style={{ display: "flex", justifyContent: "flex-start" }}>
+                      <span 
+                        style={{ fontSize: "12px", color: "#2563eb", fontWeight: "600", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "4px" }} 
+                        onClick={markAllAsRead}
+                      >
+                        <CheckCheck size={14} /> Mark all as read
+                      </span>
+                    </div>
+                  )}
                 </div>
                 
                 {/* Scrollable Queue Area */}
@@ -505,13 +623,27 @@ const Header = ({ title, subtitle, showSearch = false, statusBadge, progressPerc
                         style={{ transition: 'transform 0.15s ease, background 0.2s' }}
                       >
                         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px", alignItems: "flex-start" }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: 1 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: 1, paddingRight: '8px' }}>
                             {notif.entityTyp === 'PROJECT' && <FolderOpen size={13} color="#3b82f6" />}
                             {notif.entityTyp === 'TASK' && <CheckSquare size={13} color="#10b981" />}
                             {notif.entityTyp === 'MILESTONE' && <Flag size={13} color="#f59e0b" />}
                             <span style={{ fontSize: "13px", fontWeight: !notif.isRead ? "700" : "600", color: "#0f172a" }}>{notif.title}</span>
                           </div>
-                          <span style={{ fontSize: "10px", color: "#94a3b8", whiteSpace: "nowrap", marginLeft: "8px" }}>{formatNotifTime(notif.createdAt)}</span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+                            <span style={{
+                              fontSize: "9px",
+                              fontWeight: "800",
+                              padding: "2px 6px",
+                              borderRadius: "4px",
+                              letterSpacing: "0.5px",
+                              background: getNotifPriorityInfo(notif).bg,
+                              color: getNotifPriorityInfo(notif).color,
+                              border: `1px solid ${getNotifPriorityInfo(notif).border}`
+                            }}>
+                              {getNotifPriorityInfo(notif).label}
+                            </span>
+                            <span style={{ fontSize: "10px", color: "#94a3b8", whiteSpace: "nowrap" }}>{formatNotifTime(notif.createdAt)}</span>
+                          </div>
                         </div>
                         <div style={{ fontSize: "12px", color: "#475569", lineHeight: "1.4", marginBottom: "6px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                           {notif.message}
@@ -604,8 +736,19 @@ const Header = ({ title, subtitle, showSearch = false, statusBadge, progressPerc
                     <span style={{ fontSize: "13px", color: "#334155", wordBreak: "break-all" }}>{userEmail || "admin@atirath.com"}</span>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "4px" }}>
-                    <span style={{ width: "8px", height: "8px", background: "#10b981", borderRadius: "50%" }}></span>
-                    <span style={{ fontSize: "12px", color: "#10b981", fontWeight: "600" }}>Active Status</span>
+                    <span style={{
+                      width: "8px",
+                      height: "8px",
+                      background: userAccountStatus === "Inactive" ? "#ef4444" : "#10b981",
+                      borderRadius: "50%"
+                    }}></span>
+                    <span style={{
+                      fontSize: "12px",
+                      color: userAccountStatus === "Inactive" ? "#ef4444" : "#10b981",
+                      fontWeight: "600"
+                    }}>
+                      {userAccountStatus === "Inactive" ? "Inactive Status" : "Active Status"}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -686,8 +829,22 @@ const Header = ({ title, subtitle, showSearch = false, statusBadge, progressPerc
                   {!toastNotif.entityTyp && <Bell size={16} color="#64748b" />}
                 </div>
                 <div>
-                  <div style={{ fontSize: '13px', fontWeight: '700', color: '#0f172a', lineHeight: '1.3' }}>
-                    {toastNotif.title}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <div style={{ fontSize: '13px', fontWeight: '700', color: '#0f172a', lineHeight: '1.3' }}>
+                      {toastNotif.title}
+                    </div>
+                    <span style={{
+                      fontSize: "9px",
+                      fontWeight: "800",
+                      padding: "2px 6px",
+                      borderRadius: "4px",
+                      letterSpacing: "0.5px",
+                      background: getNotifPriorityInfo(toastNotif).bg,
+                      color: getNotifPriorityInfo(toastNotif).color,
+                      border: `1px solid ${getNotifPriorityInfo(toastNotif).border}`
+                    }}>
+                      {getNotifPriorityInfo(toastNotif).label}
+                    </span>
                   </div>
                   <div style={{ fontSize: '10px', color: '#94a3b8', fontWeight: '500', marginTop: '1px' }}>
                     {toastNotif.entityTyp === 'PROJECT' ? 'Project Update' :

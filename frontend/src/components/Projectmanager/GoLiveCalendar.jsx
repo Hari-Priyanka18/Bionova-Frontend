@@ -68,6 +68,21 @@ const calcWorkingDays = (startStr, endStr, skipSat, skipSun, publicHolidayDates 
   return count;
 };
 
+const getNextWorkingDay = (dateStr, skipSat, skipSun, publicHolidayDates = []) => {
+  if (!dateStr) return dateStr;
+  const holidaySet = new Set(publicHolidayDates);
+  let cur = parseLocal(dateStr);
+  if (!cur) return dateStr;
+  while (true) {
+    const dow = cur.getDay();
+    const dateKey = formatLocal(cur);
+    if (!((skipSat && dow === 6) || (skipSun && dow === 0) || holidaySet.has(dateKey))) {
+      return dateKey;
+    }
+    cur.setDate(cur.getDate() + 1);
+  }
+};
+
 const calcEndDate = (startStr, workingDays, skipSat, skipSun, publicHolidayDates = []) => {
   if (!startStr || !workingDays) return startStr;
   const holidaySet = new Set(publicHolidayDates);
@@ -114,7 +129,7 @@ const GoLiveCalendar = ({ project, onCancel, onPreview }) => {
   const [expandedRows, setExpandedRows] = useState(new Set(['project']));
 
   const toggleMaster = (day) => setConsiderOnly(p => ({ ...p, [day]: { ...p[day], active: !p[day].active } }));
-  const toggleSub = (day, field) => setConsiderOnly(p => ({ ...p, [day]: { ...p[day], [field]: !p[day][field] } }));
+  const toggleSub = (day, field) => setConsiderOnly(p => ({ ...p, [day]: { ...p[day], [field]: !p[field] } }));
   
   const toggleRow = (id) => {
     const next = new Set(expandedRows);
@@ -154,10 +169,11 @@ const GoLiveCalendar = ({ project, onCancel, onPreview }) => {
             const pltRes = await fetch(`${apiBaseUrl}/api/plants/${pltId}`, { headers: getAuthHeaders() });
             if (pltRes.ok) {
               const pltData = await pltRes.json();
-              const wrkDays = pltData.wrkDaysPerWk;
-              if (wrkDays === 5) { skipSat = true; skipSun = true; }
-              else if (wrkDays === 6) { skipSat = false; skipSun = true; }
-              else { skipSat = false; skipSun = false; }
+              const wrkDays = pltData.wrkDaysPerWk || pltData.workingDaysPerWeek;
+              if (Number(wrkDays) === 5) { skipSat = true; skipSun = true; }
+              else if (Number(wrkDays) === 6) { skipSat = false; skipSun = true; }
+              else if (Number(wrkDays) === 7) { skipSat = false; skipSun = false; }
+              else { skipSun = true; }
             }
           } else {
             const coyId = project.companyId || project.coyId;
@@ -166,9 +182,10 @@ const GoLiveCalendar = ({ project, onCancel, onPreview }) => {
               if (coyRes.ok) {
                 const coyData = await coyRes.json();
                 const wrkDays = coyData.wrkDaysPerWk || coyData.workingDaysPerWeek;
-                if (wrkDays === 5) { skipSat = true; skipSun = true; }
-                else if (wrkDays === 6) { skipSat = false; skipSun = true; }
-                else { skipSat = false; skipSun = false; }
+                if (Number(wrkDays) === 5) { skipSat = true; skipSun = true; }
+                else if (Number(wrkDays) === 6) { skipSat = false; skipSun = true; }
+                else if (Number(wrkDays) === 7) { skipSat = false; skipSun = false; }
+                else { skipSun = true; }
               }
             }
           }
@@ -217,20 +234,18 @@ const GoLiveCalendar = ({ project, onCancel, onPreview }) => {
         console.warn("Failed to fetch public holidays:", e);
       }
 
-      const projStart = project.startDate || project.tentStDt || '';
-      const projEnd   = project.endDate   || project.tentEndDt  || '';
-      // noOfDays is stored inclusive (start=day1), use directly as calendar-day count
-      let totalDays = parseInt(project.totalProjectDays || project.noOfDays || 0, 10);
+      const projStart = project.startDate || project.tentStDt || project.tent_st_dt || project.start_date || '';
+      const projEnd   = project.endDate   || project.tentEndDt  || project.tent_end_dt  || project.end_date   || '';
+      let totalDays = parseInt(project.totalProjectDays || project.noOfDays || project.no_of_days || 0, 10);
       if (!totalDays && projStart && projEnd) {
         const sd = parseLocal(projStart);
         const ed = parseLocal(projEnd);
-        // Inclusive fallback: Jul2–Jul26 = 25 days
         if (sd && ed) totalDays = Math.round((ed - sd) / 86400000) + 1;
       }
       const projAdjustedEnd = totalDays ? calcEndDate(projStart, totalDays, skipSat, skipSun, publicHolidayDates) : projEnd;
 
       let hierarchy = [];
-      const drftPrjId = project.drftPrjId || project.projectId || project.id;
+      const drftPrjId = project.drftPrjId || project.drft_prj_id || project.projectId || project.project_id || project.id;
       
       if (drftPrjId && !project.isIndividualTask) {
         const milestonesRes = await fetch(`${apiBaseUrl}/api/milestone-drafts/by-project/${drftPrjId}`, { headers: getAuthHeaders() });
@@ -242,17 +257,18 @@ const GoLiveCalendar = ({ project, onCancel, onPreview }) => {
             return idA - idB;
           });
           for (const m of sortedMilestones) {
-            const mStart = m.tentStDt || '';
-            const mEnd = m.tentEndDt || '';
-            let mDays = parseInt(m.mlstnDays || m.workingDays || 0, 10);
+            const mStart = m.tentStDt || m.tent_st_dt || '';
+            const mEnd = m.tentEndDt || m.tent_end_dt || '';
+            let mDays = parseInt(m.mlstnDays || m.mlstn_days || m.workingDays || 0, 10);
             if (!mDays && mStart && mEnd) {
               const sd = parseLocal(mStart);
               const ed = parseLocal(mEnd);
               if (sd && ed) mDays = Math.round((ed - sd) / 86400000) + 1;
             }
-            const mAdjEnd = mDays ? calcEndDate(mStart, mDays, skipSat, skipSun, publicHolidayDates) : mEnd;
+            const fallbackMAdjEnd = mDays ? calcEndDate(mStart, mDays, skipSat, skipSun, publicHolidayDates) : mEnd;
 
-            const tasksRes = await fetch(`${apiBaseUrl}/api/task-drafts/by-milestone/${m.drftMId}`, { headers: getAuthHeaders() });
+            const mId = m.drftMId || m.drft_m_id || m.id;
+            const tasksRes = await fetch(`${apiBaseUrl}/api/task-drafts/by-milestone/${mId}`, { headers: getAuthHeaders() });
             let taskRows = [];
             if (tasksRes.ok) {
               const tasksData = await tasksRes.json();
@@ -261,45 +277,132 @@ const GoLiveCalendar = ({ project, onCancel, onPreview }) => {
                 const idB = b.drftTaskId || b.drft_task_id || 0;
                 return idA - idB;
               });
-              taskRows = sortedTasks.map(t => {
-                const tStart = t.tentStDt || '';
-                const tEnd = t.tentEndDt || '';
-                let tDays = parseInt(t.noOfDays || t.taskDays || 0, 10);
+
+              const taskMap = {};
+
+              const rawTaskRows = sortedTasks.map(t => {
+                const tStart = t.tentStDt || t.tent_st_dt || '';
+                const tEnd = t.tentEndDt || t.tent_end_dt || '';
+                let tDays = parseInt(t.noOfDays || t.no_of_days || t.taskDays || 0, 10);
                 if (!tDays && tStart && tEnd) {
                   const sd = parseLocal(tStart);
                   const ed = parseLocal(tEnd);
                   if (sd && ed) tDays = Math.round((ed - sd) / 86400000) + 1;
                 }
-                const tAdjEnd = tDays ? calcEndDate(tStart, tDays, skipSat, skipSun, publicHolidayDates) : tEnd;
-                return { type: 'T', id: t.drftTaskId, code: t.taskCd || `TSK-${t.drftTaskId}`, name: t.taskNm, start: tStart, end: tEnd, adjEnd: tAdjEnd, adjDays: tDays };
+
+                let rawStart = tStart || mStart || projStart;
+                const depId = t.depTaskId || t.dep_task_id;
+
+                if (depId && taskMap[depId]) {
+                  const depObj = taskMap[depId];
+                  if (depObj && depObj.adjEnd) {
+                    const depStart = depObj.start || '';
+                    if (!depStart || !tStart || parseLocal(tStart) > parseLocal(depStart)) {
+                      const nextDay = addDays(depObj.adjEnd, 1);
+                      if (parseLocal(nextDay) > parseLocal(rawStart)) {
+                        rawStart = nextDay;
+                      }
+                    }
+                  }
+                } else if (tStart) {
+                  let maxPrevAdjEnd = '';
+                  sortedTasks.forEach(pt => {
+                    const pId = pt.drftTaskId || pt.drft_task_id;
+                    const pObj = taskMap[pId] || (pt.taskCd ? taskMap[pt.taskCd] : null);
+                    if (pObj && pObj.end && parseLocal(pObj.end) < parseLocal(tStart)) {
+                      if (!maxPrevAdjEnd || parseLocal(pObj.adjEnd) > parseLocal(maxPrevAdjEnd)) {
+                        maxPrevAdjEnd = pObj.adjEnd;
+                      }
+                    }
+                  });
+                  if (maxPrevAdjEnd) {
+                    const nextDay = addDays(maxPrevAdjEnd, 1);
+                    if (parseLocal(nextDay) > parseLocal(rawStart)) {
+                      rawStart = nextDay;
+                    }
+                  }
+                }
+
+                const tAdjStart = getNextWorkingDay(rawStart, skipSat, skipSun, publicHolidayDates);
+                const tAdjEnd = (tDays && tAdjStart) ? calcEndDate(tAdjStart, tDays, skipSat, skipSun, publicHolidayDates) : (tEnd || tAdjStart);
+
+                const taskObj = {
+                  type: 'T',
+                  id: t.drftTaskId || t.drft_task_id,
+                  code: t.taskCd || t.task_cd || `TSK-${t.drftTaskId || t.drft_task_id}`,
+                  name: t.taskNm || t.task_nm || '',
+                  start: tStart,
+                  end: tEnd,
+                  adjStart: tAdjStart,
+                  adjEnd: tAdjEnd,
+                  adjDays: tDays
+                };
+
+                const tKey = t.drftTaskId || t.drft_task_id;
+                if (tKey) taskMap[tKey] = taskObj;
+                if (t.taskCd) taskMap[t.taskCd] = taskObj;
+
+                return taskObj;
+              });
+
+              // Second pass: Synchronize parallel tasks with identical DB start date (tentStDt)
+              const startGroupMap = {};
+              rawTaskRows.forEach(t => {
+                if (t.start) {
+                  if (!startGroupMap[t.start] || parseLocal(t.adjStart) > parseLocal(startGroupMap[t.start])) {
+                    startGroupMap[t.start] = t.adjStart;
+                  }
+                }
+              });
+
+              taskRows = rawTaskRows.map(t => {
+                if (t.start && startGroupMap[t.start]) {
+                  const syncedAdjStart = startGroupMap[t.start];
+                  const syncedAdjEnd = (t.adjDays && syncedAdjStart) ? calcEndDate(syncedAdjStart, t.adjDays, skipSat, skipSun, publicHolidayDates) : t.adjEnd;
+                  return { ...t, adjStart: syncedAdjStart, adjEnd: syncedAdjEnd };
+                }
+                return t;
               });
             }
-            hierarchy.push({ type: 'M', id: m.drftMId, code: m.mlstnCd || `MS-${m.drftMId}`, name: m.mlstnTtl || m.mlstnNm, start: mStart, end: mEnd, adjEnd: mAdjEnd, adjDays: mDays, tasks: taskRows });
+
+            // Derive Milestone Adjusted End Date as maximum Adjusted End Date of its tasks
+            let maxTaskAdjEnd = '';
+            taskRows.forEach(t => {
+              if (t.adjEnd && (!maxTaskAdjEnd || t.adjEnd > maxTaskAdjEnd)) {
+                maxTaskAdjEnd = t.adjEnd;
+              }
+            });
+            const mAdjEnd = maxTaskAdjEnd || fallbackMAdjEnd;
+
+            hierarchy.push({
+              type: 'M',
+              id: mId,
+              code: m.mlstnCd || m.mlstn_cd || `MS-${mId}`,
+              name: m.mlstnTtl || m.mlstn_ttl || m.mlstnNm || m.mlstn_nm || '',
+              start: mStart,
+              end: mEnd,
+              adjEnd: mAdjEnd,
+              adjDays: mDays,
+              tasks: taskRows
+            });
           }
         }
       }
 
-      // If no milestones found, inject a mock visual structure to demonstrate layout
-      if (hierarchy.length === 0 && !project.isIndividualTask) {
-        const mockMStart = projStart || new Date().toISOString().split('T')[0];
-        const mockMEnd = calcEndDate(mockMStart, 30, skipSat, skipSun, publicHolidayDates);
-        const mockTStart = mockMStart;
-        const mockTEnd = calcEndDate(mockTStart, 15, skipSat, skipSun, publicHolidayDates);
-        
-        hierarchy.push({
-          type: 'M', id: 'mock-m-1', code: 'MS-001', name: 'Design Phase (Demo Data)',
-          start: mockMStart, end: mockMEnd, adjEnd: mockMEnd, adjDays: 30,
-          tasks: [
-            { type: 'T', id: 'mock-t-1', code: 'TSK-001', name: 'UI Mockups (Demo Data)', start: mockTStart, end: mockTEnd, adjEnd: mockTEnd, adjDays: 15 }
-          ]
-        });
-      }
+      // Derive Project Adjusted End Date based on project's total working days (e.g. 100 days -> 19 Nov 2026)
+      let maxMilestoneAdjEnd = '';
+      hierarchy.forEach(m => {
+        if (m.adjEnd && (!maxMilestoneAdjEnd || m.adjEnd > maxMilestoneAdjEnd)) {
+          maxMilestoneAdjEnd = m.adjEnd;
+        }
+      });
+      const projFinalAdjustedEnd = projAdjustedEnd || maxMilestoneAdjEnd;
 
       const pType = project.isIndividualTask ? 'T' : 'P';
-      const pCode = project.isIndividualTask ? (project.taskCd || `TSK-${project.id || 'NEW'}`) : (project.prjCd || project.projectCode || '');
+      const pCode = project.isIndividualTask ? (project.taskCd || project.task_cd || `TSK-${project.id || 'NEW'}`) : (project.prjCd || project.prj_cd || project.projectCode || '');
       
       setPreview({
-        projectRow: { type: pType, id: 'project', code: pCode, name: project.prjNm || project.projectName || '', start: projStart, end: projEnd, adjEnd: projAdjustedEnd, adjDays: totalDays },
+        projectRow: { type: pType, id: 'project', code: pCode, name: project.prjNm || project.prj_nm || project.projectName || '', start: projStart, end: projEnd, adjEnd: projFinalAdjustedEnd, adjDays: totalDays },
         hierarchy, skipSat, skipSun, skipPub
       });
       setStep('preview');

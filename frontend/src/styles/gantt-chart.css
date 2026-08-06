@@ -6,7 +6,8 @@
 .gc-wrap {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  height: auto;
+  min-height: 250px;
   background: #fff;
   border-radius: 8px;
   border: 1px solid #e2e8f0;
@@ -14,6 +15,8 @@
   font-size: 12px;
   font-family: inherit;
   color: #1e293b;
+  width: 100%;
+  max-width: 100%;
 }
 
 /* ─── Toolbar ─── */
@@ -148,10 +151,12 @@
 .gc-body {
   display: flex;
   flex: 1;
-  overflow: auto;
+  overflow-x: auto;
+  overflow-y: hidden;
   position: relative;
   min-height: 0;
   align-items: flex-start;
+  padding-bottom: 16px; /* Prevents horizontal scrollbar from clipping the last row */
 }
 
 /* LEFT fixed panel */

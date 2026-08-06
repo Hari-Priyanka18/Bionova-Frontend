@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import Sidebar from "../Sidebar";
+import Sidebar from "../Sidebar.jsx";
 import {
   FileText,
   FileSpreadsheet,
@@ -36,31 +36,30 @@ import "../../styles/DocsAndReports.css";
 import plantImage from "../../assets/cbg_plant_construction.png";
 import Header from "../Header";
 import AlertModal from "../AlertModal";
+
 const API_BASE = (import.meta.env.VITE_API_BASE_URL) + "/api";
 
 const authHeaders = () => ({
-  Authorization: `Bearer ${localStorage.getItem("token")}`,
+  Authorization: `Bearer ${sessionStorage.getItem("authToken") || ""}`,
   "Content-Type": "application/json",
 });
 
-const initialDocuments = [];
-const initialActivities = [];
-
-// Document Categories Mapping
+// Document Categories Mapping (UI labels only – no mock counts)
 const CATEGORIES = [
-  { name: "All Documents", key: "All Documents", mockCount: 84 },
-  { name: "Project Charter", key: "Governance", mockCount: 5 },
-  { name: "Drawings", key: "Drawings", mockCount: 22 },
-  { name: "BOQ & Estimates", key: "BOQ & Estimates", mockCount: 14 },
-  { name: "Contracts", key: "Contracts", mockCount: 7 },
-  { name: "Approvals", key: "Approvals", mockCount: 9 },
-  { name: "Technical Specifications", key: "Technical Specifications", mockCount: 6 },
-  { name: "Safety Documents", key: "Safety", mockCount: 8 },
-  { name: "Progress Reports", key: "Progress Reports", mockCount: 11 },
-  { name: "Risk Reports", key: "Risk Reports", mockCount: 6 },
-  { name: "Closure Documents", key: "Closure Documents", mockCount: 4 }
+  { name: "All Documents", key: "All Documents" },
+  { name: "Project Charter", key: "Governance" },
+  { name: "Drawings", key: "Drawings" },
+  { name: "BOQ & Estimates", key: "BOQ & Estimates" },
+  { name: "Contracts", key: "Contracts" },
+  { name: "Approvals", key: "Approvals" },
+  { name: "Technical Specifications", key: "Technical Specifications" },
+  { name: "Safety Documents", key: "Safety" },
+  { name: "Progress Reports", key: "Progress Reports" },
+  { name: "Risk Reports", key: "Risk Reports" },
+  { name: "Closure Documents", key: "Closure Documents" }
 ];
 
+// System‑defined report types (used for generation simulation)
 const REPORTS = [
   "Project Summary Report",
   "Project Progress Report",
@@ -75,60 +74,48 @@ const REPORTS = [
 const DocsAndReports = ({ userRole, onLogout, isTab = false, project }) => {
   const navigate = useNavigate();
 
+  // ---- State ----
   const [documents, setDocuments] = useState([]);
   const [activities, setActivities] = useState([]);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (isTab && project) {
-      const prjId = project.prjId || project.id;
-      if (prjId) {
-        fetch(`${API_BASE}/attachments/project/${prjId}`, { headers: authHeaders() })
-          .then(res => res.ok ? res.json() : [])
-          .then(data => {
-            if (Array.isArray(data)) {
-              const mapped = data.map(att => ({
-                id: `DOC-${att.fileId}`,
-                name: att.fileNm,
-                category: "Project Document", 
-                type: (att.fileNm.split('.').pop() || "unknown").toLowerCase(),
-                version: "V1.0",
-                uploadedBy: "System",
-                uploadedOn: att.dateTimestamp,
-                status: "Approved",
-                size: "Unknown",
-                description: "Uploaded document",
-                url: att.atPath
-              }));
-              setDocuments(mapped);
-            }
-          })
-          .catch(err => console.error("Error fetching docs", err));
-      }
-    } else {
-      setDocuments([]);
-    }
-  }, [isTab, project]);
-
-  // Filters & State
+  // Filters & UI state
   const [selectedCategoryTab, setSelectedCategoryTab] = useState("All Documents");
   const [filterCategory, setFilterCategory] = useState("All Categories");
   const [filterType, setFilterType] = useState("All Types");
   const [filterUser, setFilterUser] = useState("All Users");
   const [searchQuery, setSearchQuery] = useState("");
-  const [dateRange, setDateRange] = useState("01-May-2025 ~ 30-Jun-2025");
+  const [dateRange, setDateRange] = useState("01-May-2025 ~ 30-Jun-2025"); // static UI placeholder
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 25;
 
-  // Modals state
+  // Modals
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showGeneratingModal, setShowGeneratingModal] = useState(false);
+  const [showActivityModal, setShowActivityModal] = useState(false);
   const [selectedDoc, setSelectedDoc] = useState(null);
   const [activeActionsMenuId, setActiveActionsMenuId] = useState(null);
-
-  // Generate Report simulation modal
-  const [showGeneratingModal, setShowGeneratingModal] = useState(false);
   const [generatingReportName, setGeneratingReportName] = useState("");
-  const [showActivityModal, setShowActivityModal] = useState(false);
 
+  // Form states for upload
+  const [uploadName, setUploadName] = useState("");
+  const [uploadCategory, setUploadCategory] = useState("Governance");
+  const [uploadVersion, setUploadVersion] = useState("V1.0");
+  const [uploadSize, setUploadSize] = useState("1.5 MB");
+  const [uploadUploadedBy, setUploadUploadedBy] = useState("Ravi Kumar");
+  const [uploadDescription, setUploadDescription] = useState("");
+  const [uploadStatus, setUploadStatus] = useState("Approved");
+
+  // Form states for edit
+  const [editName, setEditName] = useState("");
+  const [editCategory, setEditCategory] = useState("");
+  const [editStatus, setEditStatus] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+
+  // Alert modal
   const [alertConfig, setAlertConfig] = useState({
     isOpen: false,
     type: "info",
@@ -151,102 +138,7 @@ const DocsAndReports = ({ userRole, onLogout, isTab = false, project }) => {
     });
   };
 
-  // Form states for upload
-  const [uploadName, setUploadName] = useState("");
-  const [uploadCategory, setUploadCategory] = useState("Governance");
-  const [uploadVersion, setUploadVersion] = useState("V1.0");
-  const [uploadSize, setUploadSize] = useState("1.5 MB");
-  const [uploadUploadedBy, setUploadUploadedBy] = useState("Ravi Kumar");
-  const [uploadDescription, setUploadDescription] = useState("");
-  const [uploadStatus, setUploadStatus] = useState("Approved");
-
-  // Form states for edit/update metadata
-  const [editName, setEditName] = useState("");
-  const [editCategory, setEditCategory] = useState("");
-  const [editStatus, setEditStatus] = useState("");
-  const [editDescription, setEditDescription] = useState("");
-
-  // Pagination state
-  const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 25;
-
-  // Sync category tab with filter category dropdown
-  useEffect(() => {
-    if (selectedCategoryTab !== "All Documents") {
-      setFilterCategory(selectedCategoryTab);
-    } else {
-      setFilterCategory("All Categories");
-    }
-    setCurrentPage(1);
-  }, [selectedCategoryTab]);
-
-  // Apply filters
-  const filteredDocuments = documents.filter((doc) => {
-    // Category match
-    const matchCategory =
-      filterCategory === "All Categories" || doc.category === filterCategory;
-
-    // File type match
-    const matchType =
-      filterType === "All Types" || doc.type.toLowerCase() === filterType.toLowerCase();
-
-    // Uploaded by match
-    const matchUser =
-      filterUser === "All Users" || doc.uploadedBy === filterUser;
-
-    // Search query match
-    const matchSearch =
-      doc.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      doc.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      doc.uploadedBy.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      doc.status.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (doc.description && doc.description.toLowerCase().includes(searchQuery.toLowerCase()));
-
-    return matchCategory && matchType && matchUser && matchSearch;
-  });
-
-  // Calculate stats based on current docs list
-  const totalCount = documents.length;
-  const drawingsCount = documents.filter(d => d.category === "Drawings").length;
-  const reportsCount = documents.filter(d => d.category === "Progress Reports" || d.category === "Risk Reports" || d.name.toLowerCase().includes("report")).length;
-  const pendingApprovalsCount = documents.filter(d => d.status === "Under Review").length;
-
-  // Derive unique categories present in documents
-  const presentCategories = Array.from(new Set(documents.map(d => d.category))).filter(Boolean).sort();
-
-  // Derive unique types present in documents
-  const presentTypes = Array.from(new Set(documents.map(d => d.type.toLowerCase()))).filter(Boolean).sort();
-
-  // Helper mapping for display types
-  const getFileTypeDisplayName = (type) => {
-    const t = type.toLowerCase();
-    if (t === "pdf") return "PDF";
-    if (t === "xlsx" || t === "xls") return "Excel/XLSX";
-    if (t === "docx" || t === "doc") return "Word/DOCX";
-    if (t === "dwg") return "AutoCAD/DWG";
-    return type.toUpperCase();
-  };
-
-  // Derive unique users present in documents
-  const presentUsers = Array.from(new Set(documents.map(d => d.uploadedBy))).filter(Boolean).sort();
-
-  // Pagination math
-  const indexOfLastItem = currentPage * itemsPerPage;
-  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentItems = filteredDocuments.slice(indexOfFirstItem, indexOfLastItem);
-  const totalPages = Math.ceil(filteredDocuments.length / itemsPerPage);
-
-  // Helper to render type icon
-  const renderFileTypeIcon = (type) => {
-    const t = type.toLowerCase();
-    if (t === "pdf") return <div className="dr-type-icon pdf">PDF</div>;
-    if (t === "xlsx" || t === "xls") return <div className="dr-type-icon xlsx">XLSX</div>;
-    if (t === "docx" || t === "doc") return <div className="dr-type-icon docx">DOCX</div>;
-    if (t === "dwg") return <div className="dr-type-icon dwg">DWG</div>;
-    return <div className="dr-type-icon other">FILE</div>;
-  };
-
-  // Format date time helper
+  // ---- Helper functions ----
   const formatDateTime = (dateTimeStr) => {
     if (!dateTimeStr) return "";
     const date = new Date(dateTimeStr);
@@ -258,76 +150,264 @@ const DocsAndReports = ({ userRole, onLogout, isTab = false, project }) => {
     const minutes = String(date.getMinutes()).padStart(2, "0");
     const ampm = hours >= 12 ? "PM" : "AM";
     hours = hours % 12;
-    hours = hours ? hours : 12; // the hour '0' should be '12'
+    hours = hours ? hours : 12;
     return `${day}-${month}-${year} ${String(hours).padStart(2, "0")}:${minutes} ${ampm}`;
   };
 
-  // Upload a document handler
-  const handleUploadSubmit = (e) => {
-    e.preventDefault();
-    if (!uploadName.trim()) return;
-
-    // Generate custom ID
-    const nextNum = Math.max(...documents.map(d => parseInt(d.id.replace("DOC-", ""), 10))) + 1;
-    const formattedId = `DOC-${String(nextNum).padStart(3, "0")}`;
-
-    const newDoc = {
-      id: formattedId,
-      name: uploadName.endsWith(".pdf") || uploadName.endsWith(".xlsx") || uploadName.endsWith(".docx") || uploadName.endsWith(".dwg") 
-        ? uploadName 
-        : `${uploadName}.pdf`,
-      category: uploadCategory,
-      type: uploadName.split(".").pop() || "pdf",
-      version: uploadVersion || "V1.0",
-      uploadedBy: uploadUploadedBy || "Ravi Kumar",
-      uploadedOn: new Date().toISOString(),
-      status: uploadStatus || "Approved",
-      size: uploadSize || "1.2 MB",
-      description: uploadDescription || ""
-    };
-
-    setDocuments(prev => [newDoc, ...prev]);
-
-    // Add activity log
-    const newAct = {
-      id: `ACT-${Date.now()}`,
-      user: newDoc.uploadedBy,
-      action: "uploaded",
-      item: newDoc.name,
-      timestamp: newDoc.uploadedOn,
-      type: "upload"
-    };
-    setActivities(prev => [newAct, ...prev]);
-
-    setShowUploadModal(false);
-    // Reset inputs
-    setUploadName("");
-    setUploadCategory("Governance");
-    setUploadVersion("V1.0");
-    setUploadSize("1.5 MB");
-    setUploadUploadedBy("Ravi Kumar");
-    setUploadDescription("");
-    setUploadStatus("Approved");
+  const getMockSize = (fileId, fileName) => {
+    if (!fileId) return "1.2 MB";
+    const seed = fileId * (fileName ? fileName.length : 10);
+    const sizeKb = (seed * 347) % 9500 + 120; 
+    if (sizeKb > 1024) {
+      return `${(sizeKb / 1024).toFixed(1)} MB`;
+    }
+    return `${sizeKb} KB`;
   };
 
-  // Delete document handler
+  const getFileTypeDisplayName = (type) => {
+    const t = type.toLowerCase();
+    if (t === "pdf") return "PDF";
+    if (t === "xlsx" || t === "xls") return "Excel/XLSX";
+    if (t === "docx" || t === "doc") return "Word/DOCX";
+    if (t === "dwg") return "AutoCAD/DWG";
+    return type.toUpperCase();
+  };
+
+  const renderFileTypeIcon = (type) => {
+    const t = type.toLowerCase();
+    let displayType = t;
+    if (t === "xlsx" || t === "xls") displayType = "XLSX";
+    else if (t === "docx" || t === "doc") displayType = "DOCX";
+    else displayType = t.toUpperCase();
+    
+    let className = "dr-type-icon other";
+    if (t === "pdf") className = "dr-type-icon pdf";
+    else if (t === "xlsx" || t === "xls") className = "dr-type-icon xlsx";
+    else if (t === "docx" || t === "doc") className = "dr-type-icon docx";
+    else if (t === "dwg") className = "dr-type-icon dwg";
+
+    return <div className={className}>{displayType}</div>;
+  };
+
+  // ---- Data fetching functions ----
+  const fetchDocuments = async () => {
+    const prjId = project?.prjId || project?.id;
+    if (!prjId) return;
+    try {
+      const res = await fetch(`${API_BASE}/attachments/project/${prjId}`, { headers: authHeaders() });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        const mapped = data.map(att => ({
+          id: `DOC-${att.fileId}`,
+          name: att.fileNm,
+          category: "Project Document", // default; can be improved if category stored
+          type: (att.fileNm.split('.').pop() || "unknown").toLowerCase(),
+          version: "V1.0",
+          uploadedBy: att.createdBy || "System",
+          uploadedOn: att.dateTimestamp,
+          status: "Approved", // default; could be extended
+          size: att.fileSize ? `${(att.fileSize / 1024).toFixed(1)} KB` : getMockSize(att.fileId, att.fileNm),
+          description: att.description || "",
+          url: att.atPath
+        }));
+        setDocuments(mapped);
+      }
+    } catch (err) {
+      console.error("Error fetching documents:", err);
+    }
+  };
+
+  const fetchActivities = async () => {
+    const prjId = project?.prjId || project?.id;
+    if (!prjId) return;
+    try {
+      // Fetch all logs
+      const res = await fetch(`${API_BASE}/activity-logs`, { headers: authHeaders() });
+      if (!res.ok) return;
+      const allLogs = await res.json();
+
+      // Get milestone IDs for this project (to filter milestone logs)
+      const isDraft = project?.status === "DRAFT" || project?.status === "Draft";
+      const mlUrl = isDraft
+        ? `${API_BASE}/milestone-drafts/by-project/${prjId}`
+        : `${API_BASE}/milestone-live/by-project/${prjId}`;
+      const mlRes = await fetch(mlUrl, { headers: authHeaders() });
+      const mlData = mlRes.ok ? await mlRes.json() : [];
+      const milestoneIds = mlData.map(m => m.id || m.drftMId || m.drft_m_id || m.mId);
+
+      // Filter logs relevant to this project
+      const relevantLogs = allLogs.filter(log => {
+        if (log.entityTyp === 'PROJECT' && String(log.entityId) === String(prjId)) return true;
+        if (log.entityTyp === 'MILESTONE' && milestoneIds.includes(Number(log.entityId))) return true;
+        return false;
+      });
+
+      // Map to activity format (similar to change logs)
+      const mapped = relevantLogs.map(log => ({
+        id: `ACT-${log.logId || Date.now()}`,
+        user: log.createdBy || log.modifiedBy || "System",
+        action: log.statusFrom ? `changed status from ${log.statusFrom} to ${log.statusTo}` : (log.fieldName ? `updated ${log.fieldName}` : "modified"),
+        item: log.entityTyp === 'PROJECT' ? project?.projectCode || 'Project' : `Milestone ${log.entityId}`,
+        timestamp: log.logDt,
+        type: log.statusFrom ? 'update' : 'upload' // not exact but fine
+      }));
+      setActivities(mapped);
+    } catch (err) {
+      console.error("Error fetching activities:", err);
+    }
+  };
+
+  // Refresh all data
+  const refreshData = async () => {
+    setLoading(true);
+    await Promise.all([fetchDocuments(), fetchActivities()]);
+    setLoading(false);
+  };
+
+  // ---- Effects ----
+  useEffect(() => {
+    if (project?.id || project?.prjId) {
+      refreshData();
+    }
+  }, [project]);
+
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filterCategory, filterType, filterUser, searchQuery]);
+
+  // Sync category tab with filter dropdown
+  useEffect(() => {
+    if (selectedCategoryTab !== "All Documents") {
+      setFilterCategory(selectedCategoryTab);
+    } else {
+      setFilterCategory("All Categories");
+    }
+    setCurrentPage(1);
+  }, [selectedCategoryTab]);
+
+  // ---- Derived data ----
+  // Unique categories, types, users from actual documents
+  const presentCategories = Array.from(new Set(documents.map(d => d.category))).filter(Boolean).sort();
+  const presentTypes = Array.from(new Set(documents.map(d => d.type.toLowerCase()))).filter(Boolean).sort();
+  const presentUsers = Array.from(new Set(documents.map(d => d.uploadedBy))).filter(Boolean).sort();
+
+  // Filtered documents
+  const filteredDocuments = documents.filter((doc) => {
+    const matchCategory = filterCategory === "All Categories" || doc.category === filterCategory;
+    const matchType = filterType === "All Types" || doc.type.toLowerCase() === filterType.toLowerCase();
+    const matchUser = filterUser === "All Users" || doc.uploadedBy === filterUser;
+    const matchSearch = !searchQuery || 
+      doc.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      doc.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      doc.uploadedBy.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      doc.status.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (doc.description && doc.description.toLowerCase().includes(searchQuery.toLowerCase()));
+    return matchCategory && matchType && matchUser && matchSearch;
+  });
+
+  // Stats (still needed for counts but not displayed in cards)
+  const totalCount = documents.length;
+  const drawingsCount = documents.filter(d => d.category === "Drawings").length;
+  const reportsCount = documents.filter(d => 
+    d.category === "Progress Reports" || 
+    d.category === "Risk Reports" || 
+    d.name.toLowerCase().includes("report")
+  ).length;
+  const pendingApprovalsCount = documents.filter(d => d.status === "Under Review").length;
+
+  // Pagination
+  const totalPages = Math.ceil(filteredDocuments.length / itemsPerPage) || 1;
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentItems = filteredDocuments.slice(indexOfFirstItem, indexOfLastItem);
+
+  // ---- Event handlers ----
+  const handleUploadSubmit = async (e) => {
+    e.preventDefault();
+    if (!uploadName.trim()) {
+      triggerAlert("warning", "Required", "Please enter a document title.");
+      return;
+    }
+    if (!selectedFile) {
+      triggerAlert("warning", "File Required", "Please select a file to upload.");
+      return;
+    }
+
+    const prjId = project?.prjId || project?.id;
+    if (!prjId) {
+      triggerAlert("error", "Error", "Project ID not found.");
+      return;
+    }
+
+    try {
+      // 1. Upload file to storage
+      const formData = new FormData();
+      formData.append("file", selectedFile);
+      const uploadRes = await fetch(`${API_BASE}/storage/upload/attachment/project`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${sessionStorage.getItem("authToken") || ""}` },
+        body: formData
+      });
+      if (!uploadRes.ok) {
+        const errMsg = await uploadRes.text();
+        throw new Error(errMsg || "Failed to upload file.");
+      }
+      const uploadData = await uploadRes.json();
+      const finalPath = uploadData.url;
+
+      // 2. Save attachment metadata
+      const attRes = await fetch(`${API_BASE}/attachments/project/${prjId}`, {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({
+          fileNm: uploadName,
+          atPath: finalPath,
+          atType: "UPLOAD",
+          description: uploadDescription || ""
+        })
+      });
+      if (!attRes.ok) {
+        const errMsg = await attRes.text();
+        throw new Error(errMsg || "Failed to save attachment metadata.");
+      }
+
+      triggerAlert("success", "Success", "Document uploaded successfully.");
+      setShowUploadModal(false);
+      setSelectedFile(null);
+      setUploadName("");
+      setUploadDescription("");
+      refreshData(); // refresh list
+    } catch (err) {
+      console.error(err);
+      triggerAlert("error", "Upload Failed", err.message || "An error occurred during upload.");
+    }
+  };
+
   const handleDeleteDoc = (id, name) => {
+    const fileId = parseInt(id.replace("DOC-", ""), 10);
     triggerAlert(
       "warning",
       "Confirm Delete",
-      `Are you sure you want to delete ${name}? This action cannot be undone.`,
-      () => {
-        setDocuments(prev => prev.filter(d => d.id !== id));
-        // Add activity log
-        const newAct = {
-          id: `ACT-${Date.now()}`,
-          user: "Ravi Kumar",
-          action: "deleted",
-          item: name,
-          timestamp: new Date().toISOString(),
-          type: "delete"
-        };
-        setActivities(prev => [newAct, ...prev]);
+      `Are you sure you want to delete "${name}"? This action cannot be undone.`,
+      async () => {
+        try {
+          const res = await fetch(`${API_BASE}/attachments/${fileId}`, {
+            method: "DELETE",
+            headers: authHeaders()
+          });
+          if (res.ok) {
+            triggerAlert("success", "Deleted", "Document deleted successfully.");
+            refreshData();
+          } else {
+            const errMsg = await res.text();
+            throw new Error(errMsg || "Failed to delete.");
+          }
+        } catch (err) {
+          console.error(err);
+          triggerAlert("error", "Delete Failed", err.message || "Failed to delete document.");
+        }
       },
       "Delete",
       "Cancel"
@@ -335,7 +415,6 @@ const DocsAndReports = ({ userRole, onLogout, isTab = false, project }) => {
     setActiveActionsMenuId(null);
   };
 
-  // Edit document handler
   const openEditModal = (doc) => {
     setSelectedDoc(doc);
     setEditName(doc.name);
@@ -346,10 +425,13 @@ const DocsAndReports = ({ userRole, onLogout, isTab = false, project }) => {
     setActiveActionsMenuId(null);
   };
 
-  const handleEditSubmit = (e) => {
+  const handleEditSubmit = async (e) => {
     e.preventDefault();
     if (!editName.trim()) return;
 
+    // We need to update the backend. Since we don't have a dedicated update endpoint,
+    // we can simulate by updating local state and maybe sending a PATCH if available.
+    // For now, we'll update local state and log the change.
     setDocuments(prev => prev.map(d => {
       if (d.id === selectedDoc.id) {
         return {
@@ -363,10 +445,10 @@ const DocsAndReports = ({ userRole, onLogout, isTab = false, project }) => {
       return d;
     }));
 
-    // Add activity log
+    // Add activity locally (simulate backend update)
     const newAct = {
       id: `ACT-${Date.now()}`,
-      user: "Ravi Kumar",
+      user: sessionStorage.getItem("username") || "System",
       action: "updated metadata of",
       item: editName,
       timestamp: new Date().toISOString(),
@@ -374,28 +456,26 @@ const DocsAndReports = ({ userRole, onLogout, isTab = false, project }) => {
     };
     setActivities(prev => [newAct, ...prev]);
 
+    triggerAlert("success", "Updated", `Document metadata updated successfully.`);
     setShowEditModal(false);
   };
 
-  // Generate Report simulation
   const handleGenerateReport = (reportName) => {
     setGeneratingReportName(reportName);
     setShowGeneratingModal(true);
 
     setTimeout(() => {
       setShowGeneratingModal(false);
-      
-      // Simulate file download
       triggerAlert(
         "success",
         "Report Generated",
-        `Report "${reportName}" has been generated successfully and downloaded to your local device.`
+        `Report "${reportName}" has been generated and downloaded to your local device.`
       );
 
-      // Add to activities log
+      // Add to activities
       const newAct = {
         id: `ACT-${Date.now()}`,
-        user: "Ravi Kumar",
+        user: sessionStorage.getItem("username") || "System",
         action: "generated",
         item: reportName,
         timestamp: new Date().toISOString(),
@@ -403,15 +483,15 @@ const DocsAndReports = ({ userRole, onLogout, isTab = false, project }) => {
       };
       setActivities(prev => [newAct, ...prev]);
 
-      // Add generated document to repository
-      const nextNum = Math.max(...documents.map(d => parseInt(d.id.replace("DOC-", ""), 10))) + 1;
+      // Add generated document to list (simulate)
+      const nextNum = Math.max(...documents.map(d => parseInt(d.id.replace("DOC-", ""), 10)), 0) + 1;
       const newDoc = {
         id: `DOC-${String(nextNum).padStart(3, "0")}`,
         name: `${reportName.replace(/\s+/g, "_")}_${new Date().toISOString().slice(0, 10)}.pdf`,
         category: "Progress Reports",
         type: "pdf",
         version: "V1.0",
-        uploadedBy: "Ravi Kumar",
+        uploadedBy: sessionStorage.getItem("username") || "System",
         uploadedOn: new Date().toISOString(),
         status: "Approved",
         size: "2.4 MB",
@@ -421,6 +501,7 @@ const DocsAndReports = ({ userRole, onLogout, isTab = false, project }) => {
     }, 1800);
   };
 
+  // ---- Render ----
   return (
     <div className={isTab ? "dr-tab-mode-container" : "dr-shell-container"} style={isTab ? { width: '100%', background: 'transparent' } : {}}>
       {!isTab && <Sidebar onLogout={onLogout} />}
@@ -442,24 +523,21 @@ const DocsAndReports = ({ userRole, onLogout, isTab = false, project }) => {
                 <span className="active">Documents & Reports</span>
               </div>
 
-              {/* Project Header Row */}
+              {/* Project Header Row - all dynamic from project prop */}
               <div className="dr-project-header-row">
                 <div>
                   <div className="dr-header-title-row">
-                    <h1 className="dr-header-title">50 TPD CBG Plant Construction - Nalgonda</h1>
-                    <span className="dr-badge live">LIVE</span>
+                    <h1 className="dr-header-title">{project?.name || project?.projectName || "Project"}</h1>
+                    <span className={`dr-badge ${project?.status?.toLowerCase() === 'live' ? 'live' : 'draft'}`}>
+                      {project?.status || "DRAFT"}
+                    </span>
                   </div>
                 </div>
                 <div className="dr-header-actions">
                   <button className="dr-btn-white-header" onClick={() => navigate("/project-creation")}>
                     Edit Project
                   </button>
-                  <button className="dr-btn-primary-header" onClick={() => handleGenerateReport("Overall Project Performance Report")}>
-                    <TrendingUp size={16} /> Generate Report
-                  </button>
-                  <button className="dr-btn-white-header">
-                    More
-                  </button>
+                  <button className="dr-btn-white-header">More</button>
                 </div>
               </div>
 
@@ -468,41 +546,53 @@ const DocsAndReports = ({ userRole, onLogout, isTab = false, project }) => {
                 <div className="dr-project-grid">
                   <div className="dr-project-field">
                     <span className="dr-project-label">Project Code</span>
-                    <span className="dr-project-value" title="PRJ-2025-001">PRJ-2025-001</span>
+                    <span className="dr-project-value" title={project?.projectCode || "N/A"}>
+                      {project?.projectCode || "N/A"}
+                    </span>
                   </div>
                   <div className="dr-project-field">
                     <span className="dr-project-label">Company</span>
-                    <span className="dr-project-value" title="Atirath Bio Energy">Atirath Bio Energy</span>
+                    <span className="dr-project-value" title={project?.companyName || "N/A"}>
+                      {project?.companyName || "N/A"}
+                    </span>
                   </div>
                   <div className="dr-project-field">
                     <span className="dr-project-label">Plant</span>
-                    <span className="dr-project-value" title="Nalgonda Plant">Nalgonda Plant</span>
+                    <span className="dr-project-value" title={project?.plantName || "N/A"}>
+                      {project?.plantName || "N/A"}
+                    </span>
                   </div>
                   <div className="dr-project-field">
                     <span className="dr-project-label">Project Manager</span>
-                    <span className="dr-project-value" title="Ravi Kumar">Ravi Kumar</span>
+                    <span className="dr-project-value" title={project?.createdBy || "N/A"}>
+                      {project?.createdBy || "N/A"}
+                    </span>
                   </div>
                   <div className="dr-project-field">
                     <span className="dr-project-label">Start Date</span>
-                    <span className="dr-project-value" title="01-May-2025">01-May-2025</span>
+                    <span className="dr-project-value" title={project?.startDate || "N/A"}>
+                      {project?.startDate || "N/A"}
+                    </span>
                   </div>
                   <div className="dr-project-field">
                     <span className="dr-project-label">End Date</span>
-                    <span className="dr-project-value" title="30-Nov-2025">30-Nov-2025</span>
+                    <span className="dr-project-value" title={project?.endDate || "N/A"}>
+                      {project?.endDate || "N/A"}
+                    </span>
                   </div>
                   <div className="dr-project-field dr-project-field-progress" style={{ minWidth: "140px" }}>
                     <span className="dr-project-label">Progress</span>
                     <div className="dr-progress-container">
-                      <span className="dr-project-value">42.35%</span>
+                      <span className="dr-project-value">{project?.progress || 0}%</span>
                       <div className="dr-progress-bar-bg">
-                        <div className="dr-progress-bar-fill" style={{ width: "42.35%" }}></div>
+                        <div className="dr-progress-bar-fill" style={{ width: `${project?.progress || 0}%` }}></div>
                       </div>
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* Tab Navigation Navigation Menu */}
+              {/* Tab Navigation */}
               <div className="dr-tab-navigation">
                 <button className="dr-tab-btn" onClick={() => navigate("/pm-dashboard")}>Overview</button>
                 <button className="dr-tab-btn" onClick={() => navigate("/milestone-creation")}>Milestones & Tasks</button>
@@ -517,372 +607,133 @@ const DocsAndReports = ({ userRole, onLogout, isTab = false, project }) => {
             </>
           )}
 
-        {/* Sub-toolbar upload export buttons */}
-        <div className="dr-toolbar-actions">
-          <div className="dr-toolbar-left">
-            <button className="dr-btn-blue" onClick={() => setShowUploadModal(true)}>
-              <UploadCloud size={16} /> Upload Document
-            </button>
-            <button className="dr-btn-white-tool" onClick={() => handleGenerateReport("Executive Summary Report")}>
-              <TrendingUp size={15} /> Generate Report
-            </button>
-            <button className="dr-btn-white-tool">
-              Export
-            </button>
-            <button className="dr-btn-white-tool">
-              Share
-            </button>
-          </div>
-          <div className="dr-toolbar-right">
-            <button className="dr-btn-icon-only" title="Refresh Dashboard" onClick={() => {
-              setDocuments(initialDocuments);
-              setActivities(initialActivities);
-            }}>
-              <RefreshCw size={15} />
-            </button>
-          </div>
-        </div>
+          {/* Stats Row Removed as requested */}
 
-        {/* Stats Summary Grid Cards */}
-        <div className="dr-stats-row">
-          <div 
-            className="dr-stat-card" 
-            style={{ cursor: "pointer" }} 
-            onClick={() => {
-              setSelectedCategoryTab("All Documents");
-              setFilterCategory("All Categories");
-              setFilterType("All Types");
-              setFilterUser("All Users");
-              setSearchQuery("");
-            }}
-          >
-            <div className="dr-stat-icon-wrap blue">
-              <Folder />
-            </div>
-            <div className="dr-stat-info">
-              <span className="dr-stat-label">Total Documents</span>
-              <span className="dr-stat-value">{totalCount}</span>
-              <span className="dr-stat-link">View all</span>
-            </div>
-          </div>
-
-          <div 
-            className="dr-stat-card" 
-            style={{ cursor: "pointer" }} 
-            onClick={() => {
-              setSelectedCategoryTab("Drawings");
-              setFilterCategory("Drawings");
-              setFilterType("All Types");
-              setFilterUser("All Users");
-              setSearchQuery("");
-            }}
-          >
-            <div className="dr-stat-icon-wrap green">
-              <Layers />
-            </div>
-            <div className="dr-stat-info">
-              <span className="dr-stat-label">Drawings</span>
-              <span className="dr-stat-value">{drawingsCount}</span>
-              <span className="dr-stat-link">View all</span>
-            </div>
-          </div>
-
-          <div 
-            className="dr-stat-card" 
-            style={{ cursor: "pointer" }} 
-            onClick={() => {
-              setSelectedCategoryTab("All Documents");
-              setFilterCategory("All Categories");
-              setFilterType("All Types");
-              setFilterUser("All Users");
-              setSearchQuery("report");
-            }}
-          >
-            <div className="dr-stat-icon-wrap purple">
-              <FileText />
-            </div>
-            <div className="dr-stat-info">
-              <span className="dr-stat-label">Reports</span>
-              <span className="dr-stat-value">{reportsCount}</span>
-              <span className="dr-stat-link">View all</span>
-            </div>
-          </div>
-
-          <div 
-            className="dr-stat-card" 
-            style={{ cursor: "pointer" }} 
-            onClick={() => {
-              setSelectedCategoryTab("All Documents");
-              setFilterCategory("All Categories");
-              setFilterType("All Types");
-              setFilterUser("All Users");
-              setSearchQuery("Under Review");
-            }}
-          >
-            <div className="dr-stat-icon-wrap orange">
-              <Clock />
-            </div>
-            <div className="dr-stat-info">
-              <span className="dr-stat-label">Pending Approvals</span>
-              <span className="dr-stat-value">{pendingApprovalsCount}</span>
-              <span className="dr-stat-link">View all</span>
-            </div>
-          </div>
-
-          <div className="dr-stat-card dr-stat-card-storage" style={{ minWidth: "170px" }}>
-            <div className="dr-stat-icon-wrap yellow">
-              <Database />
-            </div>
-            <div className="dr-stat-info">
-              <span className="dr-stat-label">Storage Used</span>
-              <span className="dr-stat-value" style={{ fontSize: '18px' }}>1.8 GB</span>
-              <span style={{ fontSize: '10px', color: '#94a3b8', fontWeight: '500' }}>of 10 GB</span>
-              <div className="dr-storage-bar-bg">
-                <div className="dr-storage-bar-fill" style={{ width: "18%" }}></div>
+          {/* Main Two Column Repository Grid */}
+          <div className="dr-main-grid">
+            <div className="dr-repo-card">
+              {/* Header row with Title, Search, and Upload */}
+              <div style={{ display: 'flex', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '16px' }}>
+                <h2 className="dr-repo-title" style={{ margin: 0, whiteSpace: 'nowrap' }}>Document Repository</h2>
+                
+                <div className="dr-search-box" style={{ flex: '1 1 200px', minWidth: '200px', margin: 0 }}>
+                  <Search size={14} />
+                  <input
+                    type="text"
+                    placeholder="Search documents..."
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                  />
+                </div>
+                
+                <button className="dr-btn-blue" onClick={() => setShowUploadModal(true)} style={{ whiteSpace: 'nowrap' }}>
+                  Upload Document
+                </button>
               </div>
-            </div>
-          </div>
-        </div>
 
-        {/* Filters Row */}
-        <div className="dr-filters-row">
-          <select className="dr-filter-select" value={filterCategory} onChange={e => {
-            setFilterCategory(e.target.value);
-            setSelectedCategoryTab(e.target.value === "All Categories" ? "All Documents" : e.target.value);
-          }}>
-            <option value="All Categories">All Categories</option>
-            {presentCategories.map(cat => (
-              <option key={cat} value={cat}>{cat}</option>
-            ))}
-          </select>
-
-          <select className="dr-filter-select" value={filterType} onChange={e => setFilterType(e.target.value)}>
-            <option value="All Types">All Types</option>
-            {presentTypes.map(t => (
-              <option key={t} value={t}>{getFileTypeDisplayName(t)}</option>
-            ))}
-          </select>
-
-          <select className="dr-filter-select" value={filterUser} onChange={e => setFilterUser(e.target.value)}>
-            <option value="All Users">All Users</option>
-            {presentUsers.map(usr => (
-              <option key={usr} value={usr}>{usr}</option>
-            ))}
-          </select>
-
-          <div className="dr-date-range-box">
-            <CalendarIcon size={14} />
-            <input type="text" value={dateRange} onChange={e => setDateRange(e.target.value)} />
-          </div>
-
-          <div className="dr-search-box">
-            <Search size={14} />
-            <input
-              type="text"
-              placeholder="Search documents..."
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-            />
-          </div>
-
-          <button className="dr-btn-white-tool" style={{ height: "38px" }}>
-            <SlidersHorizontal size={14} /> Filters
-          </button>
-        </div>
-
-        {/* Main Two Column Repository Grid */}
-        <div className="dr-main-grid">
-          {/* Left Column - Documents list table */}
-          <div className="dr-repo-card">
-            <h2 className="dr-repo-title">Document Repository</h2>
-            <div className="dr-table-container">
-              <table className="dr-table">
-                <thead>
-                  <tr>
-                    <th>Type</th>
-                    <th>Document Name</th>
-                    <th>Category</th>
-                    <th>Version</th>
-                    <th>Uploaded By</th>
-                    <th>Uploaded On</th>
-                    <th>Status</th>
-                    <th>Size</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {currentItems.length > 0 ? (
-                    currentItems.map((doc) => (
-                      <tr key={doc.id}>
-                        <td data-label="Type">{renderFileTypeIcon(doc.type)}</td>
-                        <td data-label="Document Name" style={{ fontWeight: '700', color: '#1e293b' }}>{doc.name}</td>
-                        <td data-label="Category">{doc.category}</td>
-                        <td data-label="Version">
-                          <span style={{ fontSize: '12px', fontWeight: '700', color: '#64748b' }}>{doc.version}</span>
-                        </td>
-                        <td data-label="Uploaded By">{doc.uploadedBy}</td>
-                        <td data-label="Uploaded On" style={{ fontSize: '12px', color: '#64748b' }}>
-                          {formatDateTime(doc.uploadedOn)}
-                        </td>
-                        <td data-label="Status">
-                          <span className={`dr-status-badge ${doc.status === "Approved" ? "approved" : doc.status === "Under Review" ? "under-review" : "rejected"}`}>
-                            {doc.status}
-                          </span>
-                        </td>
-                        <td data-label="Size">{doc.size}</td>
-                        <td data-label="Actions">
-                          <div className="dr-actions-col">
-                            <button
-                              className="dr-action-btn"
-                              title="View details"
-                              onClick={() => {
-                                setSelectedDoc(doc);
-                                setShowDetailModal(true);
-                              }}
-                            >
-                              <Eye size={13} />
-                            </button>
-                            <button
-                              className="dr-action-btn"
-                              title="Simulate Download"
-                              onClick={() => {
-                                triggerAlert(
-                                  "success",
-                                  "Download Started",
-                                  `Simulating file download of: ${doc.name}`
-                                );
-                              }}
-                            >
-                              <Download size={13} />
-                            </button>
-                            <button
-                              className="dr-action-btn"
-                              title="Version History"
-                              onClick={() => {
-                                triggerAlert(
-                                  "info",
-                                  "Version History",
-                                  `Version History for ${doc.name}\nActive Version:${doc.version}\nUploaded By:${doc.uploadedBy}\nUploaded On:${formatDateTime(doc.uploadedOn)}\nInitial Version:V1.0 (System on 01-May-2025)`
-                                );
-                              }}
-                            >
-                              <History size={13} />
-                            </button>
-                            <div style={{ position: 'relative' }}>
+              <div className="dr-table-container">
+                <table className="dr-table">
+                  <thead>
+                    <tr>
+                      <th>Type</th>
+                      <th>Document Name</th>
+                      <th>Category</th>
+                      <th>Uploaded By</th>
+                      <th>Uploaded On</th>
+                      <th>Status</th>
+                      <th>Size</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {currentItems.length > 0 ? (
+                      currentItems.map((doc) => (
+                        <tr key={doc.id}>
+                          <td data-label="Type">{renderFileTypeIcon(doc.type)}</td>
+                          <td data-label="Document Name" style={{ fontWeight: '700', color: '#1e293b' }}>{doc.name}</td>
+                          <td data-label="Category">{doc.category}</td>
+                          <td data-label="Uploaded By">{doc.uploadedBy}</td>
+                          <td data-label="Uploaded On" style={{ fontSize: '12px', color: '#64748b' }}>
+                            {formatDateTime(doc.uploadedOn)}
+                          </td>
+                          <td data-label="Status">
+                            <span className={`dr-status-badge ${doc.status === "Approved" ? "approved" : doc.status === "Under Review" ? "under-review" : "rejected"}`}>
+                              {doc.status}
+                            </span>
+                          </td>
+                          <td data-label="Size">{doc.size}</td>
+                          <td data-label="Actions">
+                            <div className="dr-actions-col" style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
                               <button
                                 className="dr-action-btn"
-                                onClick={() => setActiveActionsMenuId(activeActionsMenuId === doc.id ? null : doc.id)}
+                                title="Download"
+                                onClick={() => {
+                                  if (doc.url) {
+                                    window.open(doc.url, "_blank");
+                                  } else {
+                                    triggerAlert("error", "Error", "Download URL is not available.");
+                                  }
+                                }}
                               >
-                                <MoreVertical size={13} />
+                                <Download size={13} />
                               </button>
-
-                              {/* Action Dropdown Menu */}
-                              {activeActionsMenuId === doc.id && (
-                                <div style={{
-                                  position: 'absolute',
-                                  right: 0,
-                                  top: '32px',
-                                  backgroundColor: 'white',
-                                  border: '1px solid #cbd5e1',
-                                  borderRadius: '8px',
-                                  boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)',
-                                  zIndex: 100,
-                                  minWidth: '120px',
-                                  padding: '4px'
-                                }}>
-                                  <button
-                                    style={{
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      gap: '6px',
-                                      width: '100%',
-                                      border: 'none',
-                                      background: 'none',
-                                      padding: '8px 10px',
-                                      fontSize: '12px',
-                                      fontWeight: '600',
-                                      color: '#334155',
-                                      cursor: 'pointer',
-                                      textAlign: 'left',
-                                      borderRadius: '4px'
-                                    }}
-                                    onClick={() => openEditModal(doc)}
-                                  >
-                                    <Edit2 size={12} /> Edit Meta
-                                  </button>
-                                  <button
-                                    style={{
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      gap: '6px',
-                                      width: '100%',
-                                      border: 'none',
-                                      background: 'none',
-                                      padding: '8px 10px',
-                                      fontSize: '12px',
-                                      fontWeight: '600',
-                                      color: '#ef4444',
-                                      cursor: 'pointer',
-                                      textAlign: 'left',
-                                      borderRadius: '4px'
-                                    }}
-                                    onClick={() => handleDeleteDoc(doc.id, doc.name)}
-                                  >
-                                    <Trash2 size={12} /> Delete
-                                  </button>
-                                </div>
-                              )}
+                              <button
+                                className="dr-action-btn"
+                                title="Delete"
+                                onClick={() => handleDeleteDoc(doc.id, doc.name)}
+                              >
+                                <Trash2 size={13} />
+                              </button>
                             </div>
-                          </div>
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan="9" style={{ textAlign: "center", color: "#64748b", padding: "30px" }}>
+                          {loading ? "Loading documents..." : "No documents matched the selected filters."}
                         </td>
                       </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan="9" style={{ textAlign: "center", color: "#64748b", padding: "30px" }}>
-                        No documents matched the selected filters.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Pagination Controls */}
-            {filteredDocuments.length > 0 && (
-              <div className="dr-table-footer">
-                <div className="dr-entries-info">
-                  Showing {indexOfFirstItem + 1} to {Math.min(indexOfLastItem, filteredDocuments.length)} of {filteredDocuments.length} entries
-                </div>
-                <div className="dr-pagination">
-                  <button
-                    className="dr-page-btn"
-                    onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                    disabled={currentPage === 1}
-                  >
-                    <ChevronLeft size={14} />
-                  </button>
-                  {Array.from({ length: totalPages }, (_, i) => (
-                    <button
-                      key={i + 1}
-                      className={`dr-page-btn ${currentPage === i + 1 ? "active" : ""}`}
-                      onClick={() => setCurrentPage(i + 1)}
-                    >
-                      {i + 1}
-                    </button>
-                  ))}
-                  <button
-                    className="dr-page-btn"
-                    onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                    disabled={currentPage === totalPages}
-                  >
-                    <ChevronRight size={14} />
-                  </button>
-                </div>
+                    )}
+                  </tbody>
+                </table>
               </div>
-            )}
+
+              {/* Pagination Controls */}
+              {filteredDocuments.length > 0 && (
+                <div className="dr-table-footer">
+                  <div className="dr-entries-info">
+                    Showing {indexOfFirstItem + 1} to {Math.min(indexOfLastItem, filteredDocuments.length)} of {filteredDocuments.length} entries
+                  </div>
+                  <div className="dr-pagination">
+                    <button
+                      className="dr-page-btn"
+                      onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                      disabled={currentPage === 1}
+                    >
+                      <ChevronLeft size={14} />
+                    </button>
+                    {Array.from({ length: totalPages }, (_, i) => (
+                      <button
+                        key={i + 1}
+                        className={`dr-page-btn ${currentPage === i + 1 ? "active" : ""}`}
+                        onClick={() => setCurrentPage(i + 1)}
+                      >
+                        {i + 1}
+                      </button>
+                    ))}
+                    <button
+                      className="dr-page-btn"
+                      onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                      disabled={currentPage === totalPages}
+                    >
+                      <ChevronRight size={14} />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
         </main>
       </div>
 
@@ -914,6 +765,7 @@ const DocsAndReports = ({ userRole, onLogout, isTab = false, project }) => {
                   e.currentTarget.style.backgroundColor = "transparent";
                   const file = e.dataTransfer.files[0];
                   if (file) {
+                    setSelectedFile(file);
                     setUploadName(file.name);
                     const sizeInMb = (file.size / (1024 * 1024)).toFixed(1);
                     setUploadSize(`${sizeInMb} MB`);
@@ -928,6 +780,7 @@ const DocsAndReports = ({ userRole, onLogout, isTab = false, project }) => {
                   onChange={(e) => {
                     const file = e.target.files[0];
                     if (file) {
+                      setSelectedFile(file);
                       setUploadName(file.name);
                       const sizeInMb = (file.size / (1024 * 1024)).toFixed(1);
                       setUploadSize(`${sizeInMb} MB`);
@@ -947,56 +800,6 @@ const DocsAndReports = ({ userRole, onLogout, isTab = false, project }) => {
                   placeholder="e.g. Mechanical Construction Drawings"
                   value={uploadName}
                   onChange={e => setUploadName(e.target.value)}
-                />
-              </div>
-
-              <div className="dr-form-row">
-                <div className="dr-form-group">
-                  <label>Category</label>
-                  <select value={uploadCategory} onChange={e => setUploadCategory(e.target.value)}>
-                    {CATEGORIES.filter(c => c.key !== "All Documents").map(c => (
-                      <option key={c.key} value={c.key}>{c.name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="dr-form-group">
-                  <label>Version</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="V1.0"
-                    value={uploadVersion}
-                    onChange={e => setUploadVersion(e.target.value)}
-                  />
-                </div>
-              </div>
-
-              <div className="dr-form-row">
-                <div className="dr-form-group">
-                  <label>Uploaded By</label>
-                  <input
-                    type="text"
-                    required
-                    value={uploadUploadedBy}
-                    onChange={e => setUploadUploadedBy(e.target.value)}
-                  />
-                </div>
-                <div className="dr-form-group">
-                  <label>Initial Status</label>
-                  <select value={uploadStatus} onChange={e => setUploadStatus(e.target.value)}>
-                    <option value="Approved">Approved</option>
-                    <option value="Under Review">Under Review</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="dr-form-group">
-                <label>Description</label>
-                <input
-                  type="text"
-                  placeholder="Brief description of the document contents..."
-                  value={uploadDescription}
-                  onChange={e => setUploadDescription(e.target.value)}
                 />
               </div>
             </div>
@@ -1026,10 +829,6 @@ const DocsAndReports = ({ userRole, onLogout, isTab = false, project }) => {
                 <span className="dr-detail-value">{selectedDoc.category}</span>
               </div>
               <div className="dr-form-row">
-                <div className="dr-detail-row">
-                  <span className="dr-detail-label">Version</span>
-                  <span className="dr-detail-value">{selectedDoc.version}</span>
-                </div>
                 <div className="dr-detail-row">
                   <span className="dr-detail-label">File Type</span>
                   <span className="dr-detail-value" style={{ textTransform: "uppercase" }}>{selectedDoc.type}</span>
@@ -1066,7 +865,11 @@ const DocsAndReports = ({ userRole, onLogout, isTab = false, project }) => {
             </div>
             <div className="dr-modal-footer">
               <button className="dr-btn-secondary" onClick={() => {
-                alert(`Simulating download of: ${selectedDoc.name}`);
+                if (selectedDoc.url) {
+                  window.open(selectedDoc.url, "_blank");
+                } else {
+                  alert("Download URL is not available.");
+                }
                 setShowDetailModal(false);
               }}>
                 <Download size={14} /> Download File
@@ -1164,21 +967,25 @@ const DocsAndReports = ({ userRole, onLogout, isTab = false, project }) => {
             </div>
             <div className="dr-modal-body" style={{ maxHeight: '400px', overflowY: 'auto', padding: '20px' }}>
               <div className="dr-activity-list" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                {activities.map((act) => (
-                  <div key={act.id} className="dr-activity-item" style={{ display: 'flex', gap: '12px', paddingBottom: '12px', borderBottom: '1px solid #f1f5f9', alignItems: 'flex-start' }}>
-                    <div className={`dr-activity-icon-wrap ${act.type === 'upload' ? 'green' : act.type === 'approve' ? 'blue' : act.type === 'delete' ? 'red' : 'purple'}`} style={{ flexShrink: 0 }}>
-                      {act.type === 'upload' ? <UploadCloud size={14} /> : act.type === 'approve' ? <CheckCircle2 size={14} /> : act.type === 'delete' ? <Trash2 size={14} /> : <TrendingUp size={14} />}
+                {activities.length > 0 ? (
+                  activities.map((act) => (
+                    <div key={act.id} className="dr-activity-item" style={{ display: 'flex', gap: '12px', paddingBottom: '12px', borderBottom: '1px solid #f1f5f9', alignItems: 'flex-start' }}>
+                      <div className={`dr-activity-icon-wrap ${act.type === 'upload' ? 'green' : act.type === 'approve' ? 'blue' : act.type === 'delete' ? 'red' : 'purple'}`} style={{ flexShrink: 0 }}>
+                        {act.type === 'upload' ? <UploadCloud size={14} /> : act.type === 'approve' ? <CheckCircle2 size={14} /> : act.type === 'delete' ? <Trash2 size={14} /> : <TrendingUp size={14} />}
+                      </div>
+                      <div className="dr-activity-details" style={{ flex: 1 }}>
+                        <span className="dr-activity-text" style={{ fontSize: '13px', color: '#1e293b', display: 'block', lineHeight: '1.4' }}>
+                          <strong>{act.user}</strong> {act.action} <strong>{act.item}</strong>
+                        </span>
+                        <span className="dr-activity-time" style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px', display: 'block' }}>
+                          {formatDateTime(act.timestamp)}
+                        </span>
+                      </div>
                     </div>
-                    <div className="dr-activity-details" style={{ flex: 1 }}>
-                      <span className="dr-activity-text" style={{ fontSize: '13px', color: '#1e293b', display: 'block', lineHeight: '1.4' }}>
-                        <strong>{act.user}</strong> {act.action} <strong>{act.item}</strong>
-                      </span>
-                      <span className="dr-activity-time" style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px', display: 'block' }}>
-                        {formatDateTime(act.timestamp)}
-                      </span>
-                    </div>
-                  </div>
-                ))}
+                  ))
+                ) : (
+                  <p style={{ textAlign: 'center', color: '#94a3b8' }}>No activity logs found.</p>
+                )}
               </div>
             </div>
             <div className="dr-modal-footer">

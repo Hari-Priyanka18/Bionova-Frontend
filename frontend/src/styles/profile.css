@@ -215,17 +215,32 @@
   align-items: center;
   gap: 6px;
   padding: 4px 12px;
-  background-color: #dcfce7;
-  color: #16a34a;
   border-radius: 20px;
   font-size: 13px;
   font-weight: 600;
 }
 
+.pf-status-badge.active {
+  background-color: #dcfce7;
+  color: #16a34a;
+}
+
+.pf-status-badge.active .pf-status-dot {
+  background-color: #16a34a;
+}
+
+.pf-status-badge.inactive {
+  background-color: #fee2e2;
+  color: #dc2626;
+}
+
+.pf-status-badge.inactive .pf-status-dot {
+  background-color: #dc2626;
+}
+
 .pf-status-dot {
   width: 8px;
   height: 8px;
-  background-color: #16a34a;
   border-radius: 50%;
 }
 

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Flag, ListTodo, CheckSquare, RefreshCcw, HelpCircle, Clock, Plus, Filter, Search, Eye, Edit2, Trash2, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import '../../styles/project-milestones-tab.css';
-import ProjectGanttChart from './ProjectGanttChart';
+import ProjectGanttChart from './ProjectGanttChart.jsx';
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL) + "/api";
 const getAuthToken = () => sessionStorage.getItem("authToken") || "";
@@ -11,6 +12,7 @@ const authHeaders = () => ({
 });
 
 const ProjectMilestonesTab = ({ project, userRole }) => {
+  const navigate = useNavigate();
   const [milestones, setMilestones] = useState([]);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [collapseAll, setCollapseAll] = useState(false);
@@ -59,9 +61,27 @@ const ProjectMilestonesTab = ({ project, userRole }) => {
         ]);
 
         const mlData = mlRes.ok ? await mlRes.json() : [];
-        const taskData = taskRes.ok ? await taskRes.json() : [];
+        const taskDataRaw = taskRes.ok ? await taskRes.json() : [];
         const profile = profileRes.ok ? await profileRes.json() : null;
         const empData = empRes.ok ? await empRes.json() : [];
+
+        const taskData = await Promise.all((taskDataRaw || []).map(async task => {
+           try {
+               const taskId = isDraft ? (task.drftTaskId || task.drft_task_id) : (task.taskId || task.task_id || task.id);
+               if (!taskId) return task;
+               const path = isDraft ? `/process-config/draft-task/${taskId}` : `/process-config/live-task/${taskId}`;
+               const pcsRes = await fetch(`${API_BASE}${path}`, { headers: authHeaders() });
+               if (!pcsRes.ok) return task;
+               const configs = await pcsRes.json() || [];
+               const revCfg = configs.find(pc => pc.ordrId === 1 || pc.ordr_id === 1);
+               const appCfg = configs.find(pc => pc.ordrId === 2 || pc.ordr_id === 2);
+               return {
+                  ...task,
+                  reviewerId: revCfg ? (revCfg.empId || revCfg.emp_id) : (task.reviewerId || task.reviewer_id),
+                  approverId: appCfg ? (appCfg.empId || appCfg.emp_id) : (task.approverId || task.approver_id)
+               };
+           } catch(e) { return task; }
+        }));
 
         setEmployees(empData);
 
@@ -96,6 +116,7 @@ const ProjectMilestonesTab = ({ project, userRole }) => {
       }
     };
     if (project?.id) fetchData();
+    else setLoading(false);
   }, [project, userRole]);
 
   const getTasksForMilestone = (milestoneId) => {
@@ -106,6 +127,7 @@ const ProjectMilestonesTab = ({ project, userRole }) => {
     if (!status) return 'st-default';
     const s = status.toUpperCase().replace(/_/g, ' ');
     switch (s) {
+      case 'CLOSED':
       case 'COMPLETED': return 'st-completed';
       case 'IN PROGRESS':
       case 'WIP': return 'st-in-progress';
@@ -170,7 +192,7 @@ const ProjectMilestonesTab = ({ project, userRole }) => {
 
   const getAssigneeInfo = (empId) => {
     if (!empId) return { name: 'Unassigned', role: '' };
-    const emp = employees.find(e => e.empId === empId);
+    const emp = employees.find(e => String(e.empId) === String(empId));
     if (emp) {
       return {
         name: `${emp.fstNm || ''} ${emp.lstNm || ''}`.trim(),
@@ -180,10 +202,22 @@ const ProjectMilestonesTab = ({ project, userRole }) => {
     return { name: 'Unknown', role: '' };
   };
 
-  const calculateTaskProgress = (tStatus) => {
-    const s = (tStatus || '').toUpperCase();
-    if (s === 'COMPLETED') return 100;
-    if (s === 'WIP' || s === 'IN PROGRESS') return 50;
+  const getTaskStatusStr = (t) => {
+    if (!t) return '';
+    let sts = t.taskSts ?? t.task_sts ?? t.status ?? t.tasksts;
+    if (!sts) return '';
+    if (typeof sts === 'object') {
+      sts = sts.statusNm || sts.status_nm || sts.name || sts.status || '';
+    }
+    return String(sts).trim().toUpperCase();
+  };
+
+  // Task progress: 100% only when COMPLETED/CLOSED, 0% otherwise
+  const calculateTaskProgress = (t) => {
+    if (!t) return 0;
+    const s = getTaskStatusStr(t);
+    if (s === 'COMPLETED' || s === 'CLOSED' || s === 'DONE' || s === 'COMPLETE') return 100;
+    if (s === 'WIP' || s === 'IN PROGRESS' || s === 'IN_PROGRESS') return 50;
     return 0;
   };
 
@@ -198,25 +232,28 @@ const ProjectMilestonesTab = ({ project, userRole }) => {
 
   const totalTasks = relevantTasks.length;
 
-  const completedTasks = relevantTasks.filter(t => (t.taskSts || '').toUpperCase() === 'COMPLETED').length;
+  const completedTasks = relevantTasks.filter(t => {
+    const s = getTaskStatusStr(t);
+    return s === 'COMPLETED' || s === 'CLOSED' || s === 'DONE' || s === 'COMPLETE';
+  }).length;
   const inProgressTasks = relevantTasks.filter(t => {
-    const s = (t.taskSts || '').toUpperCase();
-    return s === 'WIP' || s === 'IN PROGRESS';
+    const s = getTaskStatusStr(t);
+    return s === 'WIP' || s === 'IN PROGRESS' || s === 'IN_PROGRESS';
   }).length;
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
   const overdueTasks = relevantTasks.filter(t => {
-    const s = (t.taskSts || '').toUpperCase();
-    if (s === 'COMPLETED') return false;
+    const s = getTaskStatusStr(t);
+    if (s === 'COMPLETED' || s === 'CLOSED' || s === 'DONE' || s === 'COMPLETE') return false;
     const endDtStr = t.tentEndDt || t.tent_end_dt || t.endDt || t.end_dt;
     if (!endDtStr) return false;
     const endDt = new Date(endDtStr);
     return endDt < today;
   }).length;
 
-  const notStartedTasks = totalTasks - completedTasks - inProgressTasks - overdueTasks;
+  const notStartedTasks = Math.max(0, totalTasks - completedTasks - inProgressTasks - overdueTasks);
 
   const getPercentage = (count, total) => {
     if (total === 0) return 0;
@@ -254,7 +291,7 @@ const ProjectMilestonesTab = ({ project, userRole }) => {
             {collapseAll ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
             {collapseAll ? 'Expand All' : 'Collapse All'}
           </button>
-          <button className="mt-btn-primary" onClick={() => window.open('/milestone-creation', '_self')}>
+          <button className="mt-btn-primary" onClick={() => navigate('/milestone-creation', { state: { createMode: true, projectId: project?.id || project?.prj_id || project?.prjId } })}>
             <Plus size={14} /> Add Milestone
           </button>
         </div>
@@ -284,13 +321,13 @@ const ProjectMilestonesTab = ({ project, userRole }) => {
           </div>
 
           <div className="mt-stat-card">
-            <div className="mt-stat-icon-wrap bg-green">
-              <CheckSquare size={20} color="#10b981" />
+            <div className="mt-stat-icon-wrap bg-yellow">
+              <HelpCircle size={20} color="#eab308" />
             </div>
             <div className="mt-stat-info">
-              <span className="mt-stat-value">{completedTasks}</span>
-              <span className="mt-stat-label">Completed Tasks</span>
-              <span className="mt-stat-percent">{getPercentage(completedTasks, totalTasks)}%</span>
+              <span className="mt-stat-value">{notStartedTasks}</span>
+              <span className="mt-stat-label">open Tasks</span>
+              <span className="mt-stat-percent">{getPercentage(notStartedTasks, totalTasks)}%</span>
             </div>
           </div>
 
@@ -306,17 +343,6 @@ const ProjectMilestonesTab = ({ project, userRole }) => {
           </div>
 
           <div className="mt-stat-card">
-            <div className="mt-stat-icon-wrap bg-yellow">
-              <HelpCircle size={20} color="#eab308" />
-            </div>
-            <div className="mt-stat-info">
-              <span className="mt-stat-value">{notStartedTasks}</span>
-              <span className="mt-stat-label">Not Started Tasks</span>
-              <span className="mt-stat-percent">{getPercentage(notStartedTasks, totalTasks)}%</span>
-            </div>
-          </div>
-
-          <div className="mt-stat-card">
             <div className="mt-stat-icon-wrap bg-red">
               <Clock size={20} color="#ef4444" />
             </div>
@@ -324,6 +350,17 @@ const ProjectMilestonesTab = ({ project, userRole }) => {
               <span className="mt-stat-value">{overdueTasks}</span>
               <span className="mt-stat-label">Overdue Tasks</span>
               <span className="mt-stat-percent">{getPercentage(overdueTasks, totalTasks)}%</span>
+            </div>
+          </div>
+
+          <div className="mt-stat-card">
+            <div className="mt-stat-icon-wrap bg-green">
+              <CheckSquare size={20} color="#10b981" />
+            </div>
+            <div className="mt-stat-info">
+              <span className="mt-stat-value">{completedTasks}</span>
+              <span className="mt-stat-label">Closed Tasks</span>
+              <span className="mt-stat-percent">{getPercentage(completedTasks, totalTasks)}%</span>
             </div>
           </div>
         </div>
@@ -375,7 +412,7 @@ const ProjectMilestonesTab = ({ project, userRole }) => {
                       onClick={() => setSelectedMilestone(mId)}
                     >
                       <div className="mt-milestone-index-wrap">
-                        <div className={`mt-milestone-index ${isActive ? 'active' : `c-${(idx % 5) + 1}`}`}>
+                        <div className={`mt-milestone-index c-${(idx % 5) + 1} ${isActive ? 'active' : ''}`}>
                           {idx + 1}
                         </div>
                       </div>
@@ -438,41 +475,29 @@ const ProjectMilestonesTab = ({ project, userRole }) => {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <h3 style={{ margin: 0 }}>Tasks for Milestone: <span className="highlight">{selectedMilestoneData?.mlstnTtl || selectedMilestoneData?.mlstn_ttl || selectedMilestoneData?.mlstmTtl || selectedMilestoneData?.mlstm_ttl || '...'}</span></h3>
                 </div>
-                <div className="mt-tasks-filters">
-                  <div className="mt-filter-btn">
-                    <Filter size={14} /> Filter
-                  </div>
-                  <select className="mt-filter-select">
-                    <option>All Tasks</option>
-                  </select>
-                  <div className="mt-search-box">
-                    <input
-                      type="text"
-                      placeholder="Search Task..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                    />
-                    <Search size={14} color="#94a3b8" />
-                  </div>
-                </div>
               </div>
 
               <div className="mt-table-container">
                 <table className="mt-table">
                   <thead>
                     <tr>
-                      <th>#</th>
-                      <th>Task Code</th>
-                      <th>Task Name</th>
-                      <th>Task Type</th>
-                      <th>Assigned To</th>
-                      <th>Start Date</th>
-                      <th>End Date</th>
-                      <th>Duration<br />(Days)</th>
-                      <th>Dependency</th>
-                      <th>Status</th>
-                      <th>Progress</th>
-                      <th>Actions</th>
+                      <th rowSpan="2">S.no</th>
+                      <th rowSpan="2">Task Code</th>
+                      <th rowSpan="2">Task Name</th>
+                      <th rowSpan="2">Task Type</th>
+                      <th colSpan="3" style={{ textAlign: 'center', borderBottom: '1px solid #e2e8f0' }}>Assigned To</th>
+                      <th rowSpan="2">Start Date</th>
+                      <th rowSpan="2">End Date</th>
+                      <th rowSpan="2">Duration<br />(Days)</th>
+                      <th rowSpan="2">Dependency</th>
+                      <th rowSpan="2">Status</th>
+                      <th rowSpan="2">Progress</th>
+                      <th rowSpan="1">Action</th>
+                    </tr>
+                    <tr>
+                      <th style={{ fontSize: '11px', backgroundColor: '#f8fafc', fontWeight: '600' }}>Executor</th>
+                      <th style={{ fontSize: '11px', backgroundColor: '#f8fafc', fontWeight: '600' }}>Reviewer</th>
+                      <th style={{ fontSize: '11px', backgroundColor: '#f8fafc', fontWeight: '600' }}>Approver</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -481,8 +506,10 @@ const ProjectMilestonesTab = ({ project, userRole }) => {
                       const sDt = formatDate(t.tentStDt || t.tent_st_dt || t.stDt || t.st_dt);
                       const eDt = formatDate(t.tentEndDt || t.tent_end_dt || t.endDt || t.end_dt);
                       const st = t.taskSts || t.task_sts || 'DRAFT';
-                      const assignee = getAssigneeInfo(t.empId);
-                      const prog = calculateTaskProgress(st);
+                      const executor = getAssigneeInfo(t.empId);
+                      const approver = getAssigneeInfo(t.approverId || t.approver_id);
+                      const reviewer = getAssigneeInfo(t.reviewerId || t.reviewer_id);
+                      const prog = calculateTaskProgress(t);
 
                       return (
                         <tr key={tId}>
@@ -497,11 +524,33 @@ const ProjectMilestonesTab = ({ project, userRole }) => {
                           <td>
                             <div className="mt-assignee">
                               <div className="mt-avatar">
-                                {assignee.name.charAt(0)}
+                                {executor.name.charAt(0)}
                               </div>
                               <div className="mt-assignee-info">
-                                <span className="mt-assignee-name">{assignee.name}</span>
-                                <span className="mt-assignee-role">{assignee.role}</span>
+                                <span className="mt-assignee-name">{executor.name}</span>
+                                <span className="mt-assignee-role">{executor.role}</span>
+                              </div>
+                            </div>
+                          </td>
+                          <td>
+                            <div className="mt-assignee">
+                              <div className="mt-avatar" style={{ backgroundColor: '#8b5cf6' }}>
+                                {reviewer.name.charAt(0)}
+                              </div>
+                              <div className="mt-assignee-info">
+                                <span className="mt-assignee-name">{reviewer.name}</span>
+                                <span className="mt-assignee-role">{reviewer.role}</span>
+                              </div>
+                            </div>
+                          </td>
+                          <td>
+                            <div className="mt-assignee">
+                              <div className="mt-avatar" style={{ backgroundColor: '#f59e0b' }}>
+                                {approver.name.charAt(0)}
+                              </div>
+                              <div className="mt-assignee-info">
+                                <span className="mt-assignee-name">{approver.name}</span>
+                                <span className="mt-assignee-role">{approver.role}</span>
                               </div>
                             </div>
                           </td>
@@ -523,15 +572,13 @@ const ProjectMilestonesTab = ({ project, userRole }) => {
                           <td>
                             <div className="mt-actions">
                               <button onClick={() => handleViewTask(t)} title="View Task"><Eye size={14} /></button>
-                              <button onClick={() => handleEditTask(t)} title="Edit Task"><Edit2 size={14} /></button>
-                              <button onClick={() => handleDeleteTask(t)} className="text-red" title="Delete Task"><Trash2 size={14} /></button>
                             </div>
                           </td>
                         </tr>
                       );
                     }) : (
                       <tr>
-                        <td colSpan="12" style={{ textAlign: 'center', padding: '24px', color: '#94a3b8' }}>No tasks available for this milestone.</td>
+                        <td colSpan="14" style={{ textAlign: 'center', padding: '24px', color: '#94a3b8' }}>No tasks available for this milestone.</td>
                       </tr>
                     )}
                   </tbody>
@@ -672,7 +719,7 @@ const ProjectMilestonesTab = ({ project, userRole }) => {
                   <option value="DRAFT">DRAFT</option>
                   <option value="NOT STARTED">NOT STARTED</option>
                   <option value="IN PROGRESS">IN PROGRESS</option>
-                  <option value="COMPLETED">COMPLETED</option>
+                  <option value="CLOSED">CLOSED</option>
                   <option value="OVERDUE">OVERDUE</option>
                 </select>
               </div>

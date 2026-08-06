@@ -11,6 +11,30 @@ const HorizontalProgress = ({ pct, color }) => (
   </div>
 );
 
+const formatDateDDMMYYYY = (dateStr) => {
+  if (!dateStr || dateStr === "N/A") return "N/A";
+  try {
+    const cleanStr = String(dateStr).split('T')[0];
+    const parts = cleanStr.split('-');
+    if (parts.length === 3) {
+      const [year, month, day] = parts;
+      if (year.length === 4) {
+        return `${day.padStart(2, '0')}-${month.padStart(2, '0')}-${year}`;
+      }
+    }
+    const d = new Date(dateStr);
+    if (!isNaN(d.getTime())) {
+      const day = String(d.getDate()).padStart(2, '0');
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const year = d.getFullYear();
+      return `${day}-${month}-${year}`;
+    }
+    return dateStr;
+  } catch (e) {
+    return dateStr;
+  }
+};
+
 const UserMyTask = ({ selectedProject, userTasks = [] }) => {
   const [statusFilter, setStatusFilter] = useState("All Status");
   const [priorityFilter, setPriorityFilter] = useState("All Priority");
@@ -31,13 +55,15 @@ const UserMyTask = ({ selectedProject, userTasks = [] }) => {
     const milestoneObj = selectedProject?.milestones?.find(m => (m.mId || m.mid || m.id) === tMId);
     const milestoneName = milestoneObj ? milestoneObj.name : "Unknown Milestone";
     const statusVal = (t.taskSts || t.tasksts || "").toUpperCase();
-    const progressVal = statusVal === 'COMPLETED' ? 100 : statusVal === 'WIP' ? 50 : (statusVal === 'SUBMIT_REVIEW' || statusVal === 'UNDER_REVIEW') ? 80 : 0;
+    const subSts = (t.subStatus || t.substatus || "").toUpperCase();
+    const isRework = subSts === 'REWORK' || statusVal === 'REWORK';
+    const progressVal = (statusVal === 'COMPLETED' || statusVal === 'CLOSED') ? 100 : (statusVal === 'WIP' || isRework) ? 50 : (statusVal === 'SUBMIT_REVIEW' || statusVal === 'UNDER_REVIEW') ? 80 : 0;
     
     let displayStatus = "Not Started";
-    if (statusVal === 'COMPLETED') displayStatus = "Completed";
-    else if (statusVal === 'WIP') displayStatus = "In Progress";
+    if (statusVal === 'COMPLETED' || statusVal === 'CLOSED') displayStatus = "Closed";
+    else if (statusVal === 'WIP' || isRework) displayStatus = "In Progress";
     else if (statusVal === 'SUBMIT_REVIEW' || statusVal === 'UNDER_REVIEW') displayStatus = "In Progress";
-    else if (statusVal === 'OPEN' || statusVal === 'REWORK') displayStatus = "Pending";
+    else if (statusVal === 'OPEN') displayStatus = "Pending";
 
     return {
       code: t.taskCd || t.taskcd || `TSK-${t.taskId}`,
@@ -45,7 +71,7 @@ const UserMyTask = ({ selectedProject, userTasks = [] }) => {
       milestone: milestoneName,
       milestoneId: tMId,
       priority: t.priority || "Medium",
-      due: t.endDt || t.enddt || "N/A",
+      due: formatDateDDMMYYYY(t.endDt || t.enddt || "N/A"),
       status: displayStatus,
       progress: progressVal
     };
@@ -69,6 +95,7 @@ const UserMyTask = ({ selectedProject, userTasks = [] }) => {
 
   const getStatusClass = (status) => {
     switch (status) {
+      case 'Closed':
       case 'Completed': return 'ut-status-completed';
       case 'In Progress': return 'ut-status-inprogress';
       case 'Not Started': return 'ut-status-notstarted';
@@ -103,7 +130,7 @@ const UserMyTask = ({ selectedProject, userTasks = [] }) => {
               <option value="In Progress">In Progress</option>
               <option value="Pending">Pending</option>
               <option value="Not Started">Not Started</option>
-              <option value="Completed">Completed</option>
+              <option value="Closed">Closed</option>
             </select>
           </div>
           
@@ -161,7 +188,7 @@ const UserMyTask = ({ selectedProject, userTasks = [] }) => {
                     <td><strong>{t.code}</strong></td>
                     <td>{t.name}</td>
                     <td>{t.milestone}</td>
-                    <td><span className={`ut-badge ${getStatusClass(t.priority)}`}>{t.priority}</span></td>
+                    <td>{t.status !== 'Closed' && <span className={`ut-badge ${getStatusClass(t.priority)}`}>{t.priority}</span>}</td>
                     <td>{t.due}</td>
                     <td><span className={`ut-badge ${getStatusClass(t.status)}`}>{t.status}</span></td>
                     <td>

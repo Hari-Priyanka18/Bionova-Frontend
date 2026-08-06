@@ -6,12 +6,20 @@ import {
   CheckCircle, AlertCircle, Save, Building2, Settings,
   Check, ArrowLeft, Pencil, Trash2, User, Calendar, Clock,
   Grid, List, LayoutGrid, UserCheck, UserX, UserCog, UserCheck as UserApprover,
-  PauseCircle, TrendingUp, TrendingDown, Minus
+  PauseCircle, TrendingUp, TrendingDown, Minus, RefreshCw, AlertTriangle, Loader2
 } from 'lucide-react';
 import Sidebar from '../Sidebar';
 import Header from '../Header';
 import AlertModal from '../AlertModal';
 import '../../styles/ProjectAccess.css';
+import { apiGet, apiPost, apiPut, apiDelete } from '../../utils/api';
+
+const GROUP_ICONS = {
+  'Company Master': Building2,
+  'Project Management': Folder,
+  'User Modules': Users,
+  'System Settings': Settings
+};
 
 // ── SCREEN DEFINITIONS ──
 const SCREEN_GROUPS = [
@@ -64,40 +72,90 @@ const PERMISSION_STATES = {
   RED: 'red'
 };
 
-// Static definitions removed since data is now fetched dynamically from the database.
-
-// ── Helper Functions ──
 const getStatusColor = (status) => {
-  const colors = { 'Completed': 'green', 'In Progress': 'orange', 'Pending': 'gray' };
+  const colors = { 
+    'Completed': 'green', 
+    'In Progress': 'orange', 
+    'Pending': 'gray',
+    'Under Review': 'purple',
+    'Rework': 'orange',
+    'Overdue': 'red',
+    'Due Today': 'orange'
+  };
   return colors[status] || 'gray';
+};
+
+const getInitials = (name) => {
+  if (!name) return '??';
+  return name.split(' ').filter(Boolean).map(n => n[0]).join('').toUpperCase().slice(0, 2);
+};
+
+const getAvatarColor = (name) => {
+  if (!name) return '#64748b';
+  const colors = [
+    '#2563eb', '#7c3aed', '#0ea5e9', '#10b981', '#f59e0b', 
+    '#ef4444', '#8b5cf6', '#14b8a6', '#f472b6', '#6366f1'
+  ];
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return colors[Math.abs(hash) % colors.length];
+};
+
+const renderStatusBadge = (status) => {
+  const color = getStatusColor(status);
+  let Icon = AlertCircle;
+  if (status === 'Completed') Icon = CheckCircle;
+  else if (status === 'In Progress') Icon = Clock;
+  else if (status === 'Under Review') Icon = Eye;
+  else if (status === 'Rework') Icon = RefreshCw;
+  else if (status === 'Overdue') Icon = AlertTriangle;
+  else if (status === 'Due Today') Icon = Clock;
+
+  return (
+    <span className={`pac-status-badge pac-status-${color}`} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+      <Icon size={12} style={{ flexShrink: 0 }} />
+      <span>{status}</span>
+    </span>
+  );
 };
 
 const getProjectStatusColor = (status) => {
   const colors = { 
     'active': 'green', 
+    'live': 'green', 
     'upcoming': 'orange', 
     'completed': 'blue',
-    'on-hold': 'red'
+    'closed': 'blue',
+    'on-hold': 'red',
+    'hold': 'red'
   };
   return colors[status] || 'gray';
 };
 
 const getProjectStatusIcon = (status) => {
   switch(status) {
-    case 'active': return '🟢';
+    case 'active':
+    case 'live': return '🟢';
     case 'upcoming': return '🟠';
-    case 'completed': return '🔵';
-    case 'on-hold': return '🔴';
+    case 'completed':
+    case 'closed': return '🔵';
+    case 'on-hold':
+    case 'hold': return '🔴';
     default: return '⚪';
   }
 };
 
 const getProjectStatusLabel = (status) => {
   switch(status) {
-    case 'active': return 'Active';
+    case 'active':
+    case 'live': return 'Active';
     case 'upcoming': return 'Upcoming';
-    case 'completed': return 'Completed';
-    case 'on-hold': return 'On Hold';
+    case 'completed':
+    case 'closed': return 'Completed';
+    case 'on-hold':
+    case 'hold': return 'On Hold';
     default: return status;
   }
 };
@@ -126,31 +184,6 @@ const getPriorityIcon = (priority) => {
   }
 };
 
-const normalizeProject = (proj) => {
-  if (!proj) return proj;
-  let normalizedStatus = proj.status ? proj.status.toLowerCase() : '';
-  if (normalizedStatus === 'live') {
-    normalizedStatus = 'active';
-  } else if (normalizedStatus === 'closed') {
-    normalizedStatus = 'completed';
-  }
-  return {
-    ...proj,
-    status: normalizedStatus
-  };
-};
-
-// ── API Configuration ──
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL;
-
-const getAuthHeaders = () => {
-  const token = sessionStorage.getItem("authToken") || localStorage.getItem("authToken");
-  return {
-    "Content-Type": "application/json",
-    "Authorization": `Bearer ${token || ""}`
-  };
-};
-
 // ── Main Component ──
 const ProjectAccess = ({ userRole, onLogout }) => {
   // ── State ──
@@ -159,14 +192,12 @@ const ProjectAccess = ({ userRole, onLogout }) => {
   const [viewMode, setViewMode] = useState('permission');
   const [searchTerm, setSearchTerm] = useState('');
   const [showEditPermissions, setShowEditPermissions] = useState(false);
-  const [expandedMilestones, setExpandedMilestones] = useState(new Set());
+  const [expandedMilestones, setExpandedMilestones] = useState(new Set(['M-001']));
   const [expandedGroups, setExpandedGroups] = useState({});
   const [expandedProjectGroups, setExpandedProjectGroups] = useState({});
   const [accessGroups, setAccessGroups] = useState([]);
-  const [savedAccessGroups, setSavedAccessGroups] = useState([]);
   const [selectedEmployees, setSelectedEmployees] = useState([]);
-  const [projectAccess, setProjectAccess] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [projectAccesses, setProjectAccesses] = useState([]);
   const [alertConfig, setAlertConfig] = useState({ 
     isOpen: false, 
     type: 'info', 
@@ -184,68 +215,61 @@ const ProjectAccess = ({ userRole, onLogout }) => {
   const [showAddEmployeeModal, setShowAddEmployeeModal] = useState(false);
   const [employeeSearchTerm, setEmployeeSearchTerm] = useState('');
 
-  // ── Task Assign Modal State ──
-  const [showTaskAssignModal, setShowTaskAssignModal] = useState(false);
-  const [taskAssignTarget, setTaskAssignTarget] = useState(null); // { task, role }
-  const [taskAssignSearchTerm, setTaskAssignSearchTerm] = useState('');
-
-  // ── Dynamic Data States ──
+  // ── Data ──
   const [projects, setProjects] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [milestones, setMilestones] = useState([]);
+  const [allEmployeesPermissions, setAllEmployeesPermissions] = useState([]);
+  const [loadingProjects, setLoadingProjects] = useState(true);
 
-  // Fetch initial projects and employees lists
-  const fetchInitialData = async () => {
-    setLoading(true);
+  // Fetch initial data
+  useEffect(() => {
+    fetchProjects();
+    fetchEmployees();
+  }, []);
+
+  const fetchProjects = async () => {
+    setLoadingProjects(true);
     try {
-      const prjResponse = await fetch(`${apiBaseUrl}/api/projects/access`, {
-        headers: getAuthHeaders()
-      });
-      if (prjResponse.ok) {
-        const prjData = await prjResponse.json();
-        const normalized = prjData.map(normalizeProject);
-        setProjects(normalized);
-      }
-
-      const empResponse = await fetch(`${apiBaseUrl}/api/employees`, {
-        headers: getAuthHeaders()
-      });
-      if (empResponse.ok) {
-        const empData = await empResponse.json();
-        const formattedEmps = empData.map(emp => ({
-          id: emp.empId?.toString() || emp.id?.toString(),
-          code: emp.empCode || '',
-          name: `${emp.fstNm || emp.firstName || ''} ${emp.lstNm || emp.lastName || ''}`.trim(),
-          designation: emp.designation || 'Staff',
-          department: emp.department || 'Operations'
-        }));
-        setEmployees(formattedEmps);
-      }
+      const data = await apiGet('/api/projects/access');
+      const mappedProjects = (data || []).map(proj => ({
+        ...proj,
+        id: proj.id || String(proj.prjId),
+        name: proj.name || proj.prjNm,
+        code: proj.code || proj.prjCd,
+        description: proj.description || proj.prjDesc,
+        status: proj.status || (proj.prjSts ? proj.prjSts.toLowerCase() : 'active'),
+        progress: proj.progress || 0,
+        startDate: proj.startDate || proj.stDt,
+        endDate: proj.endDate || proj.endDt,
+        manager: proj.manager || 'Suresh Babu (EMP1009)',
+        department: proj.department || 'Operations',
+        assignedEmployees: proj.assignedEmployees || []
+      }));
+      setProjects(mappedProjects);
     } catch (err) {
-      console.error('Error fetching initial data:', err);
+      console.error("Error fetching projects:", err);
+      showAlert('error', 'Error', 'Failed to load projects.');
     } finally {
-      setLoading(false);
+      setLoadingProjects(false);
     }
   };
 
-  useEffect(() => {
-    fetchInitialData();
-  }, []);
-
-  const refreshProjectAccess = async () => {
-    if (!selectedProject) return;
+  const fetchEmployees = async () => {
     try {
-      const response = await fetch(`${apiBaseUrl}/api/projects/${selectedProject.id || selectedProject.prjId}/access`, {
-        headers: getAuthHeaders()
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setSelectedProject(normalizeProject(data.project));
-        setProjectAccess(data.accesses || []);
-        setSelectedEmployees(data.assignedEmployees || []);
-      }
+      const data = await apiGet('/api/employees');
+      const mappedEmployees = (data || []).map(emp => ({
+        ...emp,
+        id: emp.empId,
+        name: `${emp.fstNm || emp.firstName || ''} ${emp.lstNm || emp.lastName || ''}`.trim(),
+        photoUrl: emp.photoUrl || emp.photo_url || null,
+        designation: emp.designation || 'Employee',
+        department: emp.deptNm || 'Operations'
+      }));
+      setEmployees(mappedEmployees);
     } catch (err) {
-      console.error('Error refreshing project access:', err);
+      console.error("Error fetching employees:", err);
+      showAlert('error', 'Error', 'Failed to load employees.');
     }
   };
 
@@ -288,7 +312,6 @@ const ProjectAccess = ({ userRole, onLogout }) => {
         badgeText: 'No Access'
       }));
       setAccessGroups(emptyGroups);
-      setSavedAccessGroups(JSON.parse(JSON.stringify(emptyGroups)));
       return;
     }
 
@@ -324,43 +347,200 @@ const ProjectAccess = ({ userRole, onLogout }) => {
     });
     
     setAccessGroups(groups);
-    setSavedAccessGroups(JSON.parse(JSON.stringify(groups)));
     setExpandedGroups({});
+  };
+
+  const initializeAccessGroupsFromPermissions = (permissions) => {
+    const groups = SCREEN_GROUPS.map(group => {
+      const screens = group.screens.map(screen => {
+        const p = permissions.find(p => 
+          (p.screenCode && p.screenCode.toLowerCase().replace(/_/g, '-') === screen.id.toLowerCase()) ||
+          (p.screenNm && p.screenNm.toLowerCase() === screen.name.toLowerCase())
+        );
+
+        if (p) {
+          const view = p.viewFlg ? (p.accessType === 'From Template' ? PERMISSION_STATES.BLUE : PERMISSION_STATES.GREEN) : PERMISSION_STATES.EMPTY;
+          const create = p.addFlg ? (p.accessType === 'From Template' ? PERMISSION_STATES.BLUE : PERMISSION_STATES.GREEN) : PERMISSION_STATES.EMPTY;
+          const edit = p.editFlg ? (p.accessType === 'From Template' ? PERMISSION_STATES.BLUE : PERMISSION_STATES.GREEN) : PERMISSION_STATES.EMPTY;
+          const delete_ = p.deleteFlg ? (p.accessType === 'From Template' ? PERMISSION_STATES.BLUE : PERMISSION_STATES.GREEN) : PERMISSION_STATES.EMPTY;
+
+          const hasBlue = [view, create, edit, delete_].includes(PERMISSION_STATES.BLUE);
+          const hasGreen = [view, create, edit, delete_].includes(PERMISSION_STATES.GREEN);
+          const hasRed = [view, create, edit, delete_].includes(PERMISSION_STATES.RED);
+          
+          let badge = 'orange';
+          let badgeText = 'No Access';
+          if (hasBlue && (hasGreen || hasRed)) { badge = 'orange'; badgeText = 'Mixed'; }
+          else if (hasBlue) { badge = 'blue'; badgeText = 'From Template'; }
+          else if (hasGreen) { badge = 'green'; badgeText = 'Added'; }
+          else if (hasRed) { badge = 'red'; badgeText = 'Revoked'; }
+
+          return {
+            ...screen,
+            screenId: p.screenId,
+            screenCode: p.screenCode,
+            view,
+            create,
+            edit,
+            delete: delete_,
+            badge,
+            badgeText
+          };
+        }
+
+        return {
+          ...screen,
+          view: PERMISSION_STATES.EMPTY,
+          create: PERMISSION_STATES.EMPTY,
+          edit: PERMISSION_STATES.EMPTY,
+          delete: PERMISSION_STATES.EMPTY,
+          badge: 'orange',
+          badgeText: 'No Access'
+        };
+      });
+
+      return {
+        ...group,
+        screens,
+        view: PERMISSION_STATES.EMPTY,
+        create: PERMISSION_STATES.EMPTY,
+        edit: PERMISSION_STATES.EMPTY,
+        delete: PERMISSION_STATES.EMPTY,
+        badge: 'orange',
+        badgeText: 'No Access'
+      };
+    });
+
+    groups.forEach(group => {
+      group.view = group.screens.some(s => s.view !== PERMISSION_STATES.EMPTY) ? PERMISSION_STATES.BLUE : PERMISSION_STATES.EMPTY;
+      group.create = group.screens.some(s => s.create !== PERMISSION_STATES.EMPTY) ? PERMISSION_STATES.BLUE : PERMISSION_STATES.EMPTY;
+      group.edit = group.screens.some(s => s.edit !== PERMISSION_STATES.EMPTY) ? PERMISSION_STATES.BLUE : PERMISSION_STATES.EMPTY;
+      group.delete = group.screens.some(s => s.delete !== PERMISSION_STATES.EMPTY) ? PERMISSION_STATES.BLUE : PERMISSION_STATES.EMPTY;
+
+      const groupHasBlue = group.screens.some(s => [s.view, s.create, s.edit, s.delete].includes(PERMISSION_STATES.BLUE));
+      const groupHasGreen = group.screens.some(s => [s.view, s.create, s.edit, s.delete].includes(PERMISSION_STATES.GREEN));
+      const groupHasRed = group.screens.some(s => [s.view, s.create, s.edit, s.delete].includes(PERMISSION_STATES.RED));
+
+      if (groupHasBlue && (groupHasGreen || groupHasRed)) {
+        group.badge = 'orange';
+        group.badgeText = 'Mixed';
+      } else if (groupHasBlue) {
+        group.badge = 'blue';
+        group.badgeText = 'From Template';
+      } else if (groupHasGreen) {
+        group.badge = 'green';
+        group.badgeText = 'Added';
+      } else if (groupHasRed) {
+        group.badge = 'red';
+        group.badgeText = 'Revoked';
+      } else {
+        group.badge = 'orange';
+        group.badgeText = 'No Access';
+      }
+    });
+
+    setAccessGroups(groups);
+    setExpandedGroups({});
+  };
+
+  const refreshProjectDetails = async (projectId) => {
+    try {
+      const accessData = await apiGet(`/api/projects/${projectId}/access`);
+      setSelectedProject(accessData.project || selectedProject);
+      setSelectedEmployees(accessData.assignedEmployees || []);
+      setProjectAccesses(accessData.accesses || []);
+
+      const milestonesData = await apiGet(`/api/projects/${projectId}/milestones-with-tasks`);
+      const mappedMilestones = (milestonesData || []).map(m => ({
+        id: m.id || String(m.mId),
+        name: m.name || m.mlstnTtl,
+        tasks: (m.tasks || []).map(t => ({
+          id: t.id || String(t.taskId),
+          name: t.name || t.taskNm,
+          taskCode: t.taskCode,
+          assignee: t.assignee || 'Unassigned',
+          reviewer: t.reviewer || 'Unassigned',
+          approver: t.approver || 'Unassigned',
+          status: t.status || 'Pending'
+        }))
+      }));
+      setMilestones(mappedMilestones);
+
+      try {
+        const allPerms = await apiGet('/api/rbac/employees/permissions');
+        setAllEmployeesPermissions(allPerms || []);
+      } catch (err) {
+        console.warn("Could not fetch all employee permissions:", err);
+      }
+    } catch (err) {
+      console.error("Error refreshing project details:", err);
+    }
   };
 
   // ── Open/Close Project ──
   const openProjectDetail = async (project) => {
-    setLoading(true);
     try {
-      const response = await fetch(`${apiBaseUrl}/api/projects/${project.id || project.prjId}/access`, {
-        headers: getAuthHeaders()
-      });
-      if (response.ok) {
-        const data = await response.json();
-        const normalized = normalizeProject(data.project);
-        setSelectedProject(normalized);
-        setProjectAccess(data.accesses || []);
-        setSelectedEmployees(data.assignedEmployees || []);
+      const accessData = await apiGet(`/api/projects/${project.id}/access`);
+      setSelectedProject(accessData.project || project);
+      setSelectedEmployees(accessData.assignedEmployees || []);
+      setProjectAccesses(accessData.accesses || []);
 
-        const msResponse = await fetch(`${apiBaseUrl}/api/projects/${project.id || project.prjId}/milestones-with-tasks`, {
-          headers: getAuthHeaders()
-        });
-        if (msResponse.ok) {
-          const msData = await msResponse.json();
-          setMilestones(msData);
-          if (msData.length > 0) {
-            setExpandedMilestones(new Set([msData[0].id]));
-          }
-        }
-        
-        initializeAccessGroups(normalized);
-        setCurrentView('project-detail');
-        setShowEditPermissions(false);
+      const milestonesData = await apiGet(`/api/projects/${project.id}/milestones-with-tasks`);
+      const mappedMilestones = (milestonesData || []).map(m => ({
+        id: m.id || String(m.mId),
+        name: m.name || m.mlstnTtl,
+        tasks: (m.tasks || []).map(t => ({
+          id: t.id || String(t.taskId),
+          name: t.name || t.taskNm,
+          taskCode: t.taskCode,
+          assignee: t.assignee || 'Unassigned',
+          reviewer: t.reviewer || 'Unassigned',
+          approver: t.approver || 'Unassigned',
+          status: t.status || 'Pending'
+        }))
+      }));
+      setMilestones(mappedMilestones);
+
+      // Fetch all employee permissions first (needed for both checkboxes and avatar display)
+      let allPerms = [];
+      try {
+        allPerms = await apiGet('/api/rbac/employees/permissions') || [];
+        setAllEmployeesPermissions(allPerms);
+      } catch (err) {
+        console.warn("Could not fetch all employee permissions:", err);
       }
+
+      // Build checkboxes as UNION of all project employees' permissions
+      const assignedIds = accessData.assignedEmployees || [];
+      const projectEmpPerms = allPerms.filter(p => assignedIds.map(id => String(id)).includes(String(p.employeeId)));
+
+      if (projectEmpPerms.length > 0) {
+        // Merge all permissions: if any employee has access to a screen, show as ticked
+        const mergedPermissions = [];
+        const screenMap = {};
+        projectEmpPerms.forEach(empPerm => {
+          (empPerm.permissions || []).forEach(p => {
+            const key = p.screenCode || p.screenNm;
+            if (!screenMap[key]) {
+              screenMap[key] = { ...p, viewFlg: false, addFlg: false, editFlg: false, deleteFlg: false };
+            }
+            if (p.viewFlg) screenMap[key].viewFlg = true;
+            if (p.addFlg) screenMap[key].addFlg = true;
+            if (p.editFlg) screenMap[key].editFlg = true;
+            if (p.deleteFlg) screenMap[key].deleteFlg = true;
+          });
+        });
+        Object.values(screenMap).forEach(p => mergedPermissions.push(p));
+        initializeAccessGroupsFromPermissions(mergedPermissions);
+      } else {
+        initializeAccessGroups(project);
+      }
+
+      setCurrentView('project-detail');
+      setShowEditPermissions(false);
     } catch (err) {
-      console.error('Error fetching project access details:', err);
-    } finally {
-      setLoading(false);
+      console.error("Error opening project details:", err);
+      showAlert('error', 'Error', 'Failed to load project details.');
     }
   };
 
@@ -368,10 +548,9 @@ const ProjectAccess = ({ userRole, onLogout }) => {
     setSelectedProject(null);
     setSelectedEmployees([]);
     setAccessGroups([]);
-    setProjectAccess([]);
+    setProjectAccesses([]);
     setCurrentView('projects');
     setShowEditPermissions(false);
-    fetchInitialData();
   };
 
   // ── Toggle Functions ──
@@ -412,7 +591,7 @@ const ProjectAccess = ({ userRole, onLogout }) => {
     
     let newState;
     if (currentState === PERMISSION_STATES.EMPTY) newState = PERMISSION_STATES.GREEN;
-    else if (currentState === PERMISSION_STATES.GREEN) newState = PERMISSION_STATES.RED;
+    else if (currentState === PERMISSION_STATES.GREEN) newState = PERMISSION_STATES.EMPTY;
     else if (currentState === PERMISSION_STATES.BLUE) newState = PERMISSION_STATES.RED;
     else if (currentState === PERMISSION_STATES.RED) newState = PERMISSION_STATES.EMPTY;
     else newState = PERMISSION_STATES.EMPTY;
@@ -564,14 +743,21 @@ const ProjectAccess = ({ userRole, onLogout }) => {
   
   // Get Employee Tasks
   const getEmployeeTasks = (empId) => {
+    const emp = employees.find(e => String(e.id) === String(empId));
+    if (!emp) return [];
+    
     const assignedTasks = [];
-    const emp = employees.find(e => e.id === empId);
-    if (!emp) return assignedTasks;
-    const codeMatch = emp.code ? `(${emp.code})` : `(EMP${emp.id})`;
-
     milestones.forEach(milestone => {
+      if (!milestone.tasks) return;
       milestone.tasks.forEach(task => {
-        if (task.assignee && task.assignee.includes(codeMatch)) {
+        const matchCode = emp.empCode ? `(${emp.empCode})` : `(${emp.id})`;
+        const matchName = emp.name;
+        
+        const isAssignee = (task.assignee && (task.assignee.includes(matchCode) || task.assignee.includes(matchName)));
+        const isReviewer = (task.reviewer && (task.reviewer.includes(matchCode) || task.reviewer.includes(matchName)));
+        const isApprover = (task.approver && (task.approver.includes(matchCode) || task.approver.includes(matchName)));
+
+        if (isAssignee) {
           assignedTasks.push({
             ...task,
             milestoneId: milestone.id,
@@ -579,7 +765,7 @@ const ProjectAccess = ({ userRole, onLogout }) => {
             role: 'Assignee'
           });
         }
-        if (task.reviewer && task.reviewer.includes(codeMatch)) {
+        if (isReviewer) {
           assignedTasks.push({
             ...task,
             milestoneId: milestone.id,
@@ -587,7 +773,7 @@ const ProjectAccess = ({ userRole, onLogout }) => {
             role: 'Reviewer'
           });
         }
-        if (task.approver && task.approver.includes(codeMatch)) {
+        if (isApprover) {
           assignedTasks.push({
             ...task,
             milestoneId: milestone.id,
@@ -600,18 +786,79 @@ const ProjectAccess = ({ userRole, onLogout }) => {
     return assignedTasks;
   };
 
+  const getScreenUsers = (screenId, screenName) => {
+    const list = [];
+    selectedEmployees.forEach(empId => {
+      const empPerms = allEmployeesPermissions.find(p => String(p.employeeId) === String(empId));
+      if (empPerms && empPerms.permissions) {
+        const hasAccess = empPerms.permissions.some(p => {
+          const matchId = (p.screenCode && p.screenCode.toLowerCase().replace(/_/g, '-') === screenId.toLowerCase());
+          const matchName = (p.screenNm && p.screenNm.toLowerCase() === screenName.toLowerCase());
+          return (matchId || matchName) && (p.viewFlg || p.addFlg || p.editFlg || p.deleteFlg);
+        });
+        if (hasAccess) {
+          const emp = employees.find(e => String(e.id) === String(empId));
+          const name = emp?.name || empPerms.name || `Employee ${empId}`;
+          list.push({
+            id: empId,
+            name,
+            photoUrl: emp?.photoUrl || null,
+            initials: getInitials(name),
+            avatarColor: getAvatarColor(name)
+          });
+        }
+      }
+    });
+    return list;
+  };
+
+  const getGroupUsers = (groupId, groupScreens) => {
+    const list = [];
+    selectedEmployees.forEach(empId => {
+      const empPerms = allEmployeesPermissions.find(p => String(p.employeeId) === String(empId));
+      if (empPerms && empPerms.permissions) {
+        const hasAccess = groupScreens.some(screen => {
+          return empPerms.permissions.some(p => {
+            const matchId = (p.screenCode && p.screenCode.toLowerCase().replace(/_/g, '-') === screen.id.toLowerCase());
+            const matchName = (p.screenNm && p.screenNm.toLowerCase() === screen.name.toLowerCase());
+            return (matchId || matchName) && (p.viewFlg || p.addFlg || p.editFlg || p.deleteFlg);
+          });
+        });
+        if (hasAccess) {
+          const emp = employees.find(e => String(e.id) === String(empId));
+          const name = emp?.name || empPerms.name || `Employee ${empId}`;
+          list.push({
+            id: empId,
+            name,
+            photoUrl: emp?.photoUrl || null,
+            initials: getInitials(name),
+            avatarColor: getAvatarColor(name)
+          });
+        }
+      }
+    });
+    return list;
+  };
+
   // Get Employee Task Count
   const getEmployeeTaskCount = (empId) => {
-    const emp = employees.find(e => e.id === empId);
+    const emp = employees.find(e => String(e.id) === String(empId));
     if (!emp) return 0;
-    const codeMatch = emp.code ? `(${emp.code})` : `(EMP${emp.id})`;
-
+    
     let count = 0;
+    const matchCode = emp.empCode ? `(${emp.empCode})` : `(${emp.id})`;
+    const matchName = emp.name;
+
     milestones.forEach(milestone => {
+      if (!milestone.tasks) return;
       milestone.tasks.forEach(task => {
-        if (task.assignee && task.assignee.includes(codeMatch)) count++;
-        if (task.reviewer && task.reviewer.includes(codeMatch)) count++;
-        if (task.approver && task.approver.includes(codeMatch)) count++;
+        const isAssignee = (task.assignee && (task.assignee.includes(matchCode) || task.assignee.includes(matchName)));
+        const isReviewer = (task.reviewer && (task.reviewer.includes(matchCode) || task.reviewer.includes(matchName)));
+        const isApprover = (task.approver && (task.approver.includes(matchCode) || task.approver.includes(matchName)));
+        
+        if (isAssignee) count++;
+        if (isReviewer) count++;
+        if (isApprover) count++;
       });
     });
     return count;
@@ -623,7 +870,7 @@ const ProjectAccess = ({ userRole, onLogout }) => {
     
     if (employeeTasks.length > 0) {
       const taskList = employeeTasks.map(t => 
-        `• ${t.code || t.id} - ${t.name} (${t.milestoneName}) [${t.role}]`
+        `• ${t.id} - ${t.name} (${t.milestoneName}) [${t.role}]`
       ).join('\n');
       
       showAlert(
@@ -641,77 +888,106 @@ const ProjectAccess = ({ userRole, onLogout }) => {
 
   // Confirm Remove Employee
   const confirmRemoveEmployee = async (empId, employeeTasks) => {
-    const name = employees.find(e => e.id === empId)?.name || 'Employee';
-    const currentUser = sessionStorage.getItem("userName") || "System User";
-    
-    setLoading(true);
     try {
-      const response = await fetch(`${apiBaseUrl}/api/projects/${selectedProject.id || selectedProject.prjId}/access/${empId}`, {
-        method: 'DELETE',
-        headers: getAuthHeaders(),
-        body: JSON.stringify({
-          performedBy: currentUser,
-          remarks: 'Revoked via Project Access Control'
-        })
-      });
-      
-      if (response.ok) {
-        await refreshProjectAccess();
-        showAlert('success', 'Employee Removed', `${name} has been removed from the project.`);
+      await apiDelete(`/api/projects/${selectedProject.id}/access/${empId}`);
+
+      if (employeeTasks.length > 0) {
+        const emp = employees.find(e => String(e.id) === String(empId));
+        const matchCode = emp ? (emp.empCode ? `(${emp.empCode})` : `(${emp.id})`) : `(${empId})`;
+        const matchName = emp ? emp.name : '';
+
+        for (const t of employeeTasks) {
+          const isAssignee = t.assignee && (t.assignee.includes(matchCode) || (matchName && t.assignee.includes(matchName)));
+          const isReviewer = t.reviewer && (t.reviewer.includes(matchCode) || (matchName && t.reviewer.includes(matchName)));
+          const isApprover = t.approver && (t.approver.includes(matchCode) || (matchName && t.approver.includes(matchName)));
+
+          if (isAssignee) {
+            await apiPost(`/api/projects/tasks/${t.id}/assign-role`, { roleType: 'assignee', empId: null });
+          }
+          if (isReviewer) {
+            await apiPost(`/api/projects/tasks/${t.id}/assign-role`, { roleType: 'reviewer', empId: null });
+          }
+          if (isApprover) {
+            await apiPost(`/api/projects/tasks/${t.id}/assign-role`, { roleType: 'approver', empId: null });
+          }
+        }
+      }
+
+      await refreshProjectDetails(selectedProject.id);
+
+      if (employeeTasks.length > 0) {
+        showAlert('info', 'Tasks Unassigned', 
+          `${employeeTasks.length} task(s) have been unassigned in the database.`
+        );
       } else {
-        const errData = await response.json();
-        showAlert('error', 'Error', errData.error || 'Failed to remove employee.');
+        showAlert('success', 'Employee Removed', 'Employee has been removed from the project.');
       }
     } catch (err) {
-      console.error('Error removing employee:', err);
-      showAlert('error', 'Error', 'Failed to connect to backend.');
-    } finally {
-      setLoading(false);
+      console.error("Error removing employee:", err);
+      showAlert('error', 'Error', 'Failed to remove employee.');
     }
   };
 
   const handleAddEmployee = async (empId) => {
-    const name = employees.find(e => e.id === empId)?.name || 'Employee';
-    const currentUser = sessionStorage.getItem("userName") || "System User";
-    
-    setLoading(true);
-    try {
-      const response = await fetch(`${apiBaseUrl}/api/projects/${selectedProject.id || selectedProject.prjId}/access/bulk`, {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify({
-          employeeIds: [empId],
-          accessType: 'VIEWER',
-          performedBy: currentUser,
-          remarks: 'Added via Project Access Control'
-        })
-      });
-      
-      if (response.ok) {
-        await refreshProjectAccess();
-        showAlert('success', 'Employee Added', `${name} has been added to the project.`);
+    if (!selectedEmployees.includes(empId)) {
+      try {
+        await apiPost(`/api/projects/${selectedProject.id}/access`, {
+          empId: empId,
+          accessType: 'EDITOR',
+          performedBy: 'System',
+          remarks: 'Added via Project Access UI'
+        });
+        
+        await refreshProjectDetails(selectedProject.id);
+        showAlert('success', 'Employee Added', 'Employee has been added to the project.');
         setShowAddEmployeeModal(false);
         setEmployeeSearchTerm('');
-      } else {
-        const errData = await response.json();
-        showAlert('error', 'Error', errData.error || 'Failed to add employee.');
+      } catch (err) {
+        console.error("Error adding employee:", err);
+        showAlert('error', 'Error', 'Failed to add employee.');
       }
+    } else {
+      showAlert('warning', 'Already Added', 'This employee is already in the project.');
+    }
+  };
+
+  const handleAssignRole = async (taskId, roleType, empId) => {
+    try {
+      await apiPost(`/api/projects/tasks/${taskId}/assign-role`, {
+        roleType,
+        empId: empId ? Number(empId) : null
+      });
+      
+      const milestonesData = await apiGet(`/api/projects/${selectedProject.id}/milestones-with-tasks`);
+      const mappedMilestones = (milestonesData || []).map(m => ({
+        id: m.id || String(m.mId),
+        name: m.name || m.mlstnTtl,
+        tasks: (m.tasks || []).map(t => ({
+          id: t.id || String(t.taskId),
+          name: t.name || t.taskNm,
+          taskCode: t.taskCode,
+          assignee: t.assignee || 'Unassigned',
+          reviewer: t.reviewer || 'Unassigned',
+          approver: t.approver || 'Unassigned',
+          status: t.status || 'Pending'
+        }))
+      }));
+      setMilestones(mappedMilestones);
+      showAlert('success', 'Success', 'Employee role updated successfully!');
     } catch (err) {
-      console.error('Error adding employee:', err);
-      showAlert('error', 'Error', 'Failed to connect to backend.');
-    } finally {
-      setLoading(false);
+      console.error("Error assigning task role:", err);
+      showAlert('error', 'Error', 'Failed to update employee assignment.');
     }
   };
 
   // ── Get Available Employees ──
   const getAvailableEmployees = () => {
-    const selectedIds = new Set(selectedEmployees);
-    const available = employees.filter(emp => !selectedIds.has(emp.id));
+    const selectedIds = new Set(selectedEmployees.map(id => String(id)));
+    const available = employees.filter(emp => !selectedIds.has(String(emp.id)));
     
     return [...available].sort((a, b) => {
-      const aSelected = selectedEmployees.includes(a.id);
-      const bSelected = selectedEmployees.includes(b.id);
+      const aSelected = selectedEmployees.map(id => String(id)).includes(String(a.id));
+      const bSelected = selectedEmployees.map(id => String(id)).includes(String(b.id));
       if (aSelected && !bSelected) return -1;
       if (!aSelected && bSelected) return 1;
       return a.name.localeCompare(b.name);
@@ -725,14 +1001,61 @@ const ProjectAccess = ({ userRole, onLogout }) => {
     const search = employeeSearchTerm.toLowerCase();
     return available.filter(emp =>
       emp.name.toLowerCase().includes(search) ||
-      emp.id.toLowerCase().includes(search) ||
-      emp.designation.toLowerCase().includes(search) ||
-      emp.department.toLowerCase().includes(search)
+      String(emp.id).toLowerCase().includes(search) ||
+      (emp.designation && emp.designation.toLowerCase().includes(search)) ||
+      (emp.department && emp.department.toLowerCase().includes(search))
     );
   })();
 
+  const handleSaveChanges = async () => {
+    if (!selectedProject || !selectedEmployees || selectedEmployees.length === 0) {
+      showAlert('warning', 'No Employees', 'At least one employee must be assigned to the project to save permissions.');
+      return;
+    }
+
+    const permissionsPayload = [];
+    accessGroups.forEach(group => {
+      group.screens.forEach(screen => {
+        permissionsPayload.push({
+          screenId: screen.screenId,
+          screenNm: screen.name,
+          groupNm: group.name,
+          screenCode: screen.screenCode,
+          viewFlg: screen.view === PERMISSION_STATES.BLUE || screen.view === PERMISSION_STATES.GREEN,
+          addFlg: screen.create === PERMISSION_STATES.BLUE || screen.create === PERMISSION_STATES.GREEN,
+          editFlg: screen.edit === PERMISSION_STATES.BLUE || screen.edit === PERMISSION_STATES.GREEN,
+          deleteFlg: screen.delete === PERMISSION_STATES.BLUE || screen.delete === PERMISSION_STATES.GREEN
+        });
+      });
+    });
+
+    try {
+      await apiPost('/api/rbac/save', {
+        empIds: selectedEmployees.map(id => Number(id)),
+        roleId: null,
+        customRoleName: "",
+        permissions: permissionsPayload,
+        createdBy: "Admin"
+      });
+      showAlert('success', 'Saved', 'Permissions saved successfully!');
+      setShowEditPermissions(false);
+    } catch (err) {
+      console.error("Error saving permissions:", err);
+      showAlert('error', 'Error', 'Failed to save screen permissions.');
+    }
+  };
+
   // ── RENDER: Projects View ──
   const renderProjectsView = () => {
+    if (loadingProjects) {
+      return (
+        <div className="pac-empty-state">
+          <Loader2 size={48} className="spinning" />
+          <h4>Loading Projects...</h4>
+        </div>
+      );
+    }
+
     if (filteredProjects.length === 0) {
       return (
         <div className="pac-empty-state">
@@ -743,10 +1066,10 @@ const ProjectAccess = ({ userRole, onLogout }) => {
     }
 
     const groupedProjects = {
-      active: filteredProjects.filter(p => p.status === 'active' || p.status === 'in-progress'),
+      active: filteredProjects.filter(p => p.status === 'active' || p.status === 'in-progress' || p.status === 'live'),
       upcoming: filteredProjects.filter(p => p.status === 'upcoming' || p.status === 'planned'),
-      completed: filteredProjects.filter(p => p.status === 'completed' || p.status === 'done'),
-      onHold: filteredProjects.filter(p => p.status === 'on-hold' || p.status === 'paused')
+      completed: filteredProjects.filter(p => p.status === 'completed' || p.status === 'done' || p.status === 'closed'),
+      onHold: filteredProjects.filter(p => p.status === 'on-hold' || p.status === 'paused' || p.status === 'hold')
     };
 
     const statusGroups = [
@@ -873,7 +1196,7 @@ const ProjectAccess = ({ userRole, onLogout }) => {
         <div className="pac-card-top">
           <div className="pac-card-status">
             <span className={`pac-status-dot ${statusColor}`}></span>
-            <span className="pac-status-label">{statusIcon} {statusLabel}</span>
+            <span className="pac-status-label">{statusLabel}</span>
           </div>
           <div className="pac-card-priority" style={{ background: priorityColor }}>
             {getPriorityIcon(project.priority)}
@@ -889,35 +1212,28 @@ const ProjectAccess = ({ userRole, onLogout }) => {
           </div>
         </div>
 
-        {/* Card Description */}
-        <p className="pac-card-desc">{project.description}</p>
-
-        {/* Card Meta - Manager & Department */}
+        {/* Card Meta - Department */}
         <div className="pac-card-meta">
-          <div className="pac-card-meta-item">
-            <User size={14} className="pac-meta-icon" />
-            <span>{project.manager}</span>
-          </div>
           <div className="pac-card-meta-item">
             <Building2 size={14} className="pac-meta-icon" />
             <span>{project.department}</span>
           </div>
         </div>
 
-        {/* Card Stats - Tasks & Team */}
+        {/* Card Stats - Milestones & Tasks */}
         <div className="pac-card-stats">
+          <div className="pac-card-stat">
+            <span className="pac-stat-icon">🎯</span>
+            <div className="pac-stat-info">
+              <span className="pac-stat-label">Milestones</span>
+              <span className="pac-stat-value">{project.milestonesCount?.completed || 0}/{project.milestonesCount?.total || 0}</span>
+            </div>
+          </div>
           <div className="pac-card-stat">
             <span className="pac-stat-icon">📋</span>
             <div className="pac-stat-info">
               <span className="pac-stat-label">Tasks</span>
               <span className="pac-stat-value">{project.tasks?.completed || 0}/{project.tasks?.total || 0}</span>
-            </div>
-          </div>
-          <div className="pac-card-stat">
-            <span className="pac-stat-icon">👥</span>
-            <div className="pac-stat-info">
-              <span className="pac-stat-label">Team</span>
-              <span className="pac-stat-value">{project.assignedEmployees?.length || 0}</span>
             </div>
           </div>
         </div>
@@ -998,16 +1314,15 @@ const ProjectAccess = ({ userRole, onLogout }) => {
                 </span>
               </div>
             </div>
-            <p className="pac-project-card-desc">{project.description}</p>
             <div className="pac-list-meta">
-              <div className="pac-list-meta-item">
-                <User size={14} /> <span>{project.manager}</span>
-              </div>
               <div className="pac-list-meta-item">
                 <Building2 size={14} /> <span>{project.department}</span>
               </div>
               <div className="pac-list-meta-item">
-                <Users size={14} /> <span>{project.assignedEmployees?.length || 0} members</span>
+                <span>🎯 Milestones: {project.milestonesCount?.completed || 0}/{project.milestonesCount?.total || 0}</span>
+              </div>
+              <div className="pac-list-meta-item">
+                <span>📋 Tasks: {project.tasks?.completed || 0}/{project.tasks?.total || 0}</span>
               </div>
             </div>
           </div>
@@ -1060,45 +1375,46 @@ const ProjectAccess = ({ userRole, onLogout }) => {
       return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
     };
 
-    const renderPerson = (name, type, task) => {
-      if (!name || name === 'Unassigned' || name === '—') {
+    const renderTaskPerson = (name, type, taskId) => {
+      const isUnassigned = !name || name === 'Unassigned' || name === '—';
+      
+      if (showEditPermissions) {
+        const matchedEmp = employees.find(e => {
+          const codeStr = e.empCode ? `(${e.empCode})` : `(${e.id})`;
+          return name && (name.includes(codeStr) || name.includes(e.name));
+        });
+        const currentVal = matchedEmp ? String(matchedEmp.id) : "";
+
         return (
-          <button 
-            className="pac-btn-outline-sm"
-            style={{ fontSize: '11px', padding: '2px 6px', display: 'inline-flex', alignItems: 'center', gap: '4px', background: '#f8fafc', border: '1px dashed #cbd5e1', color: '#64748b', cursor: 'pointer' }}
-            onClick={(e) => {
-              e.stopPropagation();
-              setTaskAssignTarget({ task, role: type });
-              setShowTaskAssignModal(true);
-            }}
-            title={`Assign ${type}`}
-          >
-            <UserPlus size={12} /> Add
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <select
+              className="pac-assign-select"
+              value={currentVal}
+              onChange={(e) => {
+                const val = e.target.value ? Number(e.target.value) : null;
+                handleAssignRole(taskId, type, val);
+              }}
+            >
+              <option value="">-- Unassigned --</option>
+              {employees.map(emp => (
+                <option key={emp.id} value={emp.id}>{emp.name} {emp.empCode ? `(${emp.empCode})` : ''}</option>
+              ))}
+            </select>
+          </div>
+        );
+      } else {
+        if (isUnassigned) {
+          return <span className="pac-person-unassigned">—</span>;
+        }
+        const color = getAvatarColor(name);
+        const initials = getInitials(name);
+        return (
+          <div className="pac-person">
+            <span className="pac-person-avatar" style={{ background: color }}>{initials}</span>
+            <span className="pac-person-name">{name}</span>
+          </div>
         );
       }
-      const color = getAvatarColor(name);
-      const initials = getInitials(name);
-      return (
-        <div 
-          className="pac-person"
-          onClick={(e) => {
-            if (showEditPermissions) {
-              e.stopPropagation();
-              setTaskAssignTarget({ task, role: type });
-              setShowTaskAssignModal(true);
-            }
-          }}
-          style={{ cursor: showEditPermissions ? 'pointer' : 'default' }}
-          title={showEditPermissions ? `Change ${type}` : undefined}
-        >
-          <span className="pac-person-avatar" style={{ background: color }}>{initials}</span>
-          <span className="pac-person-name" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-            {name}
-            {showEditPermissions && <Pencil size={10} style={{ color: '#64748b', marginLeft: '4px' }} />}
-          </span>
-        </div>
-      );
     };
 
     return (
@@ -1108,7 +1424,15 @@ const ProjectAccess = ({ userRole, onLogout }) => {
           <span className="pac-legend-item"><span className="pac-dot pac-dot-green"></span> Added</span>
           <span className="pac-legend-item"><span className="pac-dot pac-dot-red"></span> Revoked</span>
           <span className="pac-legend-item"><span className="pac-dot pac-dot-empty"></span> No Access</span>
-
+          <span className="pac-legend-item">
+            <User size={14} className="pac-legend-icon" /> Executor
+          </span>
+          <span className="pac-legend-item">
+            <UserCog size={14} className="pac-legend-icon" /> Reviewer
+          </span>
+          <span className="pac-legend-item">
+            <UserApprover size={14} className="pac-legend-icon" /> Approver
+          </span>
           {showEditPermissions && <span className="pac-edit-indicator"><AlertCircle size={14} /> Click to toggle</span>}
           {!showEditPermissions && <span className="pac-view-indicator"><Eye size={14} /> View mode</span>}
         </div>
@@ -1117,9 +1441,9 @@ const ProjectAccess = ({ userRole, onLogout }) => {
           <table className="pac-table">
             <thead>
               <tr>
-                <th style={{ width: '80px' }}>Task Code</th>
+                <th style={{ width: '120px' }}>Task Code</th>
                 <th style={{ width: '180px' }}>Task / Activity Name</th>
-                <th style={{ width: '150px' }}>Assignee</th>
+                <th style={{ width: '150px' }}>Executor</th>
                 <th style={{ width: '150px' }}>Reviewer</th>
                 <th style={{ width: '150px' }}>Approver</th>
                 <th style={{ width: '100px' }}>Status</th>
@@ -1140,24 +1464,20 @@ const ProjectAccess = ({ userRole, onLogout }) => {
                           <span className="pac-milestone-toggle">
                             {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                           </span>
-                          <span className="pac-milestone-id">{milestone.id}</span>
                           <span className="pac-milestone-name">{milestone.name}</span>
                           <span className="pac-milestone-count">{milestone.tasks?.length || 0} tasks</span>
                         </div>
                       </td>
                     </tr>
                     {isExpanded && milestone.tasks?.map((task) => {
-                      const hasReviewer = task.reviewer && task.reviewer !== 'Unassigned';
-                      const hasApprover = task.approver && task.approver !== 'Unassigned';
-
                       return (
                         <tr key={task.id} className="pac-task-row">
-                          <td><span className="pac-task-code">{task.id}</span></td>
+                          <td><span className="pac-task-code">{task.taskCode || task.id}</span></td>
                           <td>{task.name}</td>
-                          <td>{renderPerson(task.assignee, 'assignee', task)}</td>
-                          <td>{renderPerson(hasReviewer ? task.reviewer : null, 'reviewer', task)}</td>
-                          <td>{renderPerson(hasApprover ? task.approver : null, 'approver', task)}</td>
-                          <td><span className={`pac-status-badge pac-status-${getStatusColor(task.status)}`}>{task.status}</span></td>
+                          <td>{renderTaskPerson(task.assignee, 'assignee', task.id)}</td>
+                          <td>{renderTaskPerson(task.reviewer, 'reviewer', task.id)}</td>
+                          <td>{renderTaskPerson(task.approver, 'approver', task.id)}</td>
+                          <td>{renderStatusBadge(task.status)}</td>
                           <td style={{ textAlign: 'center' }}>{renderTaskCheckbox(task.id, 'view')}</td>
                           <td style={{ textAlign: 'center' }}>{renderTaskCheckbox(task.id, 'create')}</td>
                           <td style={{ textAlign: 'center' }}>{renderTaskCheckbox(task.id, 'edit')}</td>
@@ -1177,9 +1497,10 @@ const ProjectAccess = ({ userRole, onLogout }) => {
 
   // ── RENDER: Employee View ──
   const renderEmployeeView = () => {
-    const projectEmployees = employees.filter(e => selectedEmployees?.includes(e.id));
+    const projectEmployees = employees.filter(e => selectedEmployees?.map(id => String(id)).includes(String(e.id)));
+    const displayEmployees = showEditPermissions ? employees : projectEmployees;
 
-    if (!projectEmployees || projectEmployees.length === 0) {
+    if (!displayEmployees || displayEmployees.length === 0) {
       return <div className="pac-empty-state"><Users size={48} /><h4>No Employees</h4></div>;
     }
 
@@ -1201,30 +1522,18 @@ const ProjectAccess = ({ userRole, onLogout }) => {
           </div>
         </div>
         <div className="pac-employee-grid">
-          {projectEmployees.map(emp => {
+          {displayEmployees.map(emp => {
             const taskCount = getEmployeeTaskCount(emp.id);
-            
-            // Calculate aggregate permissions from savedAccessGroups
-            let perms = { view: false, create: false, edit: false, delete: false };
-            if (savedAccessGroups) {
-              savedAccessGroups.forEach(group => {
-                group.screens.forEach(s => {
-                  if (s.view === 'blue' || s.view === 'green') perms.view = true;
-                  if (s.create === 'blue' || s.create === 'green') perms.create = true;
-                  if (s.edit === 'blue' || s.edit === 'green') perms.edit = true;
-                  if (s.delete === 'blue' || s.delete === 'green') perms.delete = true;
-                });
-              });
-            }
+            const isOnTeam = selectedEmployees?.map(id => String(id)).includes(String(emp.id));
             
             return (
-              <div key={emp.id} className="pac-employee-card-enhanced">
+              <div key={emp.id} className={`pac-employee-card-enhanced ${!isOnTeam ? 'not-on-team' : ''}`} style={{ opacity: isOnTeam ? 1 : 0.6 }}>
                 <div className="pac-emp-card-header">
                   <div className="pac-emp-avatar-wrapper">
-                    <div className="pac-emp-avatar-enhanced" style={{ background: '#2563eb' }}>
+                    <div className="pac-emp-avatar-enhanced" style={{ background: isOnTeam ? '#2563eb' : '#94a3b8' }}>
                       {emp.name.split(' ').map(n => n[0]).join('')}
                     </div>
-                    {taskCount > 0 && (
+                    {isOnTeam && taskCount > 0 && (
                       <div className="pac-emp-task-indicator" title={`${taskCount} tasks assigned`}>
                         {taskCount}
                       </div>
@@ -1242,37 +1551,55 @@ const ProjectAccess = ({ userRole, onLogout }) => {
                   <div className="pac-emp-dept">
                     <Building2 size={14} /> <span>{emp.department}</span>
                   </div>
-                  <div className="pac-emp-task-count">
-                    <FileText size={14} />
-                    <span>{taskCount} task(s) assigned</span>
-                    {taskCount > 0 && (
-                      <span className="pac-emp-task-warning">⚠️</span>
-                    )}
-                  </div>
-                  <div className="pac-emp-permissions-summary">
-                    <div className="pac-emp-perms-header">
-                      <Shield size={14} /> <span>Access Permissions</span>
-                    </div>
-                    <div className="pac-emp-perms-badges">
-                      {perms.view && <span className="pac-emp-perm-badge view"><Eye size={12} /> View</span>}
-                      {perms.create && <span className="pac-emp-perm-badge create" style={{background:'#dcfce7', color:'#166534'}}><Plus size={12} /> Create</span>}
-                      {perms.edit && <span className="pac-emp-perm-badge edit"><Edit size={12} /> Edit</span>}
-                      {perms.delete && <span className="pac-emp-perm-badge delete" style={{background:'#fee2e2', color:'#991b1b'}}><Trash2 size={12} /> Delete</span>}
-                      {!perms.view && !perms.create && !perms.edit && !perms.delete && (
-                        <span className="pac-emp-perm-badge" style={{background:'#f1f5f9', color:'#64748b'}}>No Access</span>
+                  {isOnTeam ? (
+                    <div className="pac-emp-task-count">
+                      <FileText size={14} />
+                      <span>{taskCount} task(s) assigned</span>
+                      {taskCount > 0 && (
+                        <span className="pac-emp-task-warning">⚠️</span>
                       )}
                     </div>
-                  </div>
+                  ) : (
+                    <div className="pac-emp-task-count">
+                      <Minus size={14} />
+                      <span>Not on project team</span>
+                    </div>
+                  )}
                 </div>
                 {showEditPermissions && (
                   <div className="pac-emp-card-footer">
-                    <button 
-                      className={`pac-emp-remove-btn ${taskCount > 0 ? 'has-tasks' : ''}`}
-                      onClick={() => handleRemoveEmployee(emp.id)}
-                    >
-                      <UserMinus size={14} /> 
-                      Remove{taskCount > 0 ? ` (${taskCount} tasks)` : ''}
-                    </button>
+                    {isOnTeam ? (
+                      <button 
+                        className={`pac-emp-remove-btn ${taskCount > 0 ? 'has-tasks' : ''}`}
+                        onClick={() => handleRemoveEmployee(emp.id)}
+                      >
+                        <UserMinus size={14} /> 
+                        Remove{taskCount > 0 ? ` (${taskCount} tasks)` : ''}
+                      </button>
+                    ) : (
+                      <button 
+                        className="pac-emp-add-btn"
+                        onClick={() => handleAddEmployee(emp.id)}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          padding: '6px 12px',
+                          background: '#10b981',
+                          border: 'none',
+                          borderRadius: '6px',
+                          color: 'white',
+                          fontSize: '12px',
+                          fontWeight: '500',
+                          cursor: 'pointer',
+                          width: '100%',
+                          justifyContent: 'center'
+                        }}
+                      >
+                        <UserPlus size={14} /> 
+                        Add Employee
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -1567,11 +1894,53 @@ const ProjectAccess = ({ userRole, onLogout }) => {
                       style={{ cursor: 'pointer' }}
                     >
                       <td>
-                        <div className="pac-group-name">
-                          {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                          <group.icon size={16} className="pac-group-icon" />
-                          <span>{group.name}</span>
-                          <span className="pac-group-count">({group.screens.length} screens)</span>
+                        <div className="pac-group-name" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center' }}>
+                            {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                            <group.icon size={16} className="pac-group-icon" />
+                            <span>{group.name}</span>
+                            <span className="pac-group-count" style={{ marginLeft: '4px' }}>({group.screens.length} screens)</span>
+                          </div>
+                          <div className="pac-screen-users-avatars" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', marginLeft: '8px' }}>
+                            {getGroupUsers(group.id, group.screens).map(u => (
+                              <div
+                                key={u.id}
+                                title={`${u.name} has access`}
+                                style={{
+                                  width: '26px',
+                                  height: '26px',
+                                  borderRadius: '50%',
+                                  overflow: 'hidden',
+                                  border: '2px solid white',
+                                  boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                                  cursor: 'pointer',
+                                  flexShrink: 0
+                                }}
+                              >
+                                {u.photoUrl ? (
+                                  <img
+                                    src={u.photoUrl}
+                                    alt={u.name}
+                                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                    onError={e => { e.target.style.display='none'; e.target.nextSibling.style.display='flex'; }}
+                                  />
+                                ) : null}
+                                <div style={{
+                                  display: u.photoUrl ? 'none' : 'flex',
+                                  width: '100%',
+                                  height: '100%',
+                                  background: u.avatarColor,
+                                  color: 'white',
+                                  fontSize: '9px',
+                                  fontWeight: 'bold',
+                                  alignItems: 'center',
+                                  justifyContent: 'center'
+                                }}>
+                                  {u.initials}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       </td>
                       <td style={{ textAlign: 'center' }}>{group.screens.length}</td>
@@ -1597,9 +1966,51 @@ const ProjectAccess = ({ userRole, onLogout }) => {
                     {isExpanded && group.screens.map((screen) => (
                       <tr key={screen.id} className="pac-screen-row">
                         <td className="pac-screen-name">
-                          <div className="pac-screen-indent">
-                            <FileText size={14} className="pac-screen-icon" />
-                            <span>{screen.name}</span>
+                          <div className="pac-screen-indent" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center' }}>
+                              <FileText size={14} className="pac-screen-icon" />
+                              <span>{screen.name}</span>
+                            </div>
+                            <div className="pac-screen-users-avatars" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', marginLeft: '8px' }}>
+                              {getScreenUsers(screen.id, screen.name).map(u => (
+                                <div
+                                  key={u.id}
+                                  title={`${u.name} has access`}
+                                  style={{
+                                    width: '24px',
+                                    height: '24px',
+                                    borderRadius: '50%',
+                                    overflow: 'hidden',
+                                    border: '2px solid white',
+                                    boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                                    cursor: 'pointer',
+                                    flexShrink: 0
+                                  }}
+                                >
+                                  {u.photoUrl ? (
+                                    <img
+                                      src={u.photoUrl}
+                                      alt={u.name}
+                                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                      onError={e => { e.target.style.display='none'; e.target.nextSibling.style.display='flex'; }}
+                                    />
+                                  ) : null}
+                                  <div style={{
+                                    display: u.photoUrl ? 'none' : 'flex',
+                                    width: '100%',
+                                    height: '100%',
+                                    background: u.avatarColor,
+                                    color: 'white',
+                                    fontSize: '8px',
+                                    fontWeight: 'bold',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                  }}>
+                                    {u.initials}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
                           </div>
                         </td>
                         <td></td>
@@ -1632,25 +2043,8 @@ const ProjectAccess = ({ userRole, onLogout }) => {
     );
   };
 
-  // ── RENDER: Add Employee Modal ──
   const renderAddEmployeeModal = () => {
     if (!showAddEmployeeModal) return null;
-
-    const getInitials = (name) => {
-      return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
-    };
-
-    const getAvatarColor = (name) => {
-      const colors = [
-        '#2563eb', '#7c3aed', '#0ea5e9', '#10b981', '#f59e0b', 
-        '#ef4444', '#8b5cf6', '#14b8a6', '#f472b6', '#6366f1'
-      ];
-      let hash = 0;
-      for (let i = 0; i < name.length; i++) {
-        hash = name.charCodeAt(i) + ((hash << 5) - hash);
-      }
-      return colors[Math.abs(hash) % colors.length];
-    };
 
     return (
       <div className="pac-popup-overlay" onClick={() => { setShowAddEmployeeModal(false); setEmployeeSearchTerm(''); }}>
@@ -1776,167 +2170,6 @@ const ProjectAccess = ({ userRole, onLogout }) => {
     );
   };
 
-  // ── RENDER: Task Assign Modal ──
-  const renderTaskAssignModal = () => {
-    if (!showTaskAssignModal || !taskAssignTarget) return null;
-
-    const projectEmployees = employees.filter(e => selectedEmployees?.includes(e.id));
-    const availableEmployees = projectEmployees.length > 0 ? projectEmployees : employees;
-
-    const filtered = availableEmployees.filter(emp => {
-      // Exclude employee if they are already assigned to another role (e.g. assignee, reviewer, approver) on the same task
-      const task = taskAssignTarget.task;
-      const currentRole = taskAssignTarget.role;
-      const rolesToCheck = ['assignee', 'reviewer', 'approver'].filter(r => r !== currentRole);
-
-      const isAssignedToOtherRole = rolesToCheck.some(r => {
-        const val = task[r];
-        if (!val || val === '—' || val === 'Unassigned') return false;
-        
-        // Match by employee code (e.g., "EMP1012") or employee ID
-        const codeMatch = emp.code ? `(${emp.code})` : `(EMP${emp.id})`;
-        if (val.includes(codeMatch)) return true;
-
-        // Fallback name comparison
-        const namePart = val.split(' (')[0].trim();
-        return namePart.toLowerCase() === emp.name.toLowerCase();
-      });
-
-      if (isAssignedToOtherRole) return false;
-
-      return emp.name.toLowerCase().includes(taskAssignSearchTerm.toLowerCase()) ||
-        emp.id.toLowerCase().includes(taskAssignSearchTerm.toLowerCase()) ||
-        emp.designation.toLowerCase().includes(taskAssignSearchTerm.toLowerCase());
-    });
-
-    const handleAssign = async (empId) => {
-      const emp = employees.find(e => e.id === empId);
-      setLoading(true);
-      try {
-        // Optimistically update the UI to show the new assignment
-        const newMilestones = milestones.map(m => {
-          return {
-            ...m,
-            tasks: m.tasks.map(t => {
-              if (t.id === taskAssignTarget.task.id) {
-                const newName = `${emp.name} (${emp.code || `EMP${emp.id}`})`;
-                return {
-                  ...t,
-                  [taskAssignTarget.role]: newName
-                };
-              }
-              return t;
-            })
-          };
-        });
-        setMilestones(newMilestones);
-        
-        showAlert('success', 'Assigned', `${emp.name} has been assigned as ${taskAssignTarget.role} for task ${taskAssignTarget.task.id}.`);
-        setShowTaskAssignModal(false);
-        setTaskAssignSearchTerm('');
-      } catch (err) {
-        showAlert('error', 'Error', 'Failed to assign employee.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    return (
-      <div className="pac-popup-overlay" onClick={() => { setShowTaskAssignModal(false); setTaskAssignSearchTerm(''); }}>
-        <div className="pac-popup-container" onClick={(e) => e.stopPropagation()}>
-          <div className="pac-popup-window">
-            <div className="pac-popup-header">
-              <div className="pac-popup-header-left">
-                <div className="pac-popup-icon-box">
-                  <UserPlus size={22} />
-                </div>
-                <div>
-                  <h3 className="pac-popup-title" style={{ textTransform: 'capitalize' }}>Assign {taskAssignTarget.role}</h3>
-                  <p className="pac-popup-subtitle">
-                    Select a team member for <strong>{taskAssignTarget.task.name}</strong>
-                  </p>
-                </div>
-              </div>
-              <button className="pac-popup-close" onClick={() => { setShowTaskAssignModal(false); setTaskAssignSearchTerm(''); }}>
-                <X size={20} />
-              </button>
-            </div>
-
-            <div className="pac-popup-body">
-              <div className="pac-popup-search">
-                <div className="pac-popup-search-box">
-                  <Search size={18} className="pac-popup-search-icon" />
-                  <input 
-                    type="text" 
-                    placeholder="Search team members..." 
-                    value={taskAssignSearchTerm}
-                    onChange={(e) => setTaskAssignSearchTerm(e.target.value)}
-                    className="pac-popup-search-input"
-                    autoFocus
-                  />
-                  {taskAssignSearchTerm && (
-                    <button className="pac-popup-search-clear" onClick={() => setTaskAssignSearchTerm('')}>
-                      <X size={16} />
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              <div className="pac-popup-list-wrapper">
-                {filtered.length === 0 ? (
-                  <div className="pac-popup-empty">
-                    <div className="pac-popup-empty-icon">👥</div>
-                    <h4>No Members Found</h4>
-                  </div>
-                ) : (
-                  <div className="pac-popup-list">
-                    {filtered.map((emp) => {
-                      const getInitials = (name) => name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
-                      const getAvatarColor = (name) => {
-                        const colors = ['#2563eb', '#7c3aed', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
-                        let hash = 0;
-                        for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
-                        return colors[Math.abs(hash) % colors.length];
-                      };
-
-                      return (
-                        <div key={emp.id} className="pac-popup-item" onClick={() => handleAssign(emp.id)} style={{ cursor: 'pointer' }}>
-                          <div className="pac-popup-item-avatar" style={{ background: getAvatarColor(emp.name) }}>
-                            {getInitials(emp.name)}
-                          </div>
-                          <div className="pac-popup-item-info">
-                            <div className="pac-popup-item-name">{emp.name}</div>
-                            <div className="pac-popup-item-details">
-                              <span className="pac-popup-item-id">{emp.id}</span>
-                              <span className="pac-popup-item-role">{emp.designation}</span>
-                            </div>
-                          </div>
-                          <button className="pac-popup-item-add"><Plus size={16} /> Assign</button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            </div>
-            
-            <div className="pac-popup-footer">
-              <span className="pac-popup-footer-info">
-                {filtered.length} member(s) available
-              </span>
-              <button 
-                className="pac-popup-footer-cancel"
-                onClick={() => { setShowTaskAssignModal(false); setTaskAssignSearchTerm(''); }}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
   // ── RENDER: Project Detail ──
   const renderProjectDetailView = () => {
     if (!selectedProject) return null;
@@ -1955,21 +2188,17 @@ const ProjectAccess = ({ userRole, onLogout }) => {
             </span>
           </div>
           <div className="pac-detail-actions">
-            {!showEditPermissions ? (
-              <button 
-                className="pac-btn-primary"
-                onClick={() => setShowEditPermissions(true)}
-              >
-                <Pencil size={16} /> Edit Permissions
-              </button>
-            ) : (
+            <button 
+              className={`pac-btn-${showEditPermissions ? 'success' : 'primary'}`}
+              onClick={() => setShowEditPermissions(!showEditPermissions)}
+            >
+              {showEditPermissions ? <Check size={16} /> : <Pencil size={16} />}
+              {showEditPermissions ? ' Done' : ' Edit Permissions'}
+            </button>
+            {showEditPermissions && (
               <button 
                 className="pac-btn-primary" 
-                onClick={() => {
-                  setSavedAccessGroups(JSON.parse(JSON.stringify(accessGroups)));
-                  showAlert('success', 'Saved', 'Permissions saved successfully!');
-                  setShowEditPermissions(false);
-                }}
+                onClick={handleSaveChanges}
               >
                 <Save size={16} /> Save Changes
               </button>
@@ -1979,7 +2208,6 @@ const ProjectAccess = ({ userRole, onLogout }) => {
 
         <div className="pac-detail-info">
           <div className="pac-detail-info-grid">
-            <div className="pac-detail-info-item"><label>Manager</label><p><User size={14} /> {selectedProject.manager}</p></div>
             <div className="pac-detail-info-item"><label>Department</label><p><Building2 size={14} /> {selectedProject.department}</p></div>
             <div className="pac-detail-info-item"><label>Dates</label><p>{selectedProject.startDate} → {selectedProject.endDate}</p></div>
             <div className="pac-detail-info-item">
@@ -2040,24 +2268,13 @@ const ProjectAccess = ({ userRole, onLogout }) => {
         />
         <main className="cc-main">
           <div className="pac-container">
-            {loading ? (
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '350px', color: '#64748b' }}>
-                <div style={{ width: '40px', height: '40px', border: '4px solid #cbd5e1', borderTopColor: '#2563eb', borderRadius: '50%', animation: 'spin 1s linear infinite', marginBottom: '12px' }}></div>
-                <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-                <p style={{ fontWeight: '500' }}>Loading project data...</p>
-              </div>
-            ) : (
-              currentView === 'projects' ? renderProjectsView() : renderProjectDetailView()
-            )}
+            {currentView === 'projects' ? renderProjectsView() : renderProjectDetailView()}
           </div>
         </main>
       </div>
 
       {/* Add Employee Modal */}
       {renderAddEmployeeModal()}
-      
-      {/* Task Assign Modal */}
-      {renderTaskAssignModal()}
 
       {/* Alert Modal */}
       <AlertModal

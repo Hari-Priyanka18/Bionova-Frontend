@@ -1,4 +1,4 @@
-// src/pages/AssignAccess.jsx
+// src/components/Projectmanager/AssignAccess.jsx
 import React, { useState, useEffect } from 'react';
 import {
   Search, Check, Folder, Shield, ArrowRight, 
@@ -6,11 +6,16 @@ import {
   FileText, Minus, Users, User, Building2, Settings, 
   CheckCircle2, ChevronLeft, Copy, Bookmark, UserPlus, UserMinus,
   Edit, AlertCircle, BarChart2, Trash2, Pencil, Copy as CopyIcon,
-  Users as UsersIcon, FileText as FileTextIcon, ArrowLeft
+  Users as UsersIcon, FileText as FileTextIcon, ArrowLeft,
+  LayoutGrid, List, Eye as EyeIcon
 } from 'lucide-react';
+
+// ── Components ──
 import Sidebar from '../Sidebar';
 import Header from '../Header';
 import AlertModal from '../AlertModal';
+
+// ── Styles ──
 import '../../styles/AssignAcess.css';
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL;
@@ -23,25 +28,23 @@ const getAuthHeaders = () => {
   };
 };
 
-// Screen definitions with their permission keys
-const SCREEN_GROUPS = [];
+// Permission state types
+const PERMISSION_STATES = {
+  EMPTY: 'empty',
+  BLUE: 'blue',
+  GREEN: 'green',
+  RED: 'red'
+};
 
 const PERMISSION_TYPES = ['view', 'create', 'edit', 'delete'];
 
-// Permission state types
-const PERMISSION_STATES = {
-  EMPTY: 'empty',      // No Access
-  BLUE: 'blue',        // From Template
-  GREEN: 'green',      // Extra Added
-  RED: 'red'           // Revoked
-};
-
 const AssignAccess = ({ userRole, onLogout }) => {
   // ── State ──
+  const [pageMode, setPageMode] = useState('direct');
+  const [currentStep, setCurrentStep] = useState(1);
   const [employees, setEmployees] = useState([]);
   const [templates, setTemplates] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [currentStep, setCurrentStep] = useState(1);
   const [selectedEmployees, setSelectedEmployees] = useState([]);
   const [selectedTemplate, setSelectedTemplate] = useState(null);
   const [accessGroups, setAccessGroups] = useState([]);
@@ -62,16 +65,18 @@ const AssignAccess = ({ userRole, onLogout }) => {
     message: ''
   });
   
-  // ── New States for Mode Selection ──
-  const [pageMode, setPageMode] = useState('direct'); // 'direct' or 'template'
-  const [showEditTemplateModal, setShowEditTemplateModal] = useState(false);
-  const [templateToEdit, setTemplateToEdit] = useState(null);
-  const [saveAsDraft, setSaveAsDraft] = useState(false);
+  // ── Manage Access States ──
+  const [manageSearchTerm, setManageSearchTerm] = useState('');
+  const [employeePermissions, setEmployeePermissions] = useState([]);
+  const [showViewModal, setShowViewModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [templateToDelete, setTemplateToDelete] = useState(null);
-  const [updateOrSaveModal, setUpdateOrSaveModal] = useState(false);
-  const [templateUpdateChoice, setTemplateUpdateChoice] = useState(null);
-
+  const [selectedEmployee, setSelectedEmployee] = useState(null);
+  const [editAccessGroups, setEditAccessGroups] = useState([]);
+  const [editExpandedGroups, setEditExpandedGroups] = useState({});
+  const [editSearchTerm, setEditSearchTerm] = useState('');
+  const [editLoading, setEditLoading] = useState(false);
+  
   // ── Template Edit Flow States ──
   const [isTemplateEditMode, setIsTemplateEditMode] = useState(false);
   const [templateEditStep, setTemplateEditStep] = useState(1);
@@ -83,7 +88,7 @@ const AssignAccess = ({ userRole, onLogout }) => {
   const [templateEditIsDraft, setTemplateEditIsDraft] = useState(false);
   const [templateEditOriginalTemplate, setTemplateEditOriginalTemplate] = useState(null);
 
-  // ── NEW: Create Template Flow States ──
+  // ── Create Template Flow States ──
   const [isCreateTemplateMode, setIsCreateTemplateMode] = useState(false);
   const [createTemplateStep, setCreateTemplateStep] = useState(1);
   const [createTemplateGroups, setCreateTemplateGroups] = useState([]);
@@ -92,6 +97,14 @@ const AssignAccess = ({ userRole, onLogout }) => {
   const [createTemplateName, setCreateTemplateName] = useState('');
   const [createTemplateDescription, setCreateTemplateDescription] = useState('');
   const [createTemplateIsDraft, setCreateTemplateIsDraft] = useState(false);
+
+  // ── Other States ──
+  const [showEditTemplateModal, setShowEditTemplateModal] = useState(false);
+  const [templateToEdit, setTemplateToEdit] = useState(null);
+  const [saveAsDraft, setSaveAsDraft] = useState(false);
+  const [templateToDelete, setTemplateToDelete] = useState(null);
+  const [updateOrSaveModal, setUpdateOrSaveModal] = useState(false);
+  const [templateUpdateChoice, setTemplateUpdateChoice] = useState(null);
 
   // ── Alert System ──
   const triggerAlert = (type, title, message) => {
@@ -103,7 +116,6 @@ const AssignAccess = ({ userRole, onLogout }) => {
   };
 
   // ── Fetch Data ──
-  // ── Fetch Data ──
   useEffect(() => {
     const init = async () => {
       setLoading(true);
@@ -113,13 +125,13 @@ const AssignAccess = ({ userRole, onLogout }) => {
       if (groupsList && groupsList.length > 0) {
         initializeAccessGroups(groupsList);
       }
+      await fetchAllEmployeePermissions();
       setLoading(false);
     };
     init();
   }, []);
 
   const fetchEmployees = async () => {
-    setLoading(true);
     try {
       const response = await fetch(`${apiBaseUrl}/api/employees`, {
         headers: getAuthHeaders()
@@ -136,8 +148,6 @@ const AssignAccess = ({ userRole, onLogout }) => {
     } catch (err) {
       console.error('Error fetching employees:', err);
       triggerAlert('error', 'Error', 'Failed to load employees.');
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -198,7 +208,8 @@ const AssignAccess = ({ userRole, onLogout }) => {
           name: r.roleNm,
           description: `Database Template: ${r.roleNm}`,
           isDraft: false,
-          permissionsCount: r.permissionsCount || 0
+          permissionsCount: r.permissionsCount || 0,
+          createdBy: r.createdBy || 'System'
         }));
         setTemplates(mapped);
       }
@@ -207,7 +218,54 @@ const AssignAccess = ({ userRole, onLogout }) => {
     }
   };
 
-  // ── Initialize Access Groups ──
+  // ── IMPORTANT: Fetch only employees with at least ONE permission ──
+  const fetchAllEmployeePermissions = async () => {
+    try {
+      const response = await fetch(`${apiBaseUrl}/api/rbac/employees/permissions`, {
+        headers: getAuthHeaders()
+      });
+      if (response.ok) {
+        const data = await response.json();
+        // Only include employees who have at least ONE permission
+        const filteredData = data.filter(emp => 
+          emp.permissions && 
+          Array.isArray(emp.permissions) && 
+          emp.permissions.some(p => p.viewFlg || p.addFlg || p.editFlg || p.deleteFlg || p.view || p.create || p.edit || p.delete)
+        );
+        console.log('Employees with access:', filteredData.map(e => ({ name: e.name, count: e.permissions?.filter(p => p.viewFlg || p.addFlg || p.editFlg || p.deleteFlg)?.length })));
+        setEmployeePermissions(filteredData);
+      } else {
+        const perms = [];
+        for (const emp of employees) {
+          const empId = emp.empId || emp.id;
+          try {
+            const res = await fetch(`${apiBaseUrl}/api/rbac/employees/${empId}/permissions`, {
+              headers: getAuthHeaders()
+            });
+            if (res.ok) {
+              const p = await res.json();
+              if (p && Array.isArray(p) && p.some(item => item.viewFlg || item.addFlg || item.editFlg || item.deleteFlg || item.view || item.create || item.edit || item.delete)) {
+                perms.push({
+                  employeeId: empId,
+                  name: `${emp.fstNm || emp.firstName || ''} ${emp.lstNm || emp.lastName || ''}`.trim(),
+                  code: emp.empCode || emp.employeeCode || '',
+                  email: emp.email || '',
+                  role: emp.role || emp.designation || 'Employee',
+                  permissions: p
+                });
+              }
+            }
+          } catch (e) {
+            console.error(`Error fetching permissions for employee ${empId}:`, e);
+          }
+        }
+        setEmployeePermissions(perms);
+      }
+    } catch (err) {
+      console.error('Error fetching employee permissions:', err);
+    }
+  };
+
   const initializeAccessGroups = (groupsList = dbScreenGroups) => {
     const groups = groupsList.map(group => {
       const screens = group.screens.map(screen => ({
@@ -235,7 +293,97 @@ const AssignAccess = ({ userRole, onLogout }) => {
     setExpandedGroups({ [groups[0]?.id]: true });
   };
 
-  // ── Initialize Empty Create Template Groups ──
+  const initializeEditAccessGroups = (permissionsList) => {
+    const groups = dbScreenGroups.map(group => {
+      let groupHasView = false;
+      let groupHasCreate = false;
+      let groupHasEdit = false;
+      let groupHasDelete = false;
+
+      const screens = group.screens.map(screen => {
+        const perms = permissionsList?.find(p => p.screenId === screen.id);
+        if (perms) {
+          const view = perms.viewFlg ? PERMISSION_STATES.BLUE : PERMISSION_STATES.EMPTY;
+          const create = perms.addFlg ? PERMISSION_STATES.BLUE : PERMISSION_STATES.EMPTY;
+          const edit = perms.editFlg ? PERMISSION_STATES.BLUE : PERMISSION_STATES.EMPTY;
+          const delete_ = perms.deleteFlg ? PERMISSION_STATES.BLUE : PERMISSION_STATES.EMPTY;
+          
+          if (view === PERMISSION_STATES.BLUE) groupHasView = true;
+          if (create === PERMISSION_STATES.BLUE) groupHasCreate = true;
+          if (edit === PERMISSION_STATES.BLUE) groupHasEdit = true;
+          if (delete_ === PERMISSION_STATES.BLUE) groupHasDelete = true;
+
+          const hasBlue = view === PERMISSION_STATES.BLUE || create === PERMISSION_STATES.BLUE || 
+                          edit === PERMISSION_STATES.BLUE || delete_ === PERMISSION_STATES.BLUE;
+          const hasEmpty = view === PERMISSION_STATES.EMPTY || create === PERMISSION_STATES.EMPTY || 
+                          edit === PERMISSION_STATES.EMPTY || delete_ === PERMISSION_STATES.EMPTY;
+          
+          let badge = 'orange';
+          let badgeText = 'No Access';
+          
+          if (hasBlue && hasEmpty) {
+            badge = 'orange';
+            badgeText = 'Mixed';
+          } else if (hasBlue) {
+            badge = 'blue';
+            badgeText = 'From Template';
+          }
+          
+          return {
+            ...screen,
+            view,
+            create,
+            edit,
+            delete: delete_,
+            badge,
+            badgeText
+          };
+        }
+        return {
+          ...screen,
+          view: PERMISSION_STATES.EMPTY,
+          create: PERMISSION_STATES.EMPTY,
+          edit: PERMISSION_STATES.EMPTY,
+          delete: PERMISSION_STATES.EMPTY,
+          badge: 'orange',
+          badgeText: 'No Access'
+        };
+      });
+
+      const groupHasBlue = screens.some(s => 
+        PERMISSION_TYPES.some(p => s[p] === PERMISSION_STATES.BLUE)
+      );
+      const groupHasEmpty = screens.some(s => 
+        PERMISSION_TYPES.some(p => s[p] === PERMISSION_STATES.EMPTY)
+      );
+      
+      let groupBadge = 'orange';
+      let groupBadgeText = 'No Access';
+      
+      if (groupHasBlue && groupHasEmpty) {
+        groupBadge = 'orange';
+        groupBadgeText = 'Mixed';
+      } else if (groupHasBlue) {
+        groupBadge = 'blue';
+        groupBadgeText = 'From Template';
+      }
+
+      return {
+        ...group,
+        screens,
+        view: groupHasView ? PERMISSION_STATES.BLUE : PERMISSION_STATES.EMPTY,
+        create: groupHasCreate ? PERMISSION_STATES.BLUE : PERMISSION_STATES.EMPTY,
+        edit: groupHasEdit ? PERMISSION_STATES.BLUE : PERMISSION_STATES.EMPTY,
+        delete: groupHasDelete ? PERMISSION_STATES.BLUE : PERMISSION_STATES.EMPTY,
+        badge: groupBadge,
+        badgeText: groupBadgeText
+      };
+    });
+    
+    setEditAccessGroups(groups);
+    setEditExpandedGroups({ [groups[0]?.id]: true });
+  };
+
   const initializeCreateTemplateGroups = (groupsList = dbScreenGroups) => {
     const groups = groupsList.map(group => {
       const screens = group.screens.map(screen => ({
@@ -263,6 +411,97 @@ const AssignAccess = ({ userRole, onLogout }) => {
     setCreateTemplateExpandedGroups({ [groups[0]?.id]: true });
   };
 
+  const initializeTemplateEditGroups = (template) => {
+    const groups = dbScreenGroups.map(group => {
+      let groupHasView = false;
+      let groupHasCreate = false;
+      let groupHasEdit = false;
+      let groupHasDelete = false;
+
+      const screens = group.screens.map(screen => {
+        const perms = template.permissions?.[screen.id];
+        if (perms) {
+          const view = perms.view ? PERMISSION_STATES.BLUE : PERMISSION_STATES.EMPTY;
+          const create = perms.create ? PERMISSION_STATES.BLUE : PERMISSION_STATES.EMPTY;
+          const edit = perms.edit ? PERMISSION_STATES.BLUE : PERMISSION_STATES.EMPTY;
+          const delete_ = perms.delete ? PERMISSION_STATES.BLUE : PERMISSION_STATES.EMPTY;
+          
+          if (view === PERMISSION_STATES.BLUE) groupHasView = true;
+          if (create === PERMISSION_STATES.BLUE) groupHasCreate = true;
+          if (edit === PERMISSION_STATES.BLUE) groupHasEdit = true;
+          if (delete_ === PERMISSION_STATES.BLUE) groupHasDelete = true;
+
+          const hasBlue = view === PERMISSION_STATES.BLUE || create === PERMISSION_STATES.BLUE || 
+                          edit === PERMISSION_STATES.BLUE || delete_ === PERMISSION_STATES.BLUE;
+          const hasEmpty = view === PERMISSION_STATES.EMPTY || create === PERMISSION_STATES.EMPTY || 
+                          edit === PERMISSION_STATES.EMPTY || delete_ === PERMISSION_STATES.EMPTY;
+          
+          let badge = 'orange';
+          let badgeText = 'No Access';
+          
+          if (hasBlue && hasEmpty) {
+            badge = 'orange';
+            badgeText = 'Mixed';
+          } else if (hasBlue) {
+            badge = 'blue';
+            badgeText = 'From Template';
+          }
+          
+          return {
+            ...screen,
+            view,
+            create,
+            edit,
+            delete: delete_,
+            badge,
+            badgeText
+          };
+        }
+        return {
+          ...screen,
+          view: PERMISSION_STATES.EMPTY,
+          create: PERMISSION_STATES.EMPTY,
+          edit: PERMISSION_STATES.EMPTY,
+          delete: PERMISSION_STATES.EMPTY,
+          badge: 'orange',
+          badgeText: 'No Access'
+        };
+      });
+
+      const groupHasBlue = screens.some(s => 
+        PERMISSION_TYPES.some(p => s[p] === PERMISSION_STATES.BLUE)
+      );
+      const groupHasEmpty = screens.some(s => 
+        PERMISSION_TYPES.some(p => s[p] === PERMISSION_STATES.EMPTY)
+      );
+      
+      let groupBadge = 'orange';
+      let groupBadgeText = 'No Access';
+      
+      if (groupHasBlue && groupHasEmpty) {
+        groupBadge = 'orange';
+        groupBadgeText = 'Mixed';
+      } else if (groupHasBlue) {
+        groupBadge = 'blue';
+        groupBadgeText = 'From Template';
+      }
+
+      return {
+        ...group,
+        screens,
+        view: groupHasView ? PERMISSION_STATES.BLUE : PERMISSION_STATES.EMPTY,
+        create: groupHasCreate ? PERMISSION_STATES.BLUE : PERMISSION_STATES.EMPTY,
+        edit: groupHasEdit ? PERMISSION_STATES.BLUE : PERMISSION_STATES.EMPTY,
+        delete: groupHasDelete ? PERMISSION_STATES.BLUE : PERMISSION_STATES.EMPTY,
+        badge: groupBadge,
+        badgeText: groupBadgeText
+      };
+    });
+    
+    setTemplateEditGroups(groups);
+    setTemplateEditExpandedGroups({ [groups[0]?.id]: true });
+  };
+
   // ── Stepper Steps ──
   const steps = [
     { num: 1, title: 'Select Employees', desc: 'Choose employees to assign access' },
@@ -271,13 +510,11 @@ const AssignAccess = ({ userRole, onLogout }) => {
     { num: 4, title: 'Summary', desc: 'Review and save permissions' }
   ];
 
-  // ── Template Edit Stepper Steps ──
   const templateEditSteps = [
     { num: 1, title: 'Manage Access', desc: 'Edit template permissions' },
     { num: 2, title: 'Summary', desc: 'Review and save template' }
   ];
 
-  // ── Create Template Stepper Steps ──
   const createTemplateSteps = [
     { num: 1, title: 'Manage Access', desc: 'Add permissions to template' },
     { num: 2, title: 'Summary', desc: 'Review and save template' }
@@ -414,7 +651,6 @@ const AssignAccess = ({ userRole, onLogout }) => {
     }
   };
 
-  // ── Template Edit Navigation ──
   const handleTemplateEditNext = () => {
     if (templateEditStep < 2) {
       setTemplateEditStep(prev => prev + 1);
@@ -429,7 +665,6 @@ const AssignAccess = ({ userRole, onLogout }) => {
     }
   };
 
-  // ── Create Template Navigation ──
   const handleCreateTemplateNext = () => {
     if (createTemplateStep < 2) {
       setCreateTemplateStep(prev => prev + 1);
@@ -446,6 +681,13 @@ const AssignAccess = ({ userRole, onLogout }) => {
 
   // ── Employee Selection ──
   const toggleEmployee = (empId) => {
+    // Only allow selection if employee is not already assigned access
+    const assignedIds = employeePermissions.map(emp => emp.employeeId || emp.id);
+    const alreadyAssigned = assignedIds.includes(empId);
+    if (alreadyAssigned) {
+      triggerAlert('warning', 'Already Assigned', 'This employee already has access. Please use Manage Access mode to edit.');
+      return;
+    }
     setSelectedEmployees(prev => 
       prev.includes(empId) 
         ? prev.filter(id => id !== empId) 
@@ -459,7 +701,10 @@ const AssignAccess = ({ userRole, onLogout }) => {
   };
 
   const toggleAllEmployees = () => {
-    const filteredIds = filteredEmployees.map(emp => emp.empId || emp.id);
+    const assignedIds = employeePermissions.map(emp => emp.employeeId || emp.id);
+    const filteredIds = filteredAvailableEmployees
+      .filter(emp => !assignedIds.includes(emp.empId || emp.id))
+      .map(emp => emp.empId || emp.id);
     const allFilteredSelected = filteredIds.every(id => selectedEmployees.includes(id));
     
     if (allFilteredSelected) {
@@ -536,9 +781,6 @@ const AssignAccess = ({ userRole, onLogout }) => {
               } else if (hasBlue) {
                 badge = 'blue';
                 badgeText = 'From Template';
-              } else {
-                badge = 'orange';
-                badgeText = 'No Access';
               }
               
               return {
@@ -597,7 +839,6 @@ const AssignAccess = ({ userRole, onLogout }) => {
     }
   };
 
-  // ── Deselect Template ──
   const deselectTemplate = () => {
     setSelectedTemplate(null);
     setTemplateName('');
@@ -606,16 +847,19 @@ const AssignAccess = ({ userRole, onLogout }) => {
     triggerAlert('info', 'Template Removed', 'Template has been deselected. All permissions reset to No Access.');
   };
 
-  // ── Permission Toggle Function ──
-  const togglePermission = (groupId, screenId, permissionType, isEditMode = false, isCreateMode = false) => {
+  // ── Permission Toggle ──
+  const togglePermission = (groupId, screenId, permissionType, isEditMode = false, isCreateMode = false, isTemplateEditMode = false) => {
     let groups, setGroups;
     
-    if (isCreateMode) {
+    if (isTemplateEditMode) {
+      groups = templateEditGroups;
+      setGroups = setTemplateEditGroups;
+    } else if (isCreateMode) {
       groups = createTemplateGroups;
       setGroups = setCreateTemplateGroups;
     } else if (isEditMode) {
-      groups = templateEditGroups;
-      setGroups = setTemplateEditGroups;
+      groups = editAccessGroups;
+      setGroups = setEditAccessGroups;
     } else {
       groups = accessGroups;
       setGroups = setAccessGroups;
@@ -637,11 +881,17 @@ const AssignAccess = ({ userRole, onLogout }) => {
     
     let newState;
 
-    // ── Permission Toggle Logic ──
     if (currentState === PERMISSION_STATES.EMPTY) {
-      // In create mode, always mark as GREEN (Added)
       if (isCreateMode) {
         newState = PERMISSION_STATES.GREEN;
+      } else if (isTemplateEditMode) {
+        const origPerm = templateEditOriginalTemplate?.permissions?.[screenId];
+        const hasPermission = origPerm && origPerm[permissionType] === true;
+        if (hasPermission) {
+          newState = PERMISSION_STATES.BLUE;
+        } else {
+          newState = PERMISSION_STATES.GREEN;
+        }
       } else if (selectedTemplate && selectedTemplate.permissions && selectedTemplate.permissions[screenId]) {
         const templatePerm = selectedTemplate.permissions[screenId];
         const hasPermission = templatePerm[permissionType] === true;
@@ -658,7 +908,15 @@ const AssignAccess = ({ userRole, onLogout }) => {
     } else if (currentState === PERMISSION_STATES.BLUE) {
       newState = PERMISSION_STATES.RED;
     } else if (currentState === PERMISSION_STATES.RED) {
-      if (selectedTemplate && selectedTemplate.permissions && selectedTemplate.permissions[screenId]) {
+      if (isTemplateEditMode) {
+        const origPerm = templateEditOriginalTemplate?.permissions?.[screenId];
+        const hasPermission = origPerm && origPerm[permissionType] === true;
+        if (hasPermission) {
+          newState = PERMISSION_STATES.BLUE;
+        } else {
+          newState = PERMISSION_STATES.EMPTY;
+        }
+      } else if (selectedTemplate && selectedTemplate.permissions && selectedTemplate.permissions[screenId]) {
         const templatePerm = selectedTemplate.permissions[screenId];
         const hasPermission = templatePerm[permissionType] === true;
         if (hasPermission) {
@@ -697,10 +955,10 @@ const AssignAccess = ({ userRole, onLogout }) => {
     }
 
     const group = newGroups[groupIndex];
-    group.view = group.screens.some(s => s.view !== PERMISSION_STATES.EMPTY) ? PERMISSION_STATES.BLUE : PERMISSION_STATES.EMPTY;
-    group.create = group.screens.some(s => s.create !== PERMISSION_STATES.EMPTY) ? PERMISSION_STATES.BLUE : PERMISSION_STATES.EMPTY;
-    group.edit = group.screens.some(s => s.edit !== PERMISSION_STATES.EMPTY) ? PERMISSION_STATES.BLUE : PERMISSION_STATES.EMPTY;
-    group.delete = group.screens.some(s => s.delete !== PERMISSION_STATES.EMPTY) ? PERMISSION_STATES.BLUE : PERMISSION_STATES.EMPTY;
+    group.view = group.screens.some(s => s.view !== PERMISSION_STATES.EMPTY && s.view !== PERMISSION_STATES.RED) ? PERMISSION_STATES.BLUE : (group.screens.some(s => s.view === PERMISSION_STATES.RED) ? PERMISSION_STATES.RED : PERMISSION_STATES.EMPTY);
+    group.create = group.screens.some(s => s.create !== PERMISSION_STATES.EMPTY && s.create !== PERMISSION_STATES.RED) ? PERMISSION_STATES.BLUE : (group.screens.some(s => s.create === PERMISSION_STATES.RED) ? PERMISSION_STATES.RED : PERMISSION_STATES.EMPTY);
+    group.edit = group.screens.some(s => s.edit !== PERMISSION_STATES.EMPTY && s.edit !== PERMISSION_STATES.RED) ? PERMISSION_STATES.BLUE : (group.screens.some(s => s.edit === PERMISSION_STATES.RED) ? PERMISSION_STATES.RED : PERMISSION_STATES.EMPTY);
+    group.delete = group.screens.some(s => s.delete !== PERMISSION_STATES.EMPTY && s.delete !== PERMISSION_STATES.RED) ? PERMISSION_STATES.BLUE : (group.screens.some(s => s.delete === PERMISSION_STATES.RED) ? PERMISSION_STATES.RED : PERMISSION_STATES.EMPTY);
     
     const groupHasBlue = group.screens.some(s => 
       PERMISSION_TYPES.some(p => s[p] === PERMISSION_STATES.BLUE)
@@ -732,16 +990,18 @@ const AssignAccess = ({ userRole, onLogout }) => {
     setGroups(newGroups);
   };
 
-  // ── Group Level Permission Toggle ──
-  const toggleGroupPermission = (groupId, permissionType, isEditMode = false, isCreateMode = false) => {
+  const toggleGroupPermission = (groupId, permissionType, isEditMode = false, isCreateMode = false, isTemplateEditMode = false) => {
     let groups, setGroups;
     
-    if (isCreateMode) {
+    if (isTemplateEditMode) {
+      groups = templateEditGroups;
+      setGroups = setTemplateEditGroups;
+    } else if (isCreateMode) {
       groups = createTemplateGroups;
       setGroups = setCreateTemplateGroups;
     } else if (isEditMode) {
-      groups = templateEditGroups;
-      setGroups = setTemplateEditGroups;
+      groups = editAccessGroups;
+      setGroups = setEditAccessGroups;
     } else {
       groups = accessGroups;
       setGroups = setAccessGroups;
@@ -757,31 +1017,45 @@ const AssignAccess = ({ userRole, onLogout }) => {
 
     const group = newGroups[groupIndex];
     
-    const hasAny = group.screens.some(s => s[permissionType] !== PERMISSION_STATES.EMPTY);
-    
-    let targetState;
-    if (hasAny) {
-      targetState = PERMISSION_STATES.EMPTY;
-    } else {
-      // In create mode, always mark as GREEN
-      if (isCreateMode) {
-        targetState = PERMISSION_STATES.GREEN;
-      } else if (selectedTemplate && selectedTemplate.permissions) {
-        const hasTemplatePerm = group.screens.some(screen => {
-          const perms = selectedTemplate.permissions[screen.id];
-          return perms && perms[permissionType] === true;
-        });
-        targetState = hasTemplatePerm ? PERMISSION_STATES.BLUE : PERMISSION_STATES.GREEN;
-      } else {
-        targetState = PERMISSION_STATES.GREEN;
-      }
-    }
+    const hasAnyActive = group.screens.some(s => s[permissionType] === PERMISSION_STATES.BLUE || s[permissionType] === PERMISSION_STATES.GREEN);
 
     group.screens = group.screens.map(screen => {
-      const updatedScreen = {
-        ...screen,
-        [permissionType]: targetState
-      };
+      const updatedScreen = { ...screen };
+      let targetState;
+
+      if (hasAnyActive) {
+        if (isTemplateEditMode) {
+          const origPerm = templateEditOriginalTemplate?.permissions?.[screen.id];
+          if (origPerm && origPerm[permissionType] === true) {
+            targetState = PERMISSION_STATES.RED;
+          } else {
+            targetState = PERMISSION_STATES.EMPTY;
+          }
+        } else if (selectedTemplate && selectedTemplate.permissions && selectedTemplate.permissions[screen.id] && selectedTemplate.permissions[screen.id][permissionType]) {
+          targetState = PERMISSION_STATES.RED;
+        } else {
+          targetState = PERMISSION_STATES.EMPTY;
+        }
+      } else {
+        if (isTemplateEditMode) {
+          const origPerm = templateEditOriginalTemplate?.permissions?.[screen.id];
+          if (origPerm && origPerm[permissionType] === true) {
+            targetState = PERMISSION_STATES.BLUE;
+          } else {
+            targetState = PERMISSION_STATES.GREEN;
+          }
+        } else if (isCreateMode) {
+          targetState = PERMISSION_STATES.GREEN;
+        } else if (selectedTemplate && selectedTemplate.permissions) {
+          const perms = selectedTemplate.permissions[screen.id];
+          const hasTemplatePerm = perms && perms[permissionType] === true;
+          targetState = hasTemplatePerm ? PERMISSION_STATES.BLUE : PERMISSION_STATES.GREEN;
+        } else {
+          targetState = PERMISSION_STATES.GREEN;
+        }
+      }
+
+      updatedScreen[permissionType] = targetState;
       
       const hasBlue = PERMISSION_TYPES.some(p => updatedScreen[p] === PERMISSION_STATES.BLUE);
       const hasGreen = PERMISSION_TYPES.some(p => updatedScreen[p] === PERMISSION_STATES.GREEN);
@@ -807,8 +1081,11 @@ const AssignAccess = ({ userRole, onLogout }) => {
       return updatedScreen;
     });
 
-    group[permissionType] = targetState;
-    
+    group.view = group.screens.some(s => s.view !== PERMISSION_STATES.EMPTY && s.view !== PERMISSION_STATES.RED) ? PERMISSION_STATES.BLUE : (group.screens.some(s => s.view === PERMISSION_STATES.RED) ? PERMISSION_STATES.RED : PERMISSION_STATES.EMPTY);
+    group.create = group.screens.some(s => s.create !== PERMISSION_STATES.EMPTY && s.create !== PERMISSION_STATES.RED) ? PERMISSION_STATES.BLUE : (group.screens.some(s => s.create === PERMISSION_STATES.RED) ? PERMISSION_STATES.RED : PERMISSION_STATES.EMPTY);
+    group.edit = group.screens.some(s => s.edit !== PERMISSION_STATES.EMPTY && s.edit !== PERMISSION_STATES.RED) ? PERMISSION_STATES.BLUE : (group.screens.some(s => s.edit === PERMISSION_STATES.RED) ? PERMISSION_STATES.RED : PERMISSION_STATES.EMPTY);
+    group.delete = group.screens.some(s => s.delete !== PERMISSION_STATES.EMPTY && s.delete !== PERMISSION_STATES.RED) ? PERMISSION_STATES.BLUE : (group.screens.some(s => s.delete === PERMISSION_STATES.RED) ? PERMISSION_STATES.RED : PERMISSION_STATES.EMPTY);
+
     const groupHasBlue = group.screens.some(s => 
       PERMISSION_TYPES.some(p => s[p] === PERMISSION_STATES.BLUE)
     );
@@ -839,15 +1116,19 @@ const AssignAccess = ({ userRole, onLogout }) => {
     setGroups(newGroups);
   };
 
-  // ── Expand/Collapse Groups ──
-  const toggleGroup = (groupId, isEditMode = false, isCreateMode = false) => {
-    if (isCreateMode) {
+  const toggleGroup = (groupId, isEditMode = false, isCreateMode = false, isTemplateEditMode = false) => {
+    if (isTemplateEditMode) {
+      setTemplateEditExpandedGroups(prev => ({
+        ...prev,
+        [groupId]: !prev[groupId]
+      }));
+    } else if (isCreateMode) {
       setCreateTemplateExpandedGroups(prev => ({
         ...prev,
         [groupId]: !prev[groupId]
       }));
     } else if (isEditMode) {
-      setTemplateEditExpandedGroups(prev => ({
+      setEditExpandedGroups(prev => ({
         ...prev,
         [groupId]: !prev[groupId]
       }));
@@ -860,15 +1141,15 @@ const AssignAccess = ({ userRole, onLogout }) => {
   };
 
   // ── Render Checkbox ──
-  const renderCheckbox = (state, groupId, screenId, permissionType, isEditMode = false, isCreateMode = false) => {
+  const renderCheckbox = (state, groupId, screenId, permissionType, isEditMode = false, isCreateMode = false, isTemplateEditMode = false) => {
     const handleClick = (e) => {
       e.stopPropagation();
       e.preventDefault();
       
       if (screenId) {
-        togglePermission(groupId, screenId, permissionType, isEditMode, isCreateMode);
+        togglePermission(groupId, screenId, permissionType, isEditMode, isCreateMode, isTemplateEditMode);
       } else {
-        toggleGroupPermission(groupId, permissionType, isEditMode, isCreateMode);
+        toggleGroupPermission(groupId, permissionType, isEditMode, isCreateMode, isTemplateEditMode);
       }
     };
 
@@ -919,7 +1200,6 @@ const AssignAccess = ({ userRole, onLogout }) => {
     }
   };
 
-  // ── Render Preview Icon ──
   const renderPreviewIcon = (state) => {
     switch(state) {
       case PERMISSION_STATES.BLUE:
@@ -934,7 +1214,6 @@ const AssignAccess = ({ userRole, onLogout }) => {
     }
   };
 
-  // ── Get Permission Display Text ──
   const getPermissionDisplay = (state) => {
     switch(state) {
       case PERMISSION_STATES.BLUE:
@@ -988,7 +1267,143 @@ const AssignAccess = ({ userRole, onLogout }) => {
     return { blue, green, red, empty };
   };
 
-  // ── Save as Template ──
+  // ── Manage Access Functions ──
+  const handleViewEmployee = async (emp) => {
+    setSelectedEmployee(emp);
+    setLoading(true);
+    try {
+      const empId = emp.employeeId || emp.id;
+      const response = await fetch(`${apiBaseUrl}/api/rbac/employees/${empId}/permissions`, {
+        headers: getAuthHeaders()
+      });
+      if (response.ok) {
+        const permsList = await response.json();
+        setSelectedEmployee({ ...emp, permissions: permsList });
+        setShowViewModal(true);
+      } else {
+        triggerAlert('error', 'Error', 'Failed to fetch employee permissions.');
+      }
+    } catch (err) {
+      console.error('Error fetching employee permissions:', err);
+      triggerAlert('error', 'Error', 'Failed to fetch employee permissions.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEditEmployee = async (emp) => {
+    setSelectedEmployee(emp);
+    setEditLoading(true);
+    try {
+      const empId = emp.employeeId || emp.id;
+      const response = await fetch(`${apiBaseUrl}/api/rbac/employees/${empId}/permissions`, {
+        headers: getAuthHeaders()
+      });
+      if (response.ok) {
+        const permsList = await response.json();
+        setSelectedEmployee({ ...emp, permissions: permsList });
+        initializeEditAccessGroups(permsList);
+        setShowEditModal(true);
+      } else {
+        initializeEditAccessGroups([]);
+        setSelectedEmployee({ ...emp, permissions: [] });
+        setShowEditModal(true);
+      }
+    } catch (err) {
+      console.error('Error fetching employee permissions:', err);
+      initializeEditAccessGroups([]);
+      setSelectedEmployee({ ...emp, permissions: [] });
+      setShowEditModal(true);
+    } finally {
+      setEditLoading(false);
+    }
+  };
+
+  const saveEditedEmployeePermissions = async () => {
+    if (!selectedEmployee) return;
+
+    setEditLoading(true);
+    try {
+      const permissionsList = [];
+      editAccessGroups.forEach(group => {
+        group.screens.forEach(screen => {
+          permissionsList.push({
+            screenId: screen.id,
+            screenNm: screen.name,
+            groupNm: group.name,
+            screenCode: screen.code,
+            viewFlg: screen.view === PERMISSION_STATES.BLUE || screen.view === PERMISSION_STATES.GREEN,
+            addFlg: screen.create === PERMISSION_STATES.BLUE || screen.create === PERMISSION_STATES.GREEN,
+            editFlg: screen.edit === PERMISSION_STATES.BLUE || screen.edit === PERMISSION_STATES.GREEN,
+            deleteFlg: screen.delete === PERMISSION_STATES.BLUE || screen.delete === PERMISSION_STATES.GREEN
+          });
+        });
+      });
+
+      const empId = selectedEmployee.employeeId || selectedEmployee.id;
+      const payload = {
+        empId: Number(empId),
+        permissions: permissionsList,
+        createdBy: getLoggedInUserName()
+      };
+
+      const response = await fetch(`${apiBaseUrl}/api/rbac/employees/${empId}/permissions`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(payload)
+      });
+
+      if (response.ok) {
+        triggerAlert('success', 'Success', `Permissions updated for ${selectedEmployee.name}`);
+        setShowEditModal(false);
+        setSelectedEmployee(null);
+        setEditAccessGroups([]);
+        await fetchAllEmployeePermissions();
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        triggerAlert('error', 'Error', errorData.message || 'Failed to update permissions.');
+      }
+    } catch (err) {
+      console.error('Error updating permissions:', err);
+      triggerAlert('error', 'Error', 'Failed to update permissions.');
+    } finally {
+      setEditLoading(false);
+    }
+  };
+
+  const handleDeleteEmployee = (emp) => {
+    setSelectedEmployee(emp);
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDeleteEmployee = async () => {
+    if (!selectedEmployee) return;
+
+    setLoading(true);
+    try {
+      const empId = selectedEmployee.employeeId || selectedEmployee.id;
+      const response = await fetch(`${apiBaseUrl}/api/rbac/employees/${empId}/access`, {
+        method: 'DELETE',
+        headers: getAuthHeaders()
+      });
+
+      if (response.ok) {
+        triggerAlert('success', 'Deleted', `Access for ${selectedEmployee.name} has been removed.`);
+        setShowDeleteConfirm(false);
+        setSelectedEmployee(null);
+        await fetchAllEmployeePermissions();
+      } else {
+        triggerAlert('error', 'Error', 'Failed to delete employee access.');
+      }
+    } catch (err) {
+      console.error('Error deleting employee access:', err);
+      triggerAlert('error', 'Error', 'Failed to delete employee access.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ── Save Functions ──
   const saveAsTemplate = async () => {
     if (!templateName.trim()) {
       triggerAlert('warning', 'Template Name Required', 'Please enter a name for the template.');
@@ -1041,7 +1456,6 @@ const AssignAccess = ({ userRole, onLogout }) => {
     }
   };
 
-  // ── NEW: Save Create Template ──
   const saveCreateTemplate = async () => {
     if (!createTemplateName.trim()) {
       triggerAlert('warning', 'Template Name Required', 'Please enter a name for the template.');
@@ -1091,7 +1505,6 @@ const AssignAccess = ({ userRole, onLogout }) => {
     }
   };
 
-  // ── NEW: Open Create Template Mode ──
   const openCreateTemplateMode = () => {
     setCreateTemplateName('');
     setCreateTemplateDescription('');
@@ -1102,7 +1515,6 @@ const AssignAccess = ({ userRole, onLogout }) => {
     triggerAlert('info', 'Create Template', 'Add permissions to your new template. All permissions start as No Access.');
   };
 
-  // ── NEW: Close Create Template Mode ──
   const closeCreateTemplateMode = () => {
     setIsCreateTemplateMode(false);
     setCreateTemplateStep(1);
@@ -1112,7 +1524,6 @@ const AssignAccess = ({ userRole, onLogout }) => {
     setCreateTemplateIsDraft(false);
   };
 
-  // ── Save Access ──
   const handleSaveAccess = async () => {
     if (selectedEmployees.length === 0) {
       triggerAlert('warning', 'No Employees', 'Please select at least one employee.');
@@ -1153,6 +1564,7 @@ const AssignAccess = ({ userRole, onLogout }) => {
 
       if (response.ok) {
         triggerAlert('success', 'Success', 'Access permissions saved successfully!');
+        await fetchAllEmployeePermissions();
         setTimeout(() => {
           setCurrentStep(1);
           setSelectedEmployees([]);
@@ -1173,67 +1585,6 @@ const AssignAccess = ({ userRole, onLogout }) => {
     }
   };
 
-  // ── Save as Draft ──
-  const handleSaveAsDraft = async () => {
-    if (selectedEmployees.length === 0) {
-      triggerAlert('warning', 'No Employees', 'Please select at least one employee.');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const permissionsList = [];
-      accessGroups.forEach(group => {
-        group.screens.forEach(screen => {
-          permissionsList.push({
-            screenId: screen.id,
-            screenNm: screen.name,
-            groupNm: group.name,
-            screenCode: screen.code,
-            viewFlg: screen.view === PERMISSION_STATES.BLUE || screen.view === PERMISSION_STATES.GREEN,
-            addFlg: screen.create === PERMISSION_STATES.BLUE || screen.create === PERMISSION_STATES.GREEN,
-            editFlg: screen.edit === PERMISSION_STATES.BLUE || screen.edit === PERMISSION_STATES.GREEN,
-            deleteFlg: screen.delete === PERMISSION_STATES.BLUE || screen.delete === PERMISSION_STATES.GREEN
-          });
-        });
-      });
-
-      const payload = {
-        empIds: selectedEmployees.map(id => Number(id)),
-        roleId: selectedTemplate ? selectedTemplate.id : null,
-        customRoleName: null,
-        permissions: permissionsList
-      };
-
-      const response = await fetch(`${apiBaseUrl}/api/rbac/save`, {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify(payload)
-      });
-
-      if (response.ok) {
-        triggerAlert('success', 'Success', 'Access permissions saved as draft successfully!');
-        setTimeout(() => {
-          setCurrentStep(1);
-          setSelectedEmployees([]);
-          setSelectedTemplate(null);
-          setTemplateName('');
-          setTemplateDescription('');
-          initializeAccessGroups();
-        }, 2000);
-      } else {
-        const errorData = await response.json().catch(() => ({}));
-        triggerAlert('error', 'Error', errorData.message || 'Some permissions failed to save as draft. Please try again.');
-      }
-    } catch (err) {
-      console.error('Error saving permissions as draft:', err);
-      triggerAlert('error', 'Error', 'Failed to save permissions as draft. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // ── Reset Everything ──
   const handleReset = () => {
     setCurrentStep(1);
     setSelectedEmployees([]);
@@ -1247,13 +1598,18 @@ const AssignAccess = ({ userRole, onLogout }) => {
     triggerAlert('info', 'Reset', 'All selections have been cleared.');
   };
 
-  // ── Employee Management in Summary ──
   const handleRemoveEmployee = (empId) => {
     setSelectedEmployees(prev => prev.filter(id => id !== empId));
     triggerAlert('info', 'Employee Removed', 'Employee has been removed from the list.');
   };
 
   const handleAddEmployee = (empId) => {
+    const assignedIds = employeePermissions.map(emp => emp.employeeId || emp.id);
+    const alreadyAssigned = assignedIds.includes(empId);
+    if (alreadyAssigned) {
+      triggerAlert('warning', 'Already Assigned', 'This employee already has access. Please use Manage Access mode to edit.');
+      return;
+    }
     if (!selectedEmployees.includes(empId)) {
       setSelectedEmployees(prev => [...prev, empId]);
       triggerAlert('success', 'Employee Added', 'Employee has been added to the list.');
@@ -1264,22 +1620,28 @@ const AssignAccess = ({ userRole, onLogout }) => {
     }
   };
 
-  const availableEmployees = employees.filter(emp => 
-    !selectedEmployees.includes(emp.empId || emp.id) &&
-    (emp.fstNm || emp.firstName || '').toLowerCase().includes(employeeSearchTerm.toLowerCase()) ||
-    (emp.lstNm || emp.lastName || '').toLowerCase().includes(employeeSearchTerm.toLowerCase()) ||
-    (emp.empCode || emp.employeeCode || '').toLowerCase().includes(employeeSearchTerm.toLowerCase()) ||
-    (emp.email || '').toLowerCase().includes(employeeSearchTerm.toLowerCase())
-  );
+  const availableEmployees = employees.filter(emp => {
+    const empId = emp.empId || emp.id;
+    const assignedIds = employeePermissions.map(e => e.employeeId || e.id);
+    const alreadyAssigned = assignedIds.includes(empId);
+    return !selectedEmployees.includes(empId) && !alreadyAssigned &&
+      (emp.fstNm || emp.firstName || '').toLowerCase().includes(employeeSearchTerm.toLowerCase()) ||
+      (emp.lstNm || emp.lastName || '').toLowerCase().includes(employeeSearchTerm.toLowerCase()) ||
+      (emp.empCode || emp.employeeCode || '').toLowerCase().includes(employeeSearchTerm.toLowerCase()) ||
+      (emp.email || '').toLowerCase().includes(employeeSearchTerm.toLowerCase());
+  });
 
-  // ── FIXED: Filtered Employees with Selected on Top ──
-  const filteredEmployees = employees
+  // ── Filtered Employees for Direct Assign (exclude already assigned) ──
+  const filteredAvailableEmployees = employees
     .filter(emp => {
+      const empId = emp.empId || emp.id;
+      const assignedIds = employeePermissions.map(e => e.employeeId || e.id);
+      const alreadyAssigned = assignedIds.includes(empId);
       const search = searchTerm.toLowerCase();
       const name = `${emp.fstNm || emp.firstName || ''} ${emp.lstNm || emp.lastName || ''}`.toLowerCase();
       const code = (emp.empCode || emp.employeeCode || '').toLowerCase();
       const email = (emp.email || '').toLowerCase();
-      return name.includes(search) || code.includes(search) || email.includes(search);
+      return !alreadyAssigned && (name.includes(search) || code.includes(search) || email.includes(search));
     })
     .sort((a, b) => {
       const aId = a.empId || a.id;
@@ -1295,104 +1657,22 @@ const AssignAccess = ({ userRole, onLogout }) => {
       return String(codeA).localeCompare(String(codeB));
     });
 
-  // ── TEMPLATE MANAGEMENT FUNCTIONS ──
-
-  // ── Initialize Template Edit Groups from Template ──
-  const initializeTemplateEditGroups = (template) => {
-    const groups = dbScreenGroups.map(group => {
-      let groupHasView = false;
-      let groupHasCreate = false;
-      let groupHasEdit = false;
-      let groupHasDelete = false;
-
-      const screens = group.screens.map(screen => {
-        const perms = template.permissions?.[screen.id];
-        if (perms) {
-          const view = perms.view ? PERMISSION_STATES.BLUE : PERMISSION_STATES.EMPTY;
-          const create = perms.create ? PERMISSION_STATES.BLUE : PERMISSION_STATES.EMPTY;
-          const edit = perms.edit ? PERMISSION_STATES.BLUE : PERMISSION_STATES.EMPTY;
-          const delete_ = perms.delete ? PERMISSION_STATES.BLUE : PERMISSION_STATES.EMPTY;
-          
-          if (view === PERMISSION_STATES.BLUE) groupHasView = true;
-          if (create === PERMISSION_STATES.BLUE) groupHasCreate = true;
-          if (edit === PERMISSION_STATES.BLUE) groupHasEdit = true;
-          if (delete_ === PERMISSION_STATES.BLUE) groupHasDelete = true;
-
-          const hasBlue = view === PERMISSION_STATES.BLUE || create === PERMISSION_STATES.BLUE || 
-                          edit === PERMISSION_STATES.BLUE || delete_ === PERMISSION_STATES.BLUE;
-          const hasEmpty = view === PERMISSION_STATES.EMPTY || create === PERMISSION_STATES.EMPTY || 
-                          edit === PERMISSION_STATES.EMPTY || delete_ === PERMISSION_STATES.EMPTY;
-          
-          let badge = 'orange';
-          let badgeText = 'No Access';
-          
-          if (hasBlue && hasEmpty) {
-            badge = 'orange';
-            badgeText = 'Mixed';
-          } else if (hasBlue) {
-            badge = 'blue';
-            badgeText = 'From Template';
-          } else {
-            badge = 'orange';
-            badgeText = 'No Access';
-          }
-          
-          return {
-            ...screen,
-            view,
-            create,
-            edit,
-            delete: delete_,
-            badge,
-            badgeText
-          };
-        }
-        return {
-          ...screen,
-          view: PERMISSION_STATES.EMPTY,
-          create: PERMISSION_STATES.EMPTY,
-          edit: PERMISSION_STATES.EMPTY,
-          delete: PERMISSION_STATES.EMPTY,
-          badge: 'orange',
-          badgeText: 'No Access'
-        };
-      });
-
-      const groupHasBlue = screens.some(s => 
-        PERMISSION_TYPES.some(p => s[p] === PERMISSION_STATES.BLUE)
-      );
-      const groupHasEmpty = screens.some(s => 
-        PERMISSION_TYPES.some(p => s[p] === PERMISSION_STATES.EMPTY)
-      );
-      
-      let groupBadge = 'orange';
-      let groupBadgeText = 'No Access';
-      
-      if (groupHasBlue && groupHasEmpty) {
-        groupBadge = 'orange';
-        groupBadgeText = 'Mixed';
-      } else if (groupHasBlue) {
-        groupBadge = 'blue';
-        groupBadgeText = 'From Template';
-      }
-
-      return {
-        ...group,
-        screens,
-        view: groupHasView ? PERMISSION_STATES.BLUE : PERMISSION_STATES.EMPTY,
-        create: groupHasCreate ? PERMISSION_STATES.BLUE : PERMISSION_STATES.EMPTY,
-        edit: groupHasEdit ? PERMISSION_STATES.BLUE : PERMISSION_STATES.EMPTY,
-        delete: groupHasDelete ? PERMISSION_STATES.BLUE : PERMISSION_STATES.EMPTY,
-        badge: groupBadge,
-        badgeText: groupBadgeText
-      };
+  // ── Filtered Employees for Manage Access (only with access) ──
+  const filteredManageEmployees = employeePermissions
+    .filter(emp => {
+      const search = manageSearchTerm.toLowerCase();
+      const name = (emp.name || '').toLowerCase();
+      const code = (emp.code || '').toLowerCase();
+      const email = (emp.email || '').toLowerCase();
+      return name.includes(search) || code.includes(search) || email.includes(search);
+    })
+    .sort((a, b) => {
+      const nameA = (a.name || '').toLowerCase();
+      const nameB = (b.name || '').toLowerCase();
+      return nameA.localeCompare(nameB);
     });
-    
-    setTemplateEditGroups(groups);
-    setTemplateEditExpandedGroups({ [groups[0]?.id]: true });
-  };
 
-  // ── Open Template Edit Mode ──
+  // ── Template Management Functions ──
   const openTemplateEditMode = async (template) => {
     setLoading(true);
     try {
@@ -1431,7 +1711,6 @@ const AssignAccess = ({ userRole, onLogout }) => {
     }
   };
 
-  // ── Close Template Edit Mode ──
   const closeTemplateEditMode = () => {
     setIsTemplateEditMode(false);
     setTemplateEditStep(1);
@@ -1442,7 +1721,6 @@ const AssignAccess = ({ userRole, onLogout }) => {
     setTemplateEditIsDraft(false);
   };
 
-  // ── Save Edited Template ──
   const saveEditedTemplateFromEditMode = async (choice) => {
     if (!templateEditTemplateName.trim()) {
       triggerAlert('warning', 'Template Name Required', 'Please enter a name for the template.');
@@ -1499,6 +1777,7 @@ const AssignAccess = ({ userRole, onLogout }) => {
       if (response && response.ok) {
         closeTemplateEditMode();
         fetchTemplates();
+        await fetchAllEmployeePermissions();
       } else {
         triggerAlert('error', 'Error', 'Failed to save template. Please try again.');
       }
@@ -1510,173 +1789,6 @@ const AssignAccess = ({ userRole, onLogout }) => {
     }
   };
 
-  // ── TEMPLATE MANAGEMENT: Edit Existing Template ──
-  const loadTemplateForEdit = (template) => {
-    setTemplateToEdit(template);
-    setSelectedTemplate(template);
-    setTemplateName(template.name);
-    setTemplateDescription(template.description || '');
-    setSaveAsDraft(template.isDraft || false);
-    
-    if (template.permissions) {
-      const updatedGroups = accessGroups.map(group => {
-        let groupHasView = false;
-        let groupHasCreate = false;
-        let groupHasEdit = false;
-        let groupHasDelete = false;
-
-        const updatedScreens = group.screens.map(screen => {
-          const perms = template.permissions[screen.id];
-          if (perms) {
-            const view = perms.view ? PERMISSION_STATES.BLUE : PERMISSION_STATES.EMPTY;
-            const create = perms.create ? PERMISSION_STATES.BLUE : PERMISSION_STATES.EMPTY;
-            const edit = perms.edit ? PERMISSION_STATES.BLUE : PERMISSION_STATES.EMPTY;
-            const delete_ = perms.delete ? PERMISSION_STATES.BLUE : PERMISSION_STATES.EMPTY;
-            
-            if (view === PERMISSION_STATES.BLUE) groupHasView = true;
-            if (create === PERMISSION_STATES.BLUE) groupHasCreate = true;
-            if (edit === PERMISSION_STATES.BLUE) groupHasEdit = true;
-            if (delete_ === PERMISSION_STATES.BLUE) groupHasDelete = true;
-
-            const hasBlue = view === PERMISSION_STATES.BLUE || create === PERMISSION_STATES.BLUE || 
-                            edit === PERMISSION_STATES.BLUE || delete_ === PERMISSION_STATES.BLUE;
-            const hasEmpty = view === PERMISSION_STATES.EMPTY || create === PERMISSION_STATES.EMPTY || 
-                            edit === PERMISSION_STATES.EMPTY || delete_ === PERMISSION_STATES.EMPTY;
-            
-            let badge = 'orange';
-            let badgeText = 'No Access';
-            
-            if (hasBlue && hasEmpty) {
-              badge = 'orange';
-              badgeText = 'Mixed';
-            } else if (hasBlue) {
-              badge = 'blue';
-              badgeText = 'From Template';
-            } else {
-              badge = 'orange';
-              badgeText = 'No Access';
-            }
-            
-            return {
-              ...screen,
-              view,
-              create,
-              edit,
-              delete: delete_,
-              badge,
-              badgeText
-            };
-          }
-          return screen;
-        });
-
-        const groupHasBlue = updatedScreens.some(s => 
-          PERMISSION_TYPES.some(p => s[p] === PERMISSION_STATES.BLUE)
-        );
-        const groupHasEmpty = updatedScreens.some(s => 
-          PERMISSION_TYPES.some(p => s[p] === PERMISSION_STATES.EMPTY)
-        );
-        
-        let groupBadge = 'orange';
-        let groupBadgeText = 'No Access';
-        
-        if (groupHasBlue && groupHasEmpty) {
-          groupBadge = 'orange';
-          groupBadgeText = 'Mixed';
-        } else if (groupHasBlue) {
-          groupBadge = 'blue';
-          groupBadgeText = 'From Template';
-        }
-
-        return {
-          ...group,
-          screens: updatedScreens,
-          view: groupHasView ? PERMISSION_STATES.BLUE : PERMISSION_STATES.EMPTY,
-          create: groupHasCreate ? PERMISSION_STATES.BLUE : PERMISSION_STATES.EMPTY,
-          edit: groupHasEdit ? PERMISSION_STATES.BLUE : PERMISSION_STATES.EMPTY,
-          delete: groupHasDelete ? PERMISSION_STATES.BLUE : PERMISSION_STATES.EMPTY,
-          badge: groupBadge,
-          badgeText: groupBadgeText
-        };
-      });
-      
-      setAccessGroups(updatedGroups);
-    }
-    
-    setShowEditTemplateModal(true);
-  };
-
-  // ── TEMPLATE MANAGEMENT: Save Edited Template ──
-  const saveEditedTemplate = async (choice) => {
-    if (!templateName.trim()) {
-      triggerAlert('warning', 'Template Name Required', 'Please enter a name for the template.');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const permissionsList = [];
-      accessGroups.forEach(group => {
-        group.screens.forEach(screen => {
-          permissionsList.push({
-            screenId: screen.id,
-            screenNm: screen.name,
-            groupNm: group.name,
-            screenCode: screen.code,
-            viewFlg: screen.view === PERMISSION_STATES.BLUE || screen.view === PERMISSION_STATES.GREEN,
-            addFlg: screen.create === PERMISSION_STATES.BLUE || screen.create === PERMISSION_STATES.GREEN,
-            editFlg: screen.edit === PERMISSION_STATES.BLUE || screen.edit === PERMISSION_STATES.GREEN,
-            deleteFlg: screen.delete === PERMISSION_STATES.BLUE || screen.delete === PERMISSION_STATES.GREEN
-          });
-        });
-      });
-
-      let response;
-      if (choice === 'update' && templateToEdit?.id) {
-        response = await fetch(`${apiBaseUrl}/api/rbac/roles/${templateToEdit.id}`, {
-          method: 'PUT',
-          headers: getAuthHeaders(),
-          body: JSON.stringify({
-            roleNm: templateName.trim(),
-            permissions: permissionsList
-          })
-        });
-        if (response.ok) {
-          triggerAlert('success', 'Success', `Template "${templateName}" updated successfully!`);
-        }
-      } else {
-        response = await fetch(`${apiBaseUrl}/api/rbac/roles`, {
-          method: 'POST',
-          headers: getAuthHeaders(),
-          body: JSON.stringify({
-            roleNm: templateName.trim(),
-            permissions: permissionsList
-          })
-        });
-        if (response.ok) {
-          triggerAlert('success', 'Success', `Template "${templateName}" saved as new template!`);
-        }
-      }
-
-      if (response && response.ok) {
-        setShowEditTemplateModal(false);
-        setTemplateToEdit(null);
-        setSaveAsDraft(false);
-        setUpdateOrSaveModal(false);
-        setTemplateUpdateChoice(null);
-        fetchTemplates();
-      } else {
-        triggerAlert('error', 'Error', 'Failed to save template. Please try again.');
-      }
-    } catch (err) {
-      console.error('Error saving template:', err);
-      triggerAlert('error', 'Error', 'Failed to save template. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // ── TEMPLATE MANAGEMENT: Delete Template ──
   const deleteTemplate = (templateId) => {
     setTemplateToDelete(templateId);
     setShowDeleteConfirm(true);
@@ -1695,6 +1807,7 @@ const AssignAccess = ({ userRole, onLogout }) => {
         triggerAlert('success', 'Deleted', 'Template deleted successfully!');
         setShowDeleteConfirm(false);
         setTemplateToDelete(null);
+        fetchTemplates();
       } else {
         triggerAlert('error', 'Error', 'Failed to delete template.');
       }
@@ -1706,7 +1819,6 @@ const AssignAccess = ({ userRole, onLogout }) => {
     }
   };
 
-  // ── Update or Save Modal ──
   const renderUpdateOrSaveModal = () => {
     if (!updateOrSaveModal) return null;
 
@@ -1762,7 +1874,7 @@ const AssignAccess = ({ userRole, onLogout }) => {
     );
   };
 
-  // ── Step Renderers ──
+  // ── Render Functions ──
   const renderStepper = () => (
     <div className="aa-stepper">
       {steps.map((step, index) => {
@@ -1795,7 +1907,6 @@ const AssignAccess = ({ userRole, onLogout }) => {
     </div>
   );
 
-  // ── Template Edit Stepper ──
   const renderTemplateEditStepper = () => (
     <div className="aa-stepper">
       {templateEditSteps.map((step, index) => {
@@ -1828,7 +1939,6 @@ const AssignAccess = ({ userRole, onLogout }) => {
     </div>
   );
 
-  // ── Create Template Stepper ──
   const renderCreateTemplateStepper = () => (
     <div className="aa-stepper">
       {createTemplateSteps.map((step, index) => {
@@ -2010,7 +2120,6 @@ const AssignAccess = ({ userRole, onLogout }) => {
     );
   };
 
-  // ── Create Template Summary ──
   const renderCreateTemplateSummary = () => {
     const counts = getPermissionStateCounts(createTemplateGroups);
     let totalScreens = 0;
@@ -2183,7 +2292,6 @@ const AssignAccess = ({ userRole, onLogout }) => {
     );
   };
 
-  // ── Template Edit Manage Access ──
   const renderTemplateEditManageAccess = () => {
     const counts = getPermissionStateCounts(templateEditGroups);
 
@@ -2281,7 +2389,7 @@ const AssignAccess = ({ userRole, onLogout }) => {
                   <React.Fragment key={group.id}>
                     <tr 
                       className={`aa-group-row ${isExpanded ? 'expanded' : ''}`}
-                      onClick={() => toggleGroup(group.id, true)}
+                      onClick={() => toggleGroup(group.id, false, false, true)}
                       style={{ cursor: 'pointer' }}
                     >
                       <td>
@@ -2294,16 +2402,16 @@ const AssignAccess = ({ userRole, onLogout }) => {
                       </td>
                       <td style={{ textAlign: 'center' }}>{group.screens.length}</td>
                       <td style={{ textAlign: 'center' }}>
-                        {renderCheckbox(group.view, group.id, null, 'view', true)}
+                        {renderCheckbox(group.view, group.id, null, 'view', false, false, true)}
                       </td>
                       <td style={{ textAlign: 'center' }}>
-                        {renderCheckbox(group.create, group.id, null, 'create', true)}
+                        {renderCheckbox(group.create, group.id, null, 'create', false, false, true)}
                       </td>
                       <td style={{ textAlign: 'center' }}>
-                        {renderCheckbox(group.edit, group.id, null, 'edit', true)}
+                        {renderCheckbox(group.edit, group.id, null, 'edit', false, false, true)}
                       </td>
                       <td style={{ textAlign: 'center' }}>
-                        {renderCheckbox(group.delete, group.id, null, 'delete', true)}
+                        {renderCheckbox(group.delete, group.id, null, 'delete', false, false, true)}
                       </td>
                       <td style={{ textAlign: 'center' }}>
                         <span className={`aa-badge aa-badge-${group.badge}`}>
@@ -2322,16 +2430,16 @@ const AssignAccess = ({ userRole, onLogout }) => {
                         </td>
                         <td></td>
                         <td style={{ textAlign: 'center' }}>
-                          {renderCheckbox(screen.view, group.id, screen.id, 'view', true)}
+                          {renderCheckbox(screen.view, group.id, screen.id, 'view', false, false, true)}
                         </td>
                         <td style={{ textAlign: 'center' }}>
-                          {renderCheckbox(screen.create, group.id, screen.id, 'create', true)}
+                          {renderCheckbox(screen.create, group.id, screen.id, 'create', false, false, true)}
                         </td>
                         <td style={{ textAlign: 'center' }}>
-                          {renderCheckbox(screen.edit, group.id, screen.id, 'edit', true)}
+                          {renderCheckbox(screen.edit, group.id, screen.id, 'edit', false, false, true)}
                         </td>
                         <td style={{ textAlign: 'center' }}>
-                          {renderCheckbox(screen.delete, group.id, screen.id, 'delete', true)}
+                          {renderCheckbox(screen.delete, group.id, screen.id, 'delete', false, false, true)}
                         </td>
                         <td style={{ textAlign: 'center' }}>
                           <span className={`aa-badge aa-badge-${screen.badge}`}>
@@ -2350,7 +2458,6 @@ const AssignAccess = ({ userRole, onLogout }) => {
     );
   };
 
-  // ── Template Edit Summary ──
   const renderTemplateEditSummary = () => {
     const counts = getPermissionStateCounts(templateEditGroups);
     let totalScreens = 0;
@@ -2487,7 +2594,7 @@ const AssignAccess = ({ userRole, onLogout }) => {
                   
                   return (
                     <React.Fragment key={group.id}>
-                      <tr className="aa-group-row" onClick={() => toggleGroup(group.id, true)} style={{ cursor: 'pointer' }}>
+                      <tr className="aa-group-row" onClick={() => toggleGroup(group.id, false, false, true)} style={{ cursor: 'pointer' }}>
                         <td>
                           <div className="aa-group-name">
                             {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
@@ -2545,88 +2652,110 @@ const AssignAccess = ({ userRole, onLogout }) => {
     );
   };
 
-  // ── Step 1: Select Employees ──
-  const renderStep1 = () => (
-    <div className="aa-step-content">
-      <div className="aa-step-header">
-        <h3>Select Employees</h3>
-        <p>Choose one or more employees to assign access permissions.</p>
-      </div>
-      
-      <div className="aa-search-bar">
-        <Search className="aa-search-icon" size={18} />
-        <input 
-          type="text" 
-          placeholder="Search by name, code, or email..." 
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
-      </div>
+  // ── Step Renderers ──
+  const renderStep1 = () => {
+    // Get only employees who have access (at least 1 permission)
+    const assignedIds = employeePermissions
+      .filter(emp => emp.permissions && Array.isArray(emp.permissions) && emp.permissions.length > 0)
+      .map(emp => emp.employeeId || emp.id);
+    
+    const assignedCount = assignedIds.length;
+    const availableCount = employees.length - assignedCount;
 
-      <div className="aa-selection-controls">
-        <div className="aa-selection-info">
-          <strong>Selected Employees: <span className="aa-selection-count">{selectedEmployees.length}</span></strong>
-          <span className="aa-total-count">Total: {employees.length}</span>
-          {searchTerm && (
-            <span className="aa-filtered-count">Filtered: {filteredEmployees.length}</span>
-          )}
+    return (
+      <div className="aa-step-content">
+        <div className="aa-step-header">
+          <h3>Select Employees</h3>
+          <p>Choose one or more employees to assign access permissions.</p>
+          <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
+            <span style={{ color: '#10b981' }}>Available: {availableCount}</span>
+            <span style={{ marginLeft: '16px', color: '#2563eb' }}>Already Assigned: {assignedCount}</span>
+            {assignedCount > 0 && (
+              <span style={{ marginLeft: '16px', color: '#f59e0b', fontSize: '11px' }}>
+                (Assigned employees are hidden here. Use <strong>Manage Access</strong> mode to edit)
+              </span>
+            )}
+          </div>
         </div>
-        <div className="aa-selection-actions">
-          <button className="aa-btn-outline-sm" onClick={toggleAllEmployees}>
-            {filteredEmployees.length > 0 && filteredEmployees.every(emp => selectedEmployees.includes(emp.empId || emp.id))
-              ? 'Deselect Filtered'
-              : 'Select Filtered'}
-          </button>
-          {selectedEmployees.length > 0 && (
-            <button className="aa-btn-danger-sm" onClick={() => setSelectedEmployees([])}>
-              Clear All
+        
+        <div className="aa-search-bar">
+          <Search className="aa-search-icon" size={18} />
+          <input 
+            type="text" 
+            placeholder="Search by name, code, or email..." 
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
+
+        <div className="aa-selection-controls">
+          <div className="aa-selection-info">
+            <strong>Selected Employees: <span className="aa-selection-count">{selectedEmployees.length}</span></strong>
+            <span className="aa-total-count">Available: {availableCount}</span>
+            {searchTerm && (
+              <span className="aa-filtered-count">Filtered: {filteredAvailableEmployees.length}</span>
+            )}
+          </div>
+          <div className="aa-selection-actions">
+            <button className="aa-btn-outline-sm" onClick={toggleAllEmployees}>
+              {filteredAvailableEmployees.length > 0 && filteredAvailableEmployees.every(emp => selectedEmployees.includes(emp.empId || emp.id))
+                ? 'Deselect Filtered'
+                : 'Select Filtered'}
             </button>
+            {selectedEmployees.length > 0 && (
+              <button className="aa-btn-danger-sm" onClick={() => setSelectedEmployees([])}>
+                Clear All
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="aa-list">
+          {loading ? (
+            <div className="aa-loading">Loading employees...</div>
+          ) : filteredAvailableEmployees.length === 0 ? (
+            <div className="aa-empty">
+              {availableCount === 0 ? 
+                'All employees already have access. Use Manage Access mode to edit.' : 
+                'No employees found matching your search.'}
+            </div>
+          ) : (
+            filteredAvailableEmployees.map((emp, index) => {
+              const empId = emp.empId || emp.id;
+              const name = `${emp.fstNm || emp.firstName || ''} ${emp.lstNm || emp.lastName || ''}`.trim();
+              const code = emp.empCode || emp.employeeCode || '';
+              const role = emp.role || emp.designation || 'Employee';
+              const email = emp.email || '';
+              const isSelected = selectedEmployees.includes(empId);
+              const initials = name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+
+              return (
+                <div 
+                  key={empId} 
+                  className={`aa-list-item ${isSelected ? 'selected' : ''}`} 
+                  onClick={() => toggleEmployee(empId)}
+                >
+                  <input 
+                    type="checkbox" 
+                    className="aa-checkbox"
+                    checked={isSelected} 
+                    onChange={() => {}}
+                    onClick={(e) => handleEmployeeCheckbox(e, empId)}
+                  />
+                  <div className="aa-avatar">{initials || 'U'}</div>
+                  <div className="aa-info">
+                    <h5>{code ? `${code} - ${name}` : name}</h5>
+                    <p>{role} {email ? `| ${email}` : ''}</p>
+                  </div>
+                </div>
+              );
+            })
           )}
         </div>
       </div>
+    );
+  };
 
-      <div className="aa-list">
-        {loading ? (
-          <div className="aa-loading">Loading employees...</div>
-        ) : filteredEmployees.length === 0 ? (
-          <div className="aa-empty">No employees found matching your search.</div>
-        ) : (
-          filteredEmployees.map((emp, index) => {
-            const empId = emp.empId || emp.id;
-            const name = `${emp.fstNm || emp.firstName || ''} ${emp.lstNm || emp.lastName || ''}`.trim();
-            const code = emp.empCode || emp.employeeCode || '';
-            const role = emp.role || emp.designation || 'Employee';
-            const email = emp.email || '';
-            const isSelected = selectedEmployees.includes(empId);
-            const initials = name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
-
-            return (
-              <div 
-                key={empId} 
-                className={`aa-list-item ${isSelected ? 'selected' : ''}`} 
-                onClick={() => toggleEmployee(empId)}
-              >
-                <input 
-                  type="checkbox" 
-                  className="aa-checkbox"
-                  checked={isSelected} 
-                  onChange={() => {}}
-                  onClick={(e) => handleEmployeeCheckbox(e, empId)}
-                />
-                <div className="aa-avatar">{initials || 'U'}</div>
-                <div className="aa-info">
-                  <h5>{code ? `${code} - ${name}` : name}</h5>
-                  <p>{role} {email ? `| ${email}` : ''}</p>
-                </div>
-              </div>
-            );
-          })
-        )}
-      </div>
-    </div>
-  );
-
-  // ── Step 2: Select Template ──
   const renderStep2 = () => {
     const filteredTemplates = templates.filter(t => 
       t.name?.toLowerCase().includes(searchTermStep2.toLowerCase()) ||
@@ -2763,7 +2892,6 @@ const AssignAccess = ({ userRole, onLogout }) => {
     );
   };
 
-  // ── Step 3: Manage Access ──
   const renderStep3 = () => {
     const counts = getPermissionStateCounts(accessGroups);
 
@@ -2935,7 +3063,6 @@ const AssignAccess = ({ userRole, onLogout }) => {
     );
   };
 
-  // ── Step 4: Summary ──
   const renderStep4 = () => {
     const counts = getPermissionStateCounts(accessGroups);
     let totalScreens = 0;
@@ -2962,19 +3089,6 @@ const AssignAccess = ({ userRole, onLogout }) => {
         <div className="aa-step-header">
           <h3>Access Summary</h3>
           <p>Review the permissions that will be applied to the selected employees.</p>
-          
-          <div className="aa-summary-template-info">
-            {selectedTemplate && (
-              <span className="aa-summary-template-badge">
-                <CheckCircle2 size={14} /> Template: <strong>{selectedTemplate.name}</strong> is applied
-              </span>
-            )}
-            {!selectedTemplate && (
-              <span className="aa-summary-template-badge aa-summary-template-custom">
-                <Info size={14} /> Custom permissions (not saved as template)
-              </span>
-            )}
-          </div>
         </div>
 
         <div className="aa-summary-combined-row">
@@ -3176,7 +3290,498 @@ const AssignAccess = ({ userRole, onLogout }) => {
     );
   };
 
-  // ── Add Employee Modal ──
+  // ── Manage Access Tab ──
+  const renderManageAccess = () => {
+    // IMPORTANT: Only employees with at least ONE permission
+    const employeesWithAccess = employeePermissions.filter(emp => 
+      emp.permissions && 
+      Array.isArray(emp.permissions) && 
+      emp.permissions.some(p => p.viewFlg || p.addFlg || p.editFlg || p.deleteFlg || p.view || p.create || p.edit || p.delete)
+    );
+
+    const totalWithAccess = employeesWithAccess.length;
+    const totalNoAccess = employees.length - totalWithAccess;
+    const totalScreens = dbScreenGroups.reduce((sum, g) => sum + (g.screens?.length || 0), 0);
+
+    const filteredManageEmployees = employeesWithAccess
+      .filter(emp => {
+        const search = manageSearchTerm.toLowerCase();
+        const name = (emp.name || '').toLowerCase();
+        const code = (emp.code || '').toLowerCase();
+        const email = (emp.email || '').toLowerCase();
+        return name.includes(search) || code.includes(search) || email.includes(search);
+      })
+      .sort((a, b) => {
+        const nameA = (a.name || '').toLowerCase();
+        const nameB = (b.name || '').toLowerCase();
+        return nameA.localeCompare(nameB);
+      });
+
+    return (
+      <div className="aa-manage-container">
+        <div className="aa-step-content">
+          <div className="aa-step-header">
+            <h3>Manage Employee Access</h3>
+            <p>View, edit, or remove access permissions for employees.</p>
+            <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
+              <span style={{ color: '#10b981' }}>With Access: {totalWithAccess}</span>
+              <span style={{ marginLeft: '16px', color: '#f59e0b' }}>
+                No Access: {totalNoAccess}
+              </span>
+            </div>
+          </div>
+
+          <div className="aa-search-bar">
+            <Search className="aa-search-icon" size={18} />
+            <input 
+              type="text" 
+              placeholder="Search by name, code, or email..." 
+              value={manageSearchTerm}
+              onChange={(e) => setManageSearchTerm(e.target.value)}
+            />
+          </div>
+
+          <div className="aa-stats-bar" style={{ marginBottom: '16px' }}>
+            <div className="aa-stat-item">
+              <span className="aa-stat-label">With Access</span>
+              <span className="aa-stat-value aa-stat-blue">{totalWithAccess}</span>
+            </div>
+            <div className="aa-stat-divider"></div>
+            <div className="aa-stat-item">
+              <span className="aa-stat-label">Total Screens</span>
+              <span className="aa-stat-value aa-stat-green">{totalScreens}</span>
+            </div>
+          </div>
+
+          <div className="aa-table-container">
+            <table className="aa-table aa-manage-table">
+              <thead>
+                <tr>
+                  <th>Employee</th>
+                  <th>Code / Email</th>
+                  <th style={{ textAlign: 'center' }}>Screens</th>
+                  <th style={{ textAlign: 'center' }}>Permissions</th>
+                  <th style={{ textAlign: 'center' }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredManageEmployees.length === 0 ? (
+                  <tr>
+                    <td colSpan="5" className="aa-empty" style={{ padding: '40px', textAlign: 'center' }}>
+                      {totalWithAccess === 0 ? 
+                        'No employees have access assigned yet. Use Direct Assign Access mode to assign.' : 
+                        'No employees found matching your search.'}
+                    </td>
+                  </tr>
+                ) : (
+                  filteredManageEmployees.map((emp) => {
+                    const activePermissions = (emp.permissions || []).filter(p => p.viewFlg || p.addFlg || p.editFlg || p.deleteFlg || p.view || p.create || p.edit || p.delete);
+                    const screenCount = activePermissions.length;
+                    
+                    let viewCount = 0, createCount = 0, editCount = 0, deleteCount = 0;
+                    activePermissions.forEach(p => {
+                      if (p.viewFlg || p.view) viewCount++;
+                      if (p.addFlg || p.create) createCount++;
+                      if (p.editFlg || p.edit) editCount++;
+                      if (p.deleteFlg || p.delete) deleteCount++;
+                    });
+                    
+                    let permParts = [];
+                    if (viewCount > 0) permParts.push('View');
+                    if (createCount > 0) permParts.push('Create');
+                    if (editCount > 0) permParts.push('Edit');
+                    if (deleteCount > 0) permParts.push('Delete');
+                    const permissionSummary = permParts.length > 0 ? permParts.join(', ') : 'No Access';
+                    
+                    const empId = emp.employeeId || emp.id;
+                    const initials = (emp.name || 'U').split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+
+                    return (
+                      <tr key={empId} className="aa-manage-row">
+                        <td>
+                          <div className="aa-employee-info">
+                            <div className="aa-avatar">{initials}</div>
+                            <div className="aa-employee-details">
+                              <div className="aa-employee-name">{emp.name || 'Unknown'}</div>
+                              <div className="aa-employee-role">{emp.role || 'Employee'}</div>
+                            </div>
+                          </div>
+                        </td>
+                        <td>
+                          <div className="aa-employee-code">{emp.code || '-'}</div>
+                          <div className="aa-employee-email">{emp.email || '-'}</div>
+                        </td>
+                        <td style={{ textAlign: 'center' }}>
+                          <span className="aa-screens-badge aa-badge-blue">
+                            {screenCount} screens
+                          </span>
+                        </td>
+                        <td style={{ textAlign: 'center' }}>
+                          <span className="aa-perms-badge aa-badge-green">
+                            {permissionSummary}
+                          </span>
+                        </td>
+                        <td style={{ textAlign: 'center' }}>
+                          <div className="aa-action-buttons">
+                            <button 
+                              className="aa-btn-outline-sm"
+                              onClick={() => handleViewEmployee(emp)}
+                              title="View Permissions"
+                            >
+                              <EyeIcon size={14} /> View
+                            </button>
+                            <button 
+                              className="aa-btn-primary-sm"
+                              onClick={() => handleEditEmployee(emp)}
+                              title="Edit Permissions"
+                            >
+                              <Edit size={14} /> Edit
+                            </button>
+                            <button 
+                              className="aa-btn-danger-sm"
+                              onClick={() => handleDeleteEmployee(emp)}
+                              title="Delete Access"
+                            >
+                              <Trash2 size={14} /> Delete
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // ── Modals ──
+  const renderViewModal = () => {
+    if (!showViewModal || !selectedEmployee) return null;
+
+    const permissions = (selectedEmployee.permissions || []).filter(p => p.viewFlg || p.addFlg || p.editFlg || p.deleteFlg || p.view || p.create || p.edit || p.delete);
+    const groupedPermissions = {};
+    permissions.forEach(p => {
+      const group = p.groupNm || 'Uncategorized';
+      if (!groupedPermissions[group]) groupedPermissions[group] = [];
+      groupedPermissions[group].push(p);
+    });
+
+    return (
+      <div className="aa-modal-overlay" onClick={() => setShowViewModal(false)}>
+        <div className="aa-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '700px' }}>
+          <div className="aa-modal-header">
+            <h3>
+              <EyeIcon size={18} style={{ marginRight: '8px' }} />
+              View Permissions - {selectedEmployee.name}
+            </h3>
+            <button className="aa-modal-close" onClick={() => setShowViewModal(false)}>
+              <X size={18} />
+            </button>
+          </div>
+          <div className="aa-modal-body">
+            <div className="aa-view-employee-info">
+              <div className="aa-view-info-item">
+                <span className="aa-view-label">Code:</span>
+                <span className="aa-view-value">{selectedEmployee.code || '-'}</span>
+              </div>
+              <div className="aa-view-info-item">
+                <span className="aa-view-label">Email:</span>
+                <span className="aa-view-value">{selectedEmployee.email || '-'}</span>
+              </div>
+              <div className="aa-view-info-item">
+                <span className="aa-view-label">Role:</span>
+                <span className="aa-view-value">{selectedEmployee.role || 'Employee'}</span>
+              </div>
+              <div className="aa-view-info-item">
+                <span className="aa-view-label">Total Screens:</span>
+                <span className="aa-view-value">{permissions.length}</span>
+              </div>
+            </div>
+
+            <div className="aa-view-permissions-list">
+              {Object.keys(groupedPermissions).length === 0 ? (
+                <div className="aa-empty" style={{ padding: '20px' }}>
+                  No permissions assigned to this employee.
+                </div>
+              ) : (
+                Object.keys(groupedPermissions).map(group => (
+                  <div key={group} className="aa-view-group">
+                    <h4 className="aa-view-group-title">{group}</h4>
+                    <table className="aa-table aa-view-table">
+                      <thead>
+                        <tr>
+                          <th>Screen</th>
+                          <th style={{ textAlign: 'center' }}>View</th>
+                          <th style={{ textAlign: 'center' }}>Create</th>
+                          <th style={{ textAlign: 'center' }}>Edit</th>
+                          <th style={{ textAlign: 'center' }}>Delete</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {groupedPermissions[group].map((p, idx) => (
+                          <tr key={idx}>
+                            <td>{p.screenNm || p.screenName || 'Unknown'}</td>
+                            <td style={{ textAlign: 'center' }}>
+                              {p.viewFlg ? <Check size={16} color="#1a237e" /> : '-'}
+                            </td>
+                            <td style={{ textAlign: 'center' }}>
+                              {p.addFlg ? <Check size={16} color="#1a237e" /> : '-'}
+                            </td>
+                            <td style={{ textAlign: 'center' }}>
+                              {p.editFlg ? <Check size={16} color="#1a237e" /> : '-'}
+                            </td>
+                            <td style={{ textAlign: 'center' }}>
+                              {p.deleteFlg ? <Check size={16} color="#1a237e" /> : '-'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+          <div className="aa-modal-footer">
+            <button className="aa-btn-outline" onClick={() => setShowViewModal(false)}>
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderEditModal = () => {
+    if (!showEditModal || !selectedEmployee) return null;
+
+    const counts = getPermissionStateCounts(editAccessGroups);
+    const filteredGroups = editAccessGroups.map(group => ({
+      ...group,
+      screens: group.screens.filter(screen => 
+        screen.name.toLowerCase().includes(editSearchTerm.toLowerCase()) ||
+        group.name.toLowerCase().includes(editSearchTerm.toLowerCase())
+      )
+    })).filter(group => group.screens.length > 0);
+
+    return (
+      <div className="aa-modal-overlay" onClick={() => setShowEditModal(false)}>
+        <div className="aa-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '900px' }}>
+          <div className="aa-modal-header">
+            <h3>
+              <Edit size={18} style={{ marginRight: '8px' }} />
+              Edit Permissions - {selectedEmployee.name}
+            </h3>
+            <button className="aa-modal-close" onClick={() => setShowEditModal(false)}>
+              <X size={18} />
+            </button>
+          </div>
+          <div className="aa-modal-body" style={{ maxHeight: 'calc(90vh - 180px)', overflow: 'auto' }}>
+            <div className="aa-edit-employee-info" style={{ marginBottom: '16px', padding: '12px', background: '#f8fafc', borderRadius: '8px' }}>
+              <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
+                <span><strong>Code:</strong> {selectedEmployee.code || '-'}</span>
+                <span><strong>Email:</strong> {selectedEmployee.email || '-'}</span>
+                <span><strong>Role:</strong> {selectedEmployee.role || 'Employee'}</span>
+              </div>
+            </div>
+
+            <div className="aa-search-bar" style={{ marginBottom: '16px' }}>
+              <Search className="aa-search-icon" size={18} />
+              <input 
+                type="text" 
+                placeholder="Search groups or screens..." 
+                value={editSearchTerm}
+                onChange={(e) => setEditSearchTerm(e.target.value)}
+              />
+            </div>
+
+            <div className="aa-permission-legend">
+              <div className="aa-legend-item">
+                <div className="aa-chk aa-chk-blue"><Check size={12} strokeWidth={3} /></div>
+                <span>Existing Permission</span>
+              </div>
+              <div className="aa-legend-item">
+                <div className="aa-chk aa-chk-green"><Check size={12} strokeWidth={3} /></div>
+                <span>Added</span>
+              </div>
+              <div className="aa-legend-item">
+                <div className="aa-chk aa-chk-red"><X size={12} strokeWidth={3} /></div>
+                <span>Revoked</span>
+              </div>
+              <div className="aa-legend-item">
+                <div className="aa-chk aa-chk-empty"></div>
+                <span>No Access</span>
+              </div>
+            </div>
+
+            <div className="aa-stats-bar">
+              <div className="aa-stat-item">
+                <span className="aa-stat-label">Existing</span>
+                <span className="aa-stat-value aa-stat-blue">{counts.blue}</span>
+              </div>
+              <div className="aa-stat-divider"></div>
+              <div className="aa-stat-item">
+                <span className="aa-stat-label">Added</span>
+                <span className="aa-stat-value aa-stat-green">{counts.green}</span>
+              </div>
+              <div className="aa-stat-divider"></div>
+              <div className="aa-stat-item">
+                <span className="aa-stat-label">Revoked</span>
+                <span className="aa-stat-value aa-stat-red">{counts.red}</span>
+              </div>
+              <div className="aa-stat-divider"></div>
+              <div className="aa-stat-item">
+                <span className="aa-stat-label">No Access</span>
+                <span className="aa-stat-value">{counts.empty}</span>
+              </div>
+            </div>
+
+            <div className="aa-table-container">
+              <table className="aa-table aa-access-table">
+                <thead>
+                  <tr>
+                    <th width="32%">Group / Screen</th>
+                    <th width="10%" style={{ textAlign: 'center' }}>Screens</th>
+                    <th width="10%" style={{ textAlign: 'center' }}>View</th>
+                    <th width="10%" style={{ textAlign: 'center' }}>Create</th>
+                    <th width="10%" style={{ textAlign: 'center' }}>Edit</th>
+                    <th width="10%" style={{ textAlign: 'center' }}>Delete</th>
+                    <th width="18%" style={{ textAlign: 'center' }}>Access Type</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredGroups.map((group) => {
+                    const isExpanded = editExpandedGroups[group.id];
+                    const permissionCount = getGroupPermissionCount(group);
+                    
+                    return (
+                      <React.Fragment key={group.id}>
+                        <tr 
+                          className={`aa-group-row ${isExpanded ? 'expanded' : ''}`}
+                          onClick={() => toggleGroup(group.id, true)}
+                          style={{ cursor: 'pointer' }}
+                        >
+                          <td>
+                            <div className="aa-group-name">
+                              {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                              <group.icon size={16} className="aa-group-icon" />
+                              <span>{group.name}</span>
+                              <span className="aa-group-count">({group.screens.length} screens)</span>
+                            </div>
+                          </td>
+                          <td style={{ textAlign: 'center' }}>{group.screens.length}</td>
+                          <td style={{ textAlign: 'center' }}>
+                            {renderCheckbox(group.view, group.id, null, 'view', true)}
+                          </td>
+                          <td style={{ textAlign: 'center' }}>
+                            {renderCheckbox(group.create, group.id, null, 'create', true)}
+                          </td>
+                          <td style={{ textAlign: 'center' }}>
+                            {renderCheckbox(group.edit, group.id, null, 'edit', true)}
+                          </td>
+                          <td style={{ textAlign: 'center' }}>
+                            {renderCheckbox(group.delete, group.id, null, 'delete', true)}
+                          </td>
+                          <td style={{ textAlign: 'center' }}>
+                            <span className={`aa-badge aa-badge-${group.badge}`}>
+                              {permissionCount > 0 ? `${permissionCount} perms` : group.badgeText}
+                            </span>
+                          </td>
+                        </tr>
+
+                        {isExpanded && group.screens.map((screen) => (
+                          <tr key={screen.id} className="aa-screen-row">
+                            <td className="aa-screen-name">
+                              <div className="aa-screen-indent">
+                                <FileText size={14} className="aa-screen-icon" />
+                                <span>{screen.name}</span>
+                              </div>
+                            </td>
+                            <td></td>
+                            <td style={{ textAlign: 'center' }}>
+                              {renderCheckbox(screen.view, group.id, screen.id, 'view', true)}
+                            </td>
+                            <td style={{ textAlign: 'center' }}>
+                              {renderCheckbox(screen.create, group.id, screen.id, 'create', true)}
+                            </td>
+                            <td style={{ textAlign: 'center' }}>
+                              {renderCheckbox(screen.edit, group.id, screen.id, 'edit', true)}
+                            </td>
+                            <td style={{ textAlign: 'center' }}>
+                              {renderCheckbox(screen.delete, group.id, screen.id, 'delete', true)}
+                            </td>
+                            <td style={{ textAlign: 'center' }}>
+                              <span className={`aa-badge aa-badge-${screen.badge}`}>
+                                {screen.badgeText}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </React.Fragment>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div className="aa-modal-footer">
+            <button className="aa-btn-outline" onClick={() => setShowEditModal(false)}>
+              Cancel
+            </button>
+            <button className="aa-btn-primary" onClick={saveEditedEmployeePermissions} disabled={editLoading}>
+              {editLoading ? 'Saving...' : (
+                <>
+                  <Save size={16} /> Save Changes
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderDeleteConfirmModal = () => {
+    if (!showDeleteConfirm || !selectedEmployee) return null;
+
+    return (
+      <div className="aa-modal-overlay" onClick={() => setShowDeleteConfirm(false)}>
+        <div className="aa-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '420px' }}>
+          <div className="aa-modal-header">
+            <h3>Confirm Delete</h3>
+            <button className="aa-modal-close" onClick={() => setShowDeleteConfirm(false)}>
+              <X size={18} />
+            </button>
+          </div>
+          <div className="aa-modal-body">
+            <p style={{ color: '#64748b', fontSize: '14px' }}>
+              Are you sure you want to remove all access permissions for <strong>{selectedEmployee.name}</strong>?
+            </p>
+            <p className="aa-modal-warning" style={{ color: '#ef4444', marginTop: '12px', fontWeight: '500' }}>
+              This action will permanently remove all access permissions for this employee.
+            </p>
+          </div>
+          <div className="aa-modal-footer">
+            <button className="aa-btn-outline" onClick={() => setShowDeleteConfirm(false)}>
+              Cancel
+            </button>
+            <button className="aa-btn-danger" onClick={confirmDeleteEmployee} disabled={loading}>
+              {loading ? 'Deleting...' : (
+                <>
+                  <Trash2 size={16} /> Delete Access
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const renderAddEmployeeModal = () => {
     if (!showAddEmployeeModal) return null;
 
@@ -3263,7 +3868,6 @@ const AssignAccess = ({ userRole, onLogout }) => {
     );
   };
 
-  // ── Save Template Modal ──
   const renderSaveTemplateModal = () => {
     if (!showSaveTemplateModal) return null;
 
@@ -3313,159 +3917,7 @@ const AssignAccess = ({ userRole, onLogout }) => {
     );
   };
 
-  // ── Edit Template Modal ──
-  const renderEditTemplateModal = () => {
-    if (!showEditTemplateModal) return null;
-
-    return (
-      <div className="aa-modal-overlay" onClick={() => setShowEditTemplateModal(false)}>
-        <div className="aa-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '580px' }}>
-          <div className="aa-modal-header">
-            <h3>{templateToEdit ? 'Edit Template' : 'Create New Template'}</h3>
-            <button className="aa-modal-close" onClick={() => setShowEditTemplateModal(false)}>
-              <X size={18} />
-            </button>
-          </div>
-          <div className="aa-modal-body">
-            {templateToEdit && (
-              <div className="aa-edit-info">
-                <span className="aa-edit-template-code">Code: {templateToEdit.code}</span>
-                {templateToEdit.isDraft && (
-                  <span className="aa-template-status draft">Draft</span>
-                )}
-              </div>
-            )}
-            
-            <div className="aa-form-group">
-              <label>Template Name <span style={{ color: '#ef4444' }}>*</span></label>
-              <input 
-                type="text" 
-                value={templateName} 
-                onChange={(e) => setTemplateName(e.target.value)}
-                placeholder="Enter template name"
-                style={{
-                  width: '100%',
-                  padding: '10px 12px',
-                  border: '1px solid #e2e8f0',
-                  borderRadius: '6px',
-                  fontSize: '14px',
-                  outline: 'none'
-                }}
-              />
-            </div>
-            
-            <div className="aa-form-group" style={{ marginTop: '12px' }}>
-              <label>Description</label>
-              <textarea 
-                value={templateDescription} 
-                onChange={(e) => setTemplateDescription(e.target.value)}
-                placeholder="Enter template description"
-                rows={3}
-                style={{
-                  width: '100%',
-                  padding: '10px 12px',
-                  border: '1px solid #e2e8f0',
-                  borderRadius: '6px',
-                  fontSize: '14px',
-                  outline: 'none',
-                  resize: 'vertical',
-                  fontFamily: 'inherit'
-                }}
-              />
-            </div>
-
-            <div className="aa-edit-actions-info">
-              <p style={{ margin: '12px 0 0 0', fontSize: '13px', color: '#64748b' }}>
-                <Check size={14} style={{ display: 'inline', marginRight: '4px', color: '#10b981' }} />
-                You can add or remove permissions in the <strong>Manage Access</strong> section.
-              </p>
-              <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: '#64748b' }}>
-                <Users size={14} style={{ display: 'inline', marginRight: '4px', color: '#2563eb' }} />
-                You can add or remove employees in the <strong>Summary</strong> section.
-              </p>
-            </div>
-          </div>
-          <div className="aa-modal-footer">
-            <button className="aa-btn-outline" onClick={() => setShowEditTemplateModal(false)}>
-              Cancel
-            </button>
-            <button 
-              className="aa-btn-outline aa-btn-warning" 
-              onClick={() => {
-                if (templateToEdit) {
-                  setUpdateOrSaveModal(true);
-                } else {
-                  setSaveAsDraft(true);
-                  saveEditedTemplate('save');
-                }
-              }}
-              disabled={loading}
-            >
-              <FileText size={16} /> Save as Draft
-            </button>
-            <button 
-              className="aa-btn-primary" 
-              onClick={() => {
-                if (templateToEdit) {
-                  setUpdateOrSaveModal(true);
-                } else {
-                  setSaveAsDraft(false);
-                  saveEditedTemplate('save');
-                }
-              }}
-              disabled={loading}
-            >
-              {loading ? 'Saving...' : (
-                <>
-                  <Save size={16} /> {templateToEdit ? 'Save Changes' : 'Save Template'}
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  // ── Delete Confirmation Modal ──
-  const renderDeleteConfirmModal = () => {
-    if (!showDeleteConfirm) return null;
-
-    return (
-      <div className="aa-modal-overlay" onClick={() => setShowDeleteConfirm(false)}>
-        <div className="aa-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '420px' }}>
-          <div className="aa-modal-header">
-            <h3>Confirm Delete</h3>
-            <button className="aa-modal-close" onClick={() => setShowDeleteConfirm(false)}>
-              <X size={18} />
-            </button>
-          </div>
-          <div className="aa-modal-body">
-            <p style={{ color: '#64748b', fontSize: '14px' }}>
-              Are you sure you want to delete this template? This action cannot be undone.
-            </p>
-            <p className="aa-modal-warning" style={{ color: '#ef4444', marginTop: '12px', fontWeight: '500' }}>
-              This will permanently remove the template from the system.
-            </p>
-          </div>
-          <div className="aa-modal-footer">
-            <button className="aa-btn-outline" onClick={() => setShowDeleteConfirm(false)}>
-              Cancel
-            </button>
-            <button className="aa-btn-danger" onClick={confirmDeleteTemplate} disabled={loading}>
-              {loading ? 'Deleting...' : (
-                <>
-                  <Trash2 size={16} /> Delete
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  // ── Mode Selector with Radio Buttons ──
+  // ── Mode Selector ── (3 Modes)
   const renderModeSelector = () => (
     <div className="aa-mode-selector">
       <div className="aa-mode-radio-group">
@@ -3480,16 +3932,48 @@ const AssignAccess = ({ userRole, onLogout }) => {
               setCurrentStep(1);
               if (isTemplateEditMode) closeTemplateEditMode();
               if (isCreateTemplateMode) closeCreateTemplateMode();
+              setSelectedEmployees([]);
+              setSelectedTemplate(null);
+              initializeAccessGroups();
             }}
             className="aa-mode-radio-input"
           />
           <div className="aa-mode-radio-content">
             <div className="aa-mode-icon">
-              <UsersIcon size={24} />
+              <UserPlus size={24} />
             </div>
             <div className="aa-mode-content">
               <span className="aa-mode-title">Direct Assign Access</span>
               <span className="aa-mode-desc">Assign permissions directly to employees without managing templates</span>
+            </div>
+          </div>
+        </label>
+      </div>
+
+      <div className="aa-mode-radio-group">
+        <label className={`aa-mode-radio-label ${pageMode === 'manage' ? 'active' : ''}`}>
+          <input
+            type="radio"
+            name="pageMode"
+            value="manage"
+            checked={pageMode === 'manage'}
+            onChange={() => {
+              setPageMode('manage');
+              if (isTemplateEditMode) closeTemplateEditMode();
+              if (isCreateTemplateMode) closeCreateTemplateMode();
+              setSelectedEmployees([]);
+              setSelectedTemplate(null);
+              fetchAllEmployeePermissions();
+            }}
+            className="aa-mode-radio-input"
+          />
+          <div className="aa-mode-radio-content">
+            <div className="aa-mode-icon">
+              <Users size={24} />
+            </div>
+            <div className="aa-mode-content">
+              <span className="aa-mode-title">Manage Access</span>
+              <span className="aa-mode-desc">View, edit, or remove access permissions for employees</span>
             </div>
           </div>
         </label>
@@ -3504,11 +3988,11 @@ const AssignAccess = ({ userRole, onLogout }) => {
             checked={pageMode === 'template'}
             onChange={() => {
               setPageMode('template');
-              initializeAccessGroups();
-              setSelectedEmployees([]);
-              setSelectedTemplate(null);
               if (isTemplateEditMode) closeTemplateEditMode();
               if (isCreateTemplateMode) closeCreateTemplateMode();
+              setSelectedEmployees([]);
+              setSelectedTemplate(null);
+              initializeAccessGroups();
             }}
             className="aa-mode-radio-input"
           />
@@ -3528,30 +4012,22 @@ const AssignAccess = ({ userRole, onLogout }) => {
 
   // ── Template Management View ──
   const renderTemplateManagement = () => {
-    // Check if in Create Template Mode
     if (isCreateTemplateMode) {
       return (
         <div className="aa-template-edit-container">
-          {/* Back Button */}
           <div style={{ marginBottom: '16px' }}>
-            <button 
-              className="aa-btn-outline-sm" 
-              onClick={closeCreateTemplateMode}
-            >
+            <button className="aa-btn-outline-sm" onClick={closeCreateTemplateMode}>
               <ArrowLeft size={14} /> Back to Templates
             </button>
           </div>
 
-          {/* Create Template Stepper */}
           {renderCreateTemplateStepper()}
 
-          {/* Create Template Content */}
           <div className="aa-step-wrapper-content">
             {createTemplateStep === 1 && renderCreateTemplateManageAccess()}
             {createTemplateStep === 2 && renderCreateTemplateSummary()}
           </div>
 
-          {/* Create Template Bottom Bar */}
           <div className="aa-bottom-bar-sticky">
             <div className="aa-bottom-bar-content">
               <div className="aa-bottom-left">
@@ -3591,30 +4067,22 @@ const AssignAccess = ({ userRole, onLogout }) => {
       );
     }
 
-    // Check if in Edit Template Mode
     if (isTemplateEditMode) {
       return (
         <div className="aa-template-edit-container">
-          {/* Back Button */}
           <div style={{ marginBottom: '16px' }}>
-            <button 
-              className="aa-btn-outline-sm" 
-              onClick={closeTemplateEditMode}
-            >
+            <button className="aa-btn-outline-sm" onClick={closeTemplateEditMode}>
               <ArrowLeft size={14} /> Back to Templates
             </button>
           </div>
 
-          {/* Template Edit Stepper */}
           {renderTemplateEditStepper()}
 
-          {/* Template Edit Content */}
           <div className="aa-step-wrapper-content">
             {templateEditStep === 1 && renderTemplateEditManageAccess()}
             {templateEditStep === 2 && renderTemplateEditSummary()}
           </div>
 
-          {/* Template Edit Bottom Bar */}
           <div className="aa-bottom-bar-sticky">
             <div className="aa-bottom-bar-content">
               <div className="aa-bottom-left">
@@ -3654,7 +4122,6 @@ const AssignAccess = ({ userRole, onLogout }) => {
       );
     }
 
-    // Default Template Management View
     return (
       <div className="aa-template-management">
         <div className="aa-template-management-header">
@@ -3662,10 +4129,7 @@ const AssignAccess = ({ userRole, onLogout }) => {
             <h3>Template Management</h3>
             <p>Create, edit, copy and manage access templates</p>
           </div>
-          <button 
-            className="aa-btn-primary" 
-            onClick={openCreateTemplateMode}
-          >
+          <button className="aa-btn-primary" onClick={openCreateTemplateMode}>
             <Plus size={16} /> Create New Template
           </button>
         </div>
@@ -3783,15 +4247,13 @@ const AssignAccess = ({ userRole, onLogout }) => {
         <main className="cc-main">
           <div className="aa-container">
 
-            {/* Mode Selector with Radio Buttons */}
+            {/* Mode Selector - 3 Modes */}
             {renderModeSelector()}
 
             {pageMode === 'direct' ? (
               <>
-                {/* Stepper Navigation */}
                 {renderStepper()}
 
-                {/* Dynamic Step Content */}
                 <div className="aa-step-wrapper-content">
                   {currentStep === 1 && renderStep1()}
                   {currentStep === 2 && renderStep2()}
@@ -3799,7 +4261,6 @@ const AssignAccess = ({ userRole, onLogout }) => {
                   {currentStep === 4 && renderStep4()}
                 </div>
 
-                {/* Bottom Bar with 2 Buttons: Save Access & Save as Draft */}
                 <div className="aa-bottom-bar-sticky">
                   <div className="aa-bottom-bar-content">
                     <div className="aa-bottom-left">
@@ -3839,8 +4300,9 @@ const AssignAccess = ({ userRole, onLogout }) => {
                   </div>
                 </div>
               </>
+            ) : pageMode === 'manage' ? (
+              renderManageAccess()
             ) : (
-              // Template Management Mode
               renderTemplateManagement()
             )}
 
@@ -3848,22 +4310,13 @@ const AssignAccess = ({ userRole, onLogout }) => {
         </main>
       </div>
 
-      {/* Add Employee Modal */}
       {renderAddEmployeeModal()}
-
-      {/* Save Template Modal */}
       {renderSaveTemplateModal()}
-
-      {/* Edit Template Modal */}
-      {renderEditTemplateModal()}
-
-      {/* Update or Save Modal */}
       {renderUpdateOrSaveModal()}
-
-      {/* Delete Confirmation Modal */}
+      {renderViewModal()}
+      {renderEditModal()}
       {renderDeleteConfirmModal()}
 
-      {/* Alert Modal */}
       <AlertModal
         isOpen={alertConfig.isOpen}
         type={alertConfig.type}

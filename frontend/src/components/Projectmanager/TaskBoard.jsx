@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import Sidebar from "../Sidebar.jsx";
 import Header from "../Header.jsx";
 import { safeFetch, apiPatch, apiPost, apiPut, apiDelete } from "../../utils/api";
+import { getScreenPermission } from "../../utils/permissions";
 import {
   Calendar as CalendarIcon,
   Search,
@@ -30,7 +31,7 @@ import "../../styles/TaskBoard.css";
 import plantImage from "../../assets/cbg_plant_construction.png";
 
 // ─── Searchable Select Component ──────────────────────────────────────────
-const SearchableSelect = ({ options, value, onChange, placeholder, name, style, disabled }) => {
+const SearchableSelect = ({ options, value, onChange, placeholder, name, style, disabled, showSearch = true }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
   const wrapperRef = useRef(null);
@@ -43,7 +44,9 @@ const SearchableSelect = ({ options, value, onChange, placeholder, name, style, 
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const filtered = options.filter(o => o.label.toLowerCase().includes(search.toLowerCase()));
+  const filtered = showSearch
+    ? options.filter(o => o.label.toLowerCase().includes(search.toLowerCase()))
+    : options;
   const selected = options.find(o => String(o.value) === String(value));
 
   return (
@@ -75,24 +78,26 @@ const SearchableSelect = ({ options, value, onChange, placeholder, name, style, 
           backgroundColor: 'white', border: '1px solid #cbd5e1', borderRadius: '6px',
           boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)', zIndex: 1000
         }}>
-          <div style={{ padding: '8px' }}>
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search..."
-              style={{
-                width: '100%',
-                padding: '8px',
-                border: '1px solid #e2e8f0',
-                borderRadius: '4px',
-                outline: 'none',
-                fontSize: '14px',
-                boxSizing: 'border-box'
-              }}
-              onClick={(e) => e.stopPropagation()}
-            />
-          </div>
+          {showSearch && (
+            <div style={{ padding: '8px' }}>
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search..."
+                style={{
+                  width: '100%',
+                  padding: '8px',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '4px',
+                  outline: 'none',
+                  fontSize: '14px',
+                  boxSizing: 'border-box'
+                }}
+                onClick={(e) => e.stopPropagation()}
+              />
+            </div>
+          )}
           <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
             {filtered.length > 0 ? (
               filtered.map(opt => (
@@ -142,7 +147,7 @@ const mapTaskStatus = (taskSts) => {
   if (s === "OPEN") return "Not Started";
   if (s === "WIP") return "In Progress";
   if (s === "SUBMIT_REVIEW" || s === "UNDER_REVIEW") return "Under Review";
-  if (s === "COMPLETED") return "Completed";
+  if (s === "COMPLETED" || s === "CLOSED") return "Closed";
   if (s === "REWORK") return "In Progress";
   return "Not Started";
 };
@@ -151,17 +156,59 @@ const mapStatusToApi = (uiStatus) => {
   if (uiStatus === "Not Started") return "OPEN";
   if (uiStatus === "In Progress") return "WIP";
   if (uiStatus === "Under Review") return "SUBMIT_REVIEW";
-  if (uiStatus === "Completed") return "COMPLETED";
+  if (uiStatus === "Completed" || uiStatus === "Closed") return "CLOSED";
   if (uiStatus === "Overdue") return "OPEN";
   return "OPEN";
 };
 
-const mapPriorityFromApi = (prjPrty) => {
-  if (!prjPrty) return "Medium";
-  const p = prjPrty.toUpperCase();
-  if (p === "HIGH") return "High";
-  if (p === "LOW") return "Low";
+const mapPriorityFromApi = (prty) => {
+  if (!prty) return "Medium";
+  const p = String(prty).toUpperCase().trim();
+  if (p === "CRITICAL" || p === "CRIT" || p === "1") return "Critical";
+  if (p === "HIGH" || p === "H" || p === "2") return "High";
+  if (p === "MEDIUM" || p === "MED" || p === "M" || p === "3") return "Medium";
+  if (p === "NORMAL" || p === "NORM" || p === "N" || p === "4") return "Normal";
+  if (p === "LOW" || p === "L" || p === "5") return "Low";
   return "Medium";
+};
+
+const getScheduleStatusInfo = (task) => {
+  if (!task) return { status: 'On time', bg: '#eff6ff', color: '#2563eb', border: '#bfdbfe' };
+
+  const refDate = task.actCmpDt || task.actcmpdt || task.completedOn || task.submittedOn || task.rawTask?.actCmpDt || task.rawTask?.actcmpdt || task.rawTask?.tentEndDt;
+  const due = task.dueDate || task.due || task.rawTask?.tentEndDt || task.rawTask?.endDt || task.rawTask?.end_dt;
+
+  let status = 'On time';
+
+  if (refDate && due) {
+    const refStr = String(refDate).split('T')[0].split(' ')[0];
+    const dueStr = String(due).split('T')[0].split(' ')[0];
+    if (refStr < dueStr) status = 'Lead';
+    else if (refStr > dueStr) status = 'Lag';
+    else status = 'On time';
+  } else if (due) {
+    const todayStr = new Date().toISOString().split('T')[0];
+    const dueStr = String(due).split('T')[0].split(' ')[0];
+    if (todayStr > dueStr) status = 'Lag';
+    else status = 'On time';
+  }
+
+  if (status === 'Lead') {
+    return { status: 'Lead', bg: '#f0fdf4', color: '#16a34a', border: '#bbf7d0' };
+  } else if (status === 'Lag') {
+    return { status: 'Lag', bg: '#fef2f2', color: '#dc2626', border: '#fecaca' };
+  }
+  return { status: 'On time', bg: '#eff6ff', color: '#2563eb', border: '#bfdbfe' };
+};
+
+const getPriorityBadgeInfo = (priorityStr) => {
+  const p = String(priorityStr || 'Medium').toLowerCase().trim();
+  if (p === 'critical') return { label: 'Critical', bg: '#fef2f2', color: '#dc2626', border: '#fca5a5' };
+  if (p === 'high') return { label: 'High', bg: '#fee2e2', color: '#ef4444', border: '#fca5a5' };
+  if (p === 'medium') return { label: 'Medium', bg: '#fff7ed', color: '#f97316', border: '#ffedd5' };
+  if (p === 'normal') return { label: 'Normal', bg: '#f0f9ff', color: '#0284c7', border: '#bae6fd' };
+  if (p === 'low') return { label: 'Low', bg: '#f0fdf4', color: '#16a34a', border: '#bbf7d0' };
+  return { label: priorityStr || 'Medium', bg: '#fff7ed', color: '#f97316', border: '#ffedd5' };
 };
 
 const mapBackendTask = (t, projects, milestones, employees) => {
@@ -172,23 +219,34 @@ const mapBackendTask = (t, projects, milestones, employees) => {
   const employee = (employees || []).find(e => (e.empId || e.id) && String(e.empId || e.id) === String(t.empId));
 
   let status = "Not Started";
-  if (t.taskSts === "COMPLETED") {
-    status = "Completed";
+  const rawSts = (t.taskSts || t.tasksts || t.status || "").toString().toUpperCase().trim();
+  const subSts = (t.subStatus || t.substatus || "").toString().toUpperCase().trim();
+  const prcsActn = (t.prcsYesActn || t.prcsyesactn || "").toString().toUpperCase().trim();
+
+  if (rawSts === "COMPLETED" || rawSts === "CLOSED" || rawSts === "4") {
+    status = "Closed";
+  } else if (
+    subSts === "UNDER REVIEW" ||
+    subSts === "UNDER_REVIEW" ||
+    rawSts === "UNDER_REVIEW" ||
+    rawSts === "SUBMIT_REVIEW" ||
+    prcsActn === "PENDING_REVIEWER" ||
+    prcsActn === "PENDING_APPROVER"
+  ) {
+    status = "Under Review";
+  } else if (rawSts === "WIP" || rawSts === "IN_PROGRESS" || rawSts === "WORK_IN_PROGRESS" || rawSts === "ASSIGNED" || rawSts === "3" || subSts === "REWORK" || rawSts === "REWORK") {
+    status = "In Progress";
   } else {
     const today = new Date().toISOString().split("T")[0];
     if (t.endDt && t.endDt < today) {
       status = "Overdue";
-    } else if (t.taskSts === "WIP" || t.taskSts === "REWORK") {
-      status = "In Progress";
-    } else if (t.taskSts === "SUBMIT_REVIEW" || t.taskSts === "UNDER_REVIEW") {
-      status = "Under Review";
     } else {
       status = "Not Started";
     }
   }
 
   let progress = 0;
-  if (t.taskSts === "COMPLETED") {
+  if (t.taskSts === "COMPLETED" || t.taskSts === "CLOSED") {
     progress = 100;
   } else if (t.taskSts === "SUBMIT_REVIEW" || t.taskSts === "UNDER_REVIEW") {
     progress = 90;
@@ -216,8 +274,8 @@ const mapBackendTask = (t, projects, milestones, employees) => {
     dueDate: t.endDt || t.enddt || "",
     startDate: t.stDt || t.stdt || "",
     subtasksCount: t.wrkDays || t.wrkdays || 3,
-    subtasksCompleted: status === "Completed" ? (t.wrkDays || t.wrkdays || 3) : 0,
-    priority: status === "Completed" ? "Completed" : status === "Overdue" ? "Overdue" : mapPriorityFromApi(project ? (project.prjPrty || project.prjprty) : "Medium"),
+    subtasksCompleted: (status === "Closed" || status === "Completed") ? (t.wrkDays || t.wrkdays || 3) : 0,
+    priority: mapPriorityFromApi(t.taskPrty || t.taskprty || t.priority || t.prty || t.task_prty || project?.prjPrty || project?.prjprty || "Medium"),
     taskType: (t.taskAsgnTo || t.taskasgnto) === "EXTERNAL" ? "External" : "Internal",
     status: status,
     description: t.taskDesc || t.taskdesc || "",
@@ -227,6 +285,7 @@ const mapBackendTask = (t, projects, milestones, employees) => {
 
 // ─── Main Component ────────────────────────────────────────────────────────
 const TaskBoard = ({ userRole, onLogout }) => {
+  const screenPerm = getScreenPermission('TASK_BOARD');
   const [tasks, setTasks] = useState([]);
   const [allTasks, setAllTasks] = useState([]);
   const [apiLoaded, setApiLoaded] = useState(false);
@@ -312,6 +371,7 @@ const TaskBoard = ({ userRole, onLogout }) => {
     "Not Started": useRef(null),
     "In Progress": useRef(null),
     "Under Review": useRef(null),
+    "Closed": useRef(null),
     "Completed": useRef(null),
     "Overdue": useRef(null),
   };
@@ -503,7 +563,7 @@ const TaskBoard = ({ userRole, onLogout }) => {
     }
 
     const newProgress = Math.round((nextCompleted / total) * 100);
-    const updatedStatus = newProgress === 100 ? "Completed" : selectedTask.status;
+    const updatedStatus = newProgress === 100 ? "Closed" : selectedTask.status;
     const backendSts = mapStatusToApi(updatedStatus);
 
     try {
@@ -619,6 +679,7 @@ const TaskBoard = ({ userRole, onLogout }) => {
                   name="priority"
                   value={selectedPriority}
                   onChange={(e) => setSelectedPriority(e.target.value)}
+                  showSearch={false}
                   options={[
                     { value: "All", label: "All" },
                     { value: "Critical", label: "Critical" },
@@ -657,11 +718,11 @@ const TaskBoard = ({ userRole, onLogout }) => {
                 const activeDept = departmentsList.find(d => d.deptId === proj.deptId)?.deptNm || "Projects";
                 
                 const pTasks = allTasks.filter(t => String(t.projectId) === String(proj.prjId || proj.prjid || proj.id));
-                const totalTasksCount = pTasks.filter(t => t.status !== "Under Review").length;
+                const totalTasksCount = pTasks.length;
                 const notStartedCount = pTasks.filter(t => t.status === "Not Started").length;
                 const inProgressCount = pTasks.filter(t => t.status === "In Progress" || t.status === "Under Review").length;
-                const completedCount = pTasks.filter(t => t.status === "Completed").length;
-                const overdueCount = pTasks.filter(t => t.status === "Overdue").length;
+                const completedCount = pTasks.filter(t => t.status === "Completed" || t.status === "Closed").length;
+                const overdueCount = pTasks.filter(t => t.status === "Overdue" || (t.dueDate && t.dueDate < new Date().toISOString().split("T")[0] && t.status !== "Closed")).length;
 
                 const notStartedPct = totalTasksCount > 0 ? ((notStartedCount / totalTasksCount) * 100).toFixed(2) : "0.00";
                 const inProgressPct = totalTasksCount > 0 ? ((inProgressCount / totalTasksCount) * 100).toFixed(2) : "0.00";
@@ -701,8 +762,8 @@ const TaskBoard = ({ userRole, onLogout }) => {
                         <span className="tb-proj-metric-label">Total Tasks</span>
                         <span className="tb-proj-metric-val">{totalTasksCount}</span>
                       </div>
-                      <div className="tb-proj-metric-item completed" onClick={() => setSelectedStatus("Completed")} style={{ cursor: "pointer" }}>
-                        <span className="tb-proj-metric-label">Completed</span>
+                      <div className="tb-proj-metric-item completed" onClick={() => setSelectedStatus("Closed")} style={{ cursor: "pointer" }}>
+                        <span className="tb-proj-metric-label">Closed</span>
                         <span className="tb-proj-metric-val">
                           {completedCount} <span>({completedPct}%)</span>
                         </span>
@@ -739,7 +800,7 @@ const TaskBoard = ({ userRole, onLogout }) => {
               { label: "Not Started", value: "Not Started", color: "#2563eb" },
               { label: "In Progress", value: "In Progress", color: "#f97316" },
               { label: "Under Review", value: "Under Review", color: "#a855f7" },
-              { label: "Completed", value: "Completed", color: "#16a34a" },
+              { label: "Closed", value: "Closed", color: "#16a34a" },
               { label: "Overdue", value: "Overdue", color: "#ef4444" },
             ].map(tab => (
               <button
@@ -969,21 +1030,21 @@ const TaskBoard = ({ userRole, onLogout }) => {
               </div>
             )}
 
-            {/* Column 4: Completed */}
-            {(selectedStatus === "All Statuses" || selectedStatus === "Completed") && (
+            {/* Column 4: Closed */}
+            {(selectedStatus === "All Statuses" || selectedStatus === "Closed" || selectedStatus === "Completed") && (
               <div
-                ref={colRefs["Completed"]}
+                ref={colRefs["Closed"] || colRefs["Completed"]}
                 className={`tb-col completed`}
                 
               >
                 <div className="tb-col-header">
                   <div className="tb-col-title-wrap">
-                    <h3 className="tb-col-title">Completed</h3>
-                    <span className="tb-col-badge">{getTasksByStatus("Completed").length}</span>
+                    <h3 className="tb-col-title">Closed</h3>
+                    <span className="tb-col-badge">{(getTasksByStatus("Closed") || []).length + (getTasksByStatus("Completed") || []).length}</span>
                   </div>
                 </div>
                 <div className="tb-cards-container">
-                  {getTasksByStatus("Completed").map(task => (
+                  {[...getTasksByStatus("Closed"), ...getTasksByStatus("Completed")].map(task => (
                     <div
                       key={task.id}
                       className="tb-card"
@@ -992,7 +1053,23 @@ const TaskBoard = ({ userRole, onLogout }) => {
                     >
                       <div className="tb-card-header">
                         <span className="tb-card-id completed">{task.id}</span>
-                        <span className="tb-card-prio completed">COMPLETED</span>
+                        {(() => {
+                          const info = getScheduleStatusInfo(task);
+                          return (
+                            <span className="tb-card-prio" style={{
+                              backgroundColor: info.bg,
+                              color: info.color,
+                              border: `1px solid ${info.border}`,
+                              fontWeight: '700',
+                              padding: '2px 8px',
+                              borderRadius: '4px',
+                              fontSize: '11px',
+                              textTransform: 'none'
+                            }}>
+                              {info.status}
+                            </span>
+                          );
+                        })()}
                       </div>
                       <h4 className="tb-card-title">{task.title}</h4>
                       <p className="tb-card-subtitle">{task.milestone}</p>
@@ -1167,7 +1244,7 @@ const TaskBoard = ({ userRole, onLogout }) => {
               </div>
               <div className="tb-form-row">
                 <div className="tb-modal-detail-row">
-                  <span className="tb-modal-detail-label">Assignee</span>
+                  <span className="tb-modal-detail-label">Executor</span>
                   <span className="tb-modal-detail-value">{selectedTask.assignee}</span>
                 </div>
                 <div className="tb-modal-detail-row">
@@ -1180,10 +1257,51 @@ const TaskBoard = ({ userRole, onLogout }) => {
               </div>
 
               <div className="tb-form-row">
-                <div className="tb-modal-detail-row">
-                  <span className="tb-modal-detail-label">Priority</span>
-                  <span className="tb-modal-detail-value">{selectedTask.priority}</span>
-                </div>
+                {selectedTask.status === "Closed" || selectedTask.status === "Completed" ? (
+                  <div className="tb-modal-detail-row">
+                    <span className="tb-modal-detail-label">Schedule Status</span>
+                    {(() => {
+                      const info = getScheduleStatusInfo(selectedTask);
+                      return (
+                        <span className="tb-modal-detail-value" style={{
+                          backgroundColor: info.bg,
+                          color: info.color,
+                          border: `1px solid ${info.border}`,
+                          fontWeight: '700',
+                          padding: '2px 8px',
+                          borderRadius: '4px',
+                          fontSize: '12px',
+                          display: 'inline-block',
+                          width: 'fit-content'
+                        }}>
+                          {info.status}
+                        </span>
+                      );
+                    })()}
+                  </div>
+                ) : (
+                  <div className="tb-modal-detail-row">
+                    <span className="tb-modal-detail-label">Priority</span>
+                    {(() => {
+                      const prioInfo = getPriorityBadgeInfo(selectedTask.priority);
+                      return (
+                        <span className="tb-modal-detail-value" style={{
+                          backgroundColor: prioInfo.bg,
+                          color: prioInfo.color,
+                          border: `1px solid ${prioInfo.border}`,
+                          fontWeight: '700',
+                          padding: '2px 8px',
+                          borderRadius: '4px',
+                          fontSize: '12px',
+                          display: 'inline-block',
+                          width: 'fit-content'
+                        }}>
+                          {prioInfo.label}
+                        </span>
+                      );
+                    })()}
+                  </div>
+                )}
                 <div className="tb-modal-detail-row">
                   <span className="tb-modal-detail-label">Type</span>
                   <span className="tb-modal-detail-value">{selectedTask.taskType}</span>
@@ -1206,11 +1324,7 @@ const TaskBoard = ({ userRole, onLogout }) => {
 
               
             </div>
-            <div className="tb-modal-footer" style={{ justifyContent: "space-between" }}>
-              {/* ─── Only Delete and Close remain ─── */}
-              <button className="tb-btn-danger" style={{ display: 'flex', alignItems: 'center', gap: '6px' }} onClick={() => handleDeleteTask(selectedTask.id)}>
-                <Trash2 size={14} /> Delete
-              </button>
+            <div className="tb-modal-footer" style={{ justifyContent: "flex-end" }}>
               <button className="tb-btn-primary" onClick={() => setShowDetailModal(false)}>Close</button>
             </div>
           </div>

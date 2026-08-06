@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import Sidebar from "../Sidebar";
-import Header from "../Header";
-import AlertModal from "../AlertModal";
+import Sidebar from "../Sidebar.jsx";
+import Header from "../Header.jsx";
+import AlertModal from "../AlertModal.jsx";
+import { getScreenPermission } from "../../utils/permissions";
 import {
   Search,
   ArrowLeft,
@@ -116,6 +117,7 @@ const SearchableSelect = ({ options, value, onChange, placeholder, name, style, 
 };
 
 const DepartmentMapping = ({ onLogout, userRole }) => {
+  const screenPerm = getScreenPermission('DEPARTMENT_MAPPING');
   const navigate = useNavigate();
 
   // Data states
@@ -127,6 +129,7 @@ const DepartmentMapping = ({ onLogout, userRole }) => {
   // UI states
   const [view, setView] = useState("list");
   const [isEditing, setIsEditing] = useState(false);
+  const [isViewing, setIsViewing] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [activeDropdown, setActiveDropdown] = useState(null);
   const [dropdownPos, setDropdownPos] = useState({ top: 0, right: 0 });
@@ -241,6 +244,11 @@ const DepartmentMapping = ({ onLogout, userRole }) => {
   const handleCreateDept = async () => {
     if (!newDeptData.deptCode.trim() || !newDeptData.deptNm.trim()) {
       triggerAlert("error", "Validation Error", "Department Code and Name are required.");
+      return;
+    }
+
+    if (/\s/.test(newDeptData.deptCode)) {
+      triggerAlert("error", "Validation Error", "Spaces are not allowed in Department Code.");
       return;
     }
 
@@ -360,30 +368,54 @@ const DepartmentMapping = ({ onLogout, userRole }) => {
       sts: mapping.sts
     });
     setIsEditing(true);
+    setIsViewing(false);
     setEditingId(mapping.mapId);
     setActiveDropdown(null);
     setView("form");
   };
 
-  const handleDelete = async (id) => {
-    if (window.confirm("Are you sure you want to delete this mapping record?")) {
-      try {
-        const res = await fetch(`${API_BASE}/dept-coy-plt-maps/${id}`, {
-          method: "DELETE",
-          headers: authHeaders()
-        });
-        if (res.ok) {
-          triggerAlert("success", "Success", "Mapping record deleted successfully!");
-          fetchMappings();
-          setActiveDropdown(null);
-        } else {
-          triggerAlert("error", "Error", "Failed to delete mapping record.");
+  const handleView = (mapping) => {
+    setFormData({
+      coyId: mapping.coyId,
+      pltId: mapping.pltId,
+      deptId: mapping.deptId,
+      sts: mapping.sts
+    });
+    setIsEditing(false);
+    setIsViewing(true);
+    setEditingId(mapping.mapId);
+    setActiveDropdown(null);
+    setView("form");
+  };
+
+  const handleDelete = (id) => {
+    setAlertConfig({
+      isOpen: true,
+      type: "warning",
+      title: "Confirm Delete",
+      message: "Are you sure you want to delete this mapping record?",
+      confirmText: "Delete",
+      cancelText: "Cancel",
+      onConfirm: async () => {
+        try {
+          const res = await fetch(`${API_BASE}/dept-coy-plt-maps/${id}`, {
+            method: "DELETE",
+            headers: authHeaders()
+          });
+          if (res.ok) {
+            triggerAlert("success", "Success", "Mapping record deleted successfully!");
+            fetchMappings();
+            setActiveDropdown(null);
+          } else {
+            triggerAlert("error", "Error", "Failed to delete mapping record.");
+          }
+        } catch (err) {
+          console.error("Error deleting mapping:", err);
+          triggerAlert("error", "Error", "A network error occurred.");
         }
-      } catch (err) {
-        console.error("Error deleting mapping:", err);
-        triggerAlert("error", "Error", "A network error occurred.");
       }
-    }
+    });
+    setActiveDropdown(null);
   };
 
   const toggleDropdown = (e, id) => {
@@ -451,10 +483,10 @@ const DepartmentMapping = ({ onLogout, userRole }) => {
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "20px 24px", borderBottom: "1px solid #e2e8f0", backgroundColor: "#fafbfc" }}>
                 <div>
                   <h2 style={{ fontSize: "20px", fontWeight: "700", color: "#0f172a", margin: 0 }}>
-                    {isEditing ? "Edit Department Mapping" : "Department Mapping"}
+                    {isViewing ? "View Department Mapping" : isEditing ? "Edit Department Mapping" : "Department Mapping"}
                   </h2>
                   <p style={{ color: "#64748b", margin: "4px 0 0 0", fontSize: "14px" }}>
-                    Map Department with Company and Plant
+                    {isViewing ? "View mapping details" : "Map Department with Company and Plant"}
                   </p>
                 </div>
                 <button
@@ -464,6 +496,7 @@ const DepartmentMapping = ({ onLogout, userRole }) => {
                     setView("list");
                     handleResetForm();
                     setIsEditing(false);
+                    setIsViewing(false);
                     setEditingId(null);
                   }}
                   style={{ display: "flex", alignItems: "center", gap: "6px", padding: "8px 16px", background: "#2563eb", color: "white", border: "none", borderRadius: "6px", cursor: "pointer", fontSize: "13px", fontWeight: "500" }}
@@ -475,118 +508,164 @@ const DepartmentMapping = ({ onLogout, userRole }) => {
               {/* Form Fields */}
               <div style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "28px" }}>
                 
-                {/* Selection Header */}
-                <div>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-                    <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#1e293b", margin: 0 }}>Mapping Selection</h3>
-                    
-                    {/* Status Toggle Bar */}
-                    <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                      <span style={{ fontSize: "14px", fontWeight: "600", color: "#475569" }}>Status:</span>
-
-                      <label style={{ position: "relative", display: "inline-block", width: "46px", height: "26px", margin: 0 }}>
-                        <input
-                          type="checkbox"
-                          checked={formData.sts === true}
-                          onChange={handleToggleStatus}
-                          style={{ opacity: 0, width: 0, height: 0 }}
-                        />
-                        <span style={{
-                          position: "absolute", cursor: "pointer", top: 0, left: 0, right: 0, bottom: 0,
-                          backgroundColor: formData.sts === true ? "#10b981" : "#cbd5e1",
-                          transition: ".4s", borderRadius: "34px"
-                        }}>
-                          <span style={{
-                            position: "absolute", height: "20px", width: "20px",
-                            left: formData.sts === true ? "23px" : "3px", bottom: "3px",
-                            backgroundColor: "white", transition: ".4s", borderRadius: "50%",
-                            boxShadow: "0 2px 4px rgba(0,0,0,0.1)"
-                          }}></span>
-                        </span>
-                      </label>
-
-                      <span style={{
-                        fontSize: "14px", fontWeight: "600", minWidth: "60px",
-                        color: formData.sts === true ? "#16a34a" : "#dc2626"
-                      }}>
-                        {formData.sts === true ? "Active" : "Inactive"}
-                      </span>
+                {isViewing ? (
+                  <div className="cc-view-unified" style={{ padding: '12px 0' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 40px' }}>
+                      
+                      {/* Left Column Fields */}
+                      <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', padding: '12px 0', borderBottom: '1px dashed #e2e8f0' }}>
+                          <span style={{ fontSize: '13px', fontWeight: '600', color: '#64748b' }}>Company :</span>
+                          <span style={{ fontSize: '14px', color: '#0f172a', fontWeight: '500' }}>{getCompanyName(formData.coyId) || '-'}</span>
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', padding: '12px 0', borderBottom: '1px dashed #e2e8f0' }}>
+                          <span style={{ fontSize: '13px', fontWeight: '600', color: '#64748b' }}>Plant :</span>
+                          <span style={{ fontSize: '14px', color: '#0f172a', fontWeight: '500' }}>{getPlantName(formData.pltId) || '-'}</span>
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', padding: '12px 0', borderBottom: '1px dashed #e2e8f0' }}>
+                          <span style={{ fontSize: '13px', fontWeight: '600', color: '#64748b' }}>Department :</span>
+                          <span style={{ fontSize: '14px', color: '#0f172a', fontWeight: '500' }}>{getDeptName(formData.deptId) || '-'}</span>
+                        </div>
+                      </div>
+                      
+                      {/* Right Column Fields */}
+                      <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', padding: '12px 0', borderBottom: '1px dashed #e2e8f0', alignItems: 'center' }}>
+                          <span style={{ fontSize: '13px', fontWeight: '600', color: '#64748b' }}>Status :</span>
+                          <span style={{ padding: '2px 10px', borderRadius: '12px', fontSize: '12px', fontWeight: '600', width: 'fit-content', backgroundColor: formData.sts === true ? '#dcfce7' : '#fee2e2', color: formData.sts === true ? '#166534' : '#991b1b' }}>{formData.sts === true ? 'Active' : 'Inactive'}</span>
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', padding: '12px 0', borderBottom: '1px dashed #e2e8f0' }}>
+                          <span style={{ fontSize: '13px', fontWeight: '600', color: '#64748b' }}>Department Code :</span>
+                          <span style={{ fontSize: '14px', color: '#0f172a', fontWeight: '500' }}>{getDeptCode(formData.deptId) || '-'}</span>
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', padding: '12px 0', borderBottom: '1px dashed #e2e8f0' }}>
+                          <span style={{ fontSize: '13px', fontWeight: '600', color: '#64748b' }}>Description :</span>
+                          <span style={{ fontSize: '14px', color: '#0f172a', fontWeight: '500' }}>{getDeptDescr(formData.deptId) || '-'}</span>
+                        </div>
+                      </div>
                     </div>
                   </div>
+                ) : (
+                  <>
+                    {/* Selection Header */}
+                    <div>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+                        <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#1e293b", margin: 0 }}>Mapping Selection</h3>
+                        
+                        {/* Status Toggle Bar */}
+                        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                          <span style={{ fontSize: "14px", fontWeight: "600", color: "#475569" }}>Status:</span>
 
-                  <div className="cc-form-layout-row columns-3">
-                    <label className="cc-field-item">
-                      <span>Company <b style={{ color: "#ef4444" }}>*</b></span>
-                      <SearchableSelect 
-                        name="coyId" 
-                        value={formData.coyId} 
-                        onChange={handleInputChange} 
-                        placeholder="Select Company"
-                        options={companies.map(c => ({ value: c.coyId, label: c.coyNm }))}
-                      />
-                    </label>
+                          <label style={{ position: "relative", display: "inline-block", width: "46px", height: "26px", margin: 0, opacity: isViewing ? 0.6 : 1, cursor: isViewing ? "not-allowed" : "pointer" }}>
+                            <input
+                              type="checkbox"
+                              checked={formData.sts === true}
+                              onChange={handleToggleStatus}
+                              disabled={isViewing}
+                              style={{ opacity: 0, width: 0, height: 0 }}
+                            />
+                            <span style={{
+                              position: "absolute", cursor: "pointer", top: 0, left: 0, right: 0, bottom: 0,
+                              backgroundColor: formData.sts === true ? "#10b981" : "#cbd5e1",
+                              transition: ".4s", borderRadius: "34px"
+                            }}>
+                              <span style={{
+                                position: "absolute", height: "20px", width: "20px",
+                                left: formData.sts === true ? "23px" : "3px", bottom: "3px",
+                                backgroundColor: "white", transition: ".4s", borderRadius: "50%",
+                                boxShadow: "0 2px 4px rgba(0,0,0,0.1)"
+                              }}></span>
+                            </span>
+                          </label>
 
-                    <label className="cc-field-item">
-                      <span>Plant <b style={{ color: "#ef4444" }}>*</b></span>
-                      <SearchableSelect 
-                        name="pltId" 
-                        value={formData.pltId} 
-                        onChange={handleInputChange} 
-                        placeholder={formData.coyId ? "Select Plant" : "Select Company First"}
-                        options={filteredPlants.map(p => ({ value: p.pltId, label: p.pltNm }))}
-                        disabled={!formData.coyId}
-                      />
-                    </label>
+                          <span style={{
+                            fontSize: "14px", fontWeight: "600", minWidth: "60px",
+                            color: formData.sts === true ? "#16a34a" : "#dc2626"
+                          }}>
+                            {formData.sts === true ? "Active" : "Inactive"}
+                          </span>
+                        </div>
+                      </div>
 
-                    <label className="cc-field-item">
-                      <span>Department <b style={{ color: "#ef4444" }}>*</b></span>
-                      <SearchableSelect 
-                        name="deptId" 
-                        value={formData.deptId} 
-                        onChange={handleInputChange} 
-                        placeholder="Select Department"
-                        options={departments.map(d => ({ value: d.deptId, label: d.deptNm }))}
-                        onCreate={() => setShowDeptPopup(true)}
-                      />
-                    </label>
-                  </div>
-                </div>
+                      <div className="cc-form-layout-row columns-3">
+                        <label className="cc-field-item">
+                          <span>Company <b style={{ color: "#ef4444" }}>*</b></span>
+                          <SearchableSelect 
+                            name="coyId" 
+                            value={formData.coyId} 
+                            onChange={handleInputChange} 
+                            placeholder="Select Company"
+                            options={companies.map(c => ({ value: c.coyId, label: c.coyNm }))}
+                            disabled={isViewing}
+                          />
+                        </label>
 
-                {/* Details Header */}
-                <div>
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "16px" }}>
-                    <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#1e293b", margin: 0 }}>Department Details</h3>
-                  </div>
+                        <label className="cc-field-item">
+                          <span>Plant <b style={{ color: "#ef4444" }}>*</b></span>
+                          <SearchableSelect 
+                            name="pltId" 
+                            value={formData.pltId} 
+                            onChange={handleInputChange} 
+                            placeholder={formData.coyId ? "Select Plant" : "Select Company First"}
+                            options={filteredPlants.map(p => ({ value: p.pltId, label: p.pltNm }))}
+                            disabled={!formData.coyId || isViewing}
+                          />
+                        </label>
 
-                  <div className="cc-form-layout-row columns-3">
-                    <label className="cc-field-item">
-                      <span>Department Code</span>
-                      <input type="text" name="code" value={deptCode} readOnly style={{ backgroundColor: "#f8fafc", color: "#64748b", cursor: "not-allowed" }} placeholder="Auto-fills from Selection" />
-                    </label>
+                        <label className="cc-field-item">
+                          <span>Department <b style={{ color: "#ef4444" }}>*</b></span>
+                          <SearchableSelect 
+                            name="deptId" 
+                            value={formData.deptId} 
+                            onChange={handleInputChange} 
+                            placeholder="Select Department"
+                            options={departments.map(d => ({ value: d.deptId, label: d.deptNm }))}
+                            onCreate={!isViewing ? () => setShowDeptPopup(true) : undefined}
+                            disabled={isViewing}
+                          />
+                        </label>
+                      </div>
+                    </div>
 
-                    <label className="cc-field-item">
-                      <span>Department Name</span>
-                      <input type="text" name="name" value={deptNm} readOnly style={{ backgroundColor: "#f8fafc", color: "#64748b", cursor: "not-allowed" }} placeholder="Auto-fills from Selection" />
-                    </label>
+                    {/* Details Header */}
+                    <div>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "16px" }}>
+                        <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#1e293b", margin: 0 }}>Department Details</h3>
+                      </div>
 
-                    <label className="cc-field-item">
-                      <span>Description</span>
-                      <textarea name="description" value={deptDescr} readOnly style={{ backgroundColor: "#f8fafc", color: "#64748b", cursor: "not-allowed" }} placeholder="Auto-fills from selection" rows={2} />
-                    </label>
-                  </div>
-                </div>
+                      <div className="cc-form-layout-row columns-3">
+                        <label className="cc-field-item">
+                          <span>Department Code</span>
+                          <input type="text" name="code" value={deptCode} readOnly style={{ backgroundColor: "#f8fafc", color: "#64748b", cursor: "not-allowed" }} placeholder="Auto-fills from Selection" />
+                        </label>
+
+                        <label className="cc-field-item">
+                          <span>Department Name</span>
+                          <input type="text" name="name" value={deptNm} readOnly style={{ backgroundColor: "#f8fafc", color: "#64748b", cursor: "not-allowed" }} placeholder="Auto-fills from Selection" />
+                        </label>
+
+                        <label className="cc-field-item">
+                          <span>Description</span>
+                          <textarea name="description" value={deptDescr} readOnly style={{ backgroundColor: "#f8fafc", color: "#64748b", cursor: "not-allowed" }} placeholder="Auto-fills from selection" rows={2} />
+                        </label>
+                      </div>
+                    </div>
+                  </>
+                )}
 
               </div>
 
               {/* Form Action Buttons */}
+              {!isViewing && (
               <div className="cc-form-footer" style={{ display: "flex", justifyContent: "flex-end", gap: "12px", padding: "16px 24px", backgroundColor: "#fafbfc", borderTop: "1px solid #e2e8f0" }}>
                 <button type="button" className="cc-btn primary" onClick={handleSave}>
                   <Save size={14} /> {isEditing ? "Update Mapping" : "Save Mapping"}
                 </button>
-                <button type="button" className="cc-btn secondary" onClick={() => { setView("list"); handleResetForm(); setIsEditing(false); setEditingId(null); }}>
+                <button type="button" className="cc-btn secondary" onClick={() => { setView("list"); handleResetForm(); setIsEditing(false); setIsViewing(false); setEditingId(null); }}>
                   Cancel
                 </button>
               </div>
+              )}
             </div>
           ) : (
             /* ================= VIEW: LIST MODE ================= */
@@ -595,7 +674,7 @@ const DepartmentMapping = ({ onLogout, userRole }) => {
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "20px 24px", borderBottom: "1px solid #e2e8f0" }}>
                 <div>
                   <h2 style={{ fontSize: "18px", fontWeight: "700", color: "#0f172a", margin: 0 }}>
-                    Department Mappings
+                    Mapped Departments
                   </h2>
                   <p style={{ color: "#64748b", margin: "4px 0 0 0", fontSize: "14px" }}>
                     View and manage department mappings with companies and plants
@@ -612,18 +691,21 @@ const DepartmentMapping = ({ onLogout, userRole }) => {
                       style={{ padding: '8px 12px 8px 36px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '14px', outline: 'none', width: '250px' }}
                     />
                   </div>
-                  <button
-                    type="button"
-                    className="cc-btn-add-new"
-                    onClick={() => {
-                      handleResetForm();
-                      setIsEditing(false);
-                      setView("form");
-                    }}
-                    style={{ display: "flex", alignItems: "center", gap: "6px", padding: "8px 20px", background: "#2563eb", color: "white", border: "none", borderRadius: "6px", cursor: "pointer", fontSize: "14px", fontWeight: "500" }}
-                  >
-                    <Plus size={16} /> Add Department Mapping
-                  </button>
+                  {screenPerm.canCreate && (
+                    <button
+                      type="button"
+                      className="cc-btn-add-new"
+                      onClick={() => {
+                        handleResetForm();
+                        setIsEditing(false);
+                        setIsViewing(false);
+                        setView("form");
+                      }}
+                      style={{ display: "flex", alignItems: "center", gap: "6px", padding: "8px 20px", background: "#2563eb", color: "white", border: "none", borderRadius: "6px", cursor: "pointer", fontSize: "14px", fontWeight: "500" }}
+                    >
+                      <Plus size={16} /> Add Department Mapping
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -673,31 +755,28 @@ const DepartmentMapping = ({ onLogout, userRole }) => {
                                   <button
                                     type="button"
                                     style={{ padding: "10px 16px", textAlign: "left", background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: "10px", fontSize: "14px", color: "#334155", borderRadius: "4px", margin: "2px 4px" }}
-                                    onClick={() => {
-                                      triggerAlert(
-                                        "info",
-                                        "Mapping Details",
-                                        `Department Mapping Details:\n\nCompany: ${getCompanyName(item.coyId)}\nPlant: ${getPlantName(item.pltId)}\nDepartment: ${getDeptName(item.deptId)}\nCode: ${getDeptCode(item.deptId)}\nDescription: ${getDeptDescr(item.deptId)}\nStatus: ${item.sts === true ? "Active" : "Inactive"}`
-                                      );
-                                      setActiveDropdown(null);
-                                    }}
+                                    onClick={() => handleView(item)}
                                   >
                                     <Eye size={15} /> View
                                   </button>
-                                  <button
-                                    type="button"
-                                    style={{ padding: "10px 16px", textAlign: "left", background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: "10px", fontSize: "14px", color: "#334155", borderRadius: "4px", margin: "2px 4px" }}
-                                    onClick={() => handleEdit(item)}
-                                  >
-                                    <Edit size={15} /> Edit
-                                  </button>
-                                  <button
-                                    type="button"
-                                    style={{ padding: "10px 16px", textAlign: "left", background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: "10px", fontSize: "14px", color: "#ef4444", borderRadius: "4px", margin: "2px 4px" }}
-                                    onClick={() => handleDelete(item.mapId)}
-                                  >
-                                    <Trash2 size={15} /> Delete
-                                  </button>
+                                  {screenPerm.canEdit && (
+                                    <button
+                                      type="button"
+                                      style={{ padding: "10px 16px", textAlign: "left", background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: "10px", fontSize: "14px", color: "#334155", borderRadius: "4px", margin: "2px 4px" }}
+                                      onClick={() => handleEdit(item)}
+                                    >
+                                      <Edit size={15} /> Edit
+                                    </button>
+                                  )}
+                                  {screenPerm.canDelete && (
+                                    <button
+                                      type="button"
+                                      style={{ padding: "10px 16px", textAlign: "left", background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: "10px", fontSize: "14px", color: "#ef4444", borderRadius: "4px", margin: "2px 4px" }}
+                                      onClick={() => handleDelete(item.mapId)}
+                                    >
+                                      <Trash2 size={15} /> Delete
+                                    </button>
+                                  )}
                                 </div>
                             )}
                           </td>
@@ -705,8 +784,15 @@ const DepartmentMapping = ({ onLogout, userRole }) => {
                       ))
                     ) : (
                       <tr>
-                        <td colSpan="7" style={{ textAlign: "center", padding: "60px 20px", color: "#64748b", fontSize: "14px" }}>
-                          {loading ? "Loading department mappings..." : "No mapping records found. Click the button above to add a mapping."}
+                        <td colSpan="7" style={{ textAlign: "center", padding: "60px 20px" }}>
+                          {loading ? (
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', color: '#64748b', fontSize: '14px' }}>
+                              <RefreshCcw className="spinning" style={{ animation: 'spin 1s linear infinite' }} size={16} />
+                              <span>Loading department mappings...</span>
+                            </div>
+                          ) : (
+                            <span style={{ color: '#64748b', fontSize: '14px' }}>No mapping records found. Click the button above to add a mapping.</span>
+                          )}
                         </td>
                       </tr>
                     )}
@@ -725,6 +811,9 @@ const DepartmentMapping = ({ onLogout, userRole }) => {
         title={alertConfig.title}
         message={alertConfig.message}
         onClose={() => setAlertConfig(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={alertConfig.onConfirm}
+        confirmText={alertConfig.confirmText}
+        cancelText={alertConfig.cancelText}
       />
 
       {showDeptPopup && (
