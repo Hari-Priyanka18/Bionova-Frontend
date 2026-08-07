@@ -411,15 +411,28 @@ const DepartmentMapping = ({ onLogout, userRole }) => {
 
   const toggleDropdown = (e, id) => {
     e.stopPropagation();
-    const rect = e.currentTarget.getBoundingClientRect();
-    const dropdownHeight = 150;
-    const spaceBelow = window.innerHeight - rect.bottom;
-    const spaceAbove = rect.top;
+    if (activeDropdown === id) {
+      setActiveDropdown(null);
+    } else {
+      const btn = e.currentTarget;
+      const rect = btn.getBoundingClientRect();
+      const container = btn.closest('.cc-table-container');
+      
+      let spaceBelow = window.innerHeight - rect.bottom;
+      let spaceAbove = rect.top;
+      
+      if (container) {
+        const containerRect = container.getBoundingClientRect();
+        spaceBelow = containerRect.bottom - rect.bottom;
+        spaceAbove = rect.top - containerRect.top;
+      }
 
-    setDropdownPos({
-      isTop: spaceBelow < dropdownHeight && spaceAbove > dropdownHeight
-    });
-    setActiveDropdown((prev) => (prev === id ? null : id));
+      const dropdownHeight = 150;
+      setDropdownPos({
+        isTop: spaceBelow < dropdownHeight && spaceAbove > spaceBelow
+      });
+      setActiveDropdown(id);
+    }
   };
 
   // Helper names resolver
@@ -745,8 +758,8 @@ const DepartmentMapping = ({ onLogout, userRole }) => {
 
                             {activeDropdown === item.mapId && (
                               <>
-                                <div className="cc-actions-dropdown-backdrop" onClick={() => setActiveDropdown(null)} style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 998 }} />
-                                <div className="cc-actions-dropdown-menu" style={{ position: 'absolute', right: '30px', top: dropdownPos.isTop ? 'auto' : '100%', bottom: dropdownPos.isTop ? '100%' : 'auto', backgroundColor: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', zIndex: 999, display: 'flex', flexDirection: 'column', padding: '4px 0', minWidth: '140px' }}>
+                                <div className="cc-actions-dropdown-backdrop" onClick={() => setActiveDropdown(null)} style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 90 }} />
+                                <div className="cc-actions-dropdown-menu" style={{ position: 'absolute', right: '30px', top: dropdownPos.isTop ? 'auto' : '100%', bottom: dropdownPos.isTop ? '100%' : 'auto', backgroundColor: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', zIndex: 99, display: 'flex', flexDirection: 'column', padding: '4px 0', minWidth: '140px' }}>
                                   <button
                                     type="button"
                                     style={{ padding: "10px 16px", textAlign: "left", background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: "10px", fontSize: "14px", color: "#334155", borderRadius: "4px", margin: "2px 4px" }}

@@ -6,7 +6,6 @@ import AlertModal from "../AlertModal.jsx";
 import { useNavigate } from 'react-router-dom';
 import '../../styles/PublicHoliday.css';
 import { apiGet, apiPost, apiPut, apiDelete } from "../../utils/api";
-import { getScreenPermission } from "../../utils/permissions";
 
 const formatDateDisplay = (dateStr) => {
   if (!dateStr) return "";
@@ -62,7 +61,6 @@ const mapBackendHoliday = (h, employees = [], companies = [], plants = []) => {
 };
 
 const PublicHoliday = ({ userRole, onLogout }) => {
-  const screenPerm = getScreenPermission('PUBLIC_HOLIDAYS');
   const [holidays, setHolidays] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [companies, setCompanies] = useState([]);
@@ -73,7 +71,7 @@ const PublicHoliday = ({ userRole, onLogout }) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
   const [editId, setEditId] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
 
   const [alertConfig, setAlertConfig] = useState({
     isOpen: false,
@@ -106,7 +104,6 @@ const PublicHoliday = ({ userRole, onLogout }) => {
   const navigate = useNavigate();
 
   const fetchData = async () => {
-    setIsLoading(true);
     try {
       const [holidaysData, employeesData, companiesData, plantsData, profileRes] = await Promise.all([
         apiGet("/api/calendar"),
@@ -209,8 +206,13 @@ const PublicHoliday = ({ userRole, onLogout }) => {
           await fetchData();
           triggerAlert("success", "Success", "Holiday deleted successfully.");
         } catch (err) {
-          console.error("Error deleting holiday:", err);
-          triggerAlert("error", "Error", "Failed to delete holiday: " + err.message);
+          if (err.message && err.message.includes("Unexpected end of JSON input")) {
+            await fetchData();
+            triggerAlert("success", "Success", "Holiday deleted successfully.");
+          } else {
+            console.error("Error deleting holiday:", err);
+            triggerAlert("error", "Error", "Failed to delete holiday: " + err.message);
+          }
         }
       },
       "Delete",
@@ -297,15 +299,13 @@ const PublicHoliday = ({ userRole, onLogout }) => {
         <main className="ph-main" style={{ padding: '24px', overflowY: 'auto', flex: 1 }}>
           <div className="ph-container">
             {/* Header Actions */}
-            {screenPerm.canCreate && (
-              <div className="ph-header-row" style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '16px' }}>
-                <div className="ph-header-actions">
-                  <button className="ph-btn-primary" onClick={openAddDrawer}>
-                    <Plus size={16} /> Add Holiday
-                  </button>
-                </div>
+            <div className="ph-header-row" style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '16px' }}>
+              <div className="ph-header-actions">
+                <button className="ph-btn-primary" onClick={openAddDrawer}>
+                  <Plus size={16} /> Add Holiday
+                </button>
               </div>
-            )}
+            </div>
 
             {/* Main Card */}
             <div className="ph-card" style={{ marginTop: '0' }}>
@@ -329,9 +329,6 @@ const PublicHoliday = ({ userRole, onLogout }) => {
                     value={searchQuery}
                     onChange={handleSearch}
                   />
-                  <button className="ph-filter-btn">
-                    <Filter size={16} />
-                  </button>
                 </div>
               </div>
 
@@ -375,14 +372,8 @@ const PublicHoliday = ({ userRole, onLogout }) => {
                         </td>
                         <td>
                           <div className="ph-actions">
-                            {screenPerm.canEdit ? (
-                              <button className="ph-action-btn edit" onClick={() => openEditDrawer(h)}><Edit2 size={14} /></button>
-                            ) : (
-                              <span style={{ fontSize: '12px', color: '#94a3b8', fontStyle: 'italic' }}>View Only</span>
-                            )}
-                            {screenPerm.canDelete && (
-                              <button className="ph-action-btn delete" onClick={() => handleDelete(h.id)}><Trash2 size={14} /></button>
-                            )}
+                            <button className="ph-action-btn edit" onClick={() => openEditDrawer(h)}><Edit2 size={14} /></button>
+                            <button className="ph-action-btn delete" onClick={() => handleDelete(h.id)}><Trash2 size={14} /></button>
                           </div>
                         </td>
                       </tr>
@@ -397,24 +388,10 @@ const PublicHoliday = ({ userRole, onLogout }) => {
                   Total Holidays: <span>{filteredHolidays.length}</span>
                 </div>
                 <div className="ph-pag-right">
-                  <span>Rows per page</span>
-                  <select 
-                    className="ph-select" 
-                    style={{ minWidth: '70px', paddingRight: '28px' }}
-                    value={rowsPerPage}
-                    onChange={(e) => { setRowsPerPage(parseInt(e.target.value, 10)); setCurrentPage(1); }}
-                  >
-                    <option value={10}>10</option>
-                    <option value={20}>20</option>
-                    <option value={50}>50</option>
-                  </select>
-                  <span>{Math.min((currentPage - 1) * rowsPerPage + 1, filteredHolidays.length)} to {Math.min(currentPage * rowsPerPage, filteredHolidays.length)} of {filteredHolidays.length}</span>
                   <div className="ph-pag-controls">
-                    <button disabled={currentPage === 1} onClick={() => setCurrentPage(1)}><ChevronsLeft size={16} /></button>
                     <button disabled={currentPage === 1} onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}><ChevronLeft size={16} /></button>
-                    <span className="active">{currentPage}</span>
+                    <span className="active" style={{ padding: '0 8px', fontSize: '14px', fontWeight: '500' }}>Page {currentPage}</span>
                     <button disabled={currentPage === totalPages} onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}><ChevronRight size={16} /></button>
-                    <button disabled={currentPage === totalPages} onClick={() => setCurrentPage(totalPages)}><ChevronsRight size={16} /></button>
                   </div>
                 </div>
               </div>

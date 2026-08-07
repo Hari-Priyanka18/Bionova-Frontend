@@ -368,7 +368,8 @@ const Header = ({ title, subtitle, showSearch = false, statusBadge, progressPerc
         borderBottom: "1px solid #e2e8f0",
         position: "fixed",
         top: 0,
-        boxSizing: "border-box"
+        boxSizing: "border-box",
+        zIndex: 999
       }}>
         {/* Left Side: Title */}
         <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
