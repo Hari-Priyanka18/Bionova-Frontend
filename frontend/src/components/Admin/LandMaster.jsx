@@ -932,7 +932,7 @@ const AgriLandAllocation = ({ userRole, onLogout }) => {
           spaceAbove = rect.top - containerRect.top;
         }
 
-        const dropdownHeight = 150;
+        const dropdownHeight = 250;
         setDropdownPos({
           isTop: spaceBelow < dropdownHeight && spaceAbove > spaceBelow
         });
