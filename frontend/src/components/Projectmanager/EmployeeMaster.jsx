@@ -2316,7 +2316,7 @@ const EmployeeCreation = ({ userRole, onLogout }) => {
                 </div>
 
                 {activeEmployeeTab === "INTERNAL" ? (
-                <div className="emp-table-container" style={{ overflowX: 'auto', paddingBottom: '140px' }}>
+                <div className="emp-table-container" style={{ overflowX: 'auto' }}>
                   <table className="emp-list-table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '2200px' }}>
                     <thead style={{ backgroundColor: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
                       <tr>
@@ -2412,7 +2412,7 @@ const EmployeeCreation = ({ userRole, onLogout }) => {
                   </table>
                 </div>
                 ) : (
-                <div className="emp-table-container" style={{ overflowX: 'auto', paddingBottom: '140px' }}>
+                <div className="emp-table-container" style={{ overflowX: 'auto' }}>
                   <table className="emp-list-table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '1000px' }}>
                     <thead style={{ backgroundColor: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
                       <tr>

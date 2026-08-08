@@ -1619,7 +1619,7 @@ const ProjectCreation = ({ userRole, onLogout }) => {
                   </button>
                 </div>
 
-                <div className="proj-table-container" style={{ overflowX: 'auto', paddingBottom: '140px' }}>
+                <div className="proj-table-container" style={{ overflowX: 'auto' }}>
                   {/* ─── Loading Spinner ─────────────────────────────── */}
                   {loading ? (
                     <div style={{ textAlign: 'center', padding: '60px 20px', color: '#64748b' }}>
