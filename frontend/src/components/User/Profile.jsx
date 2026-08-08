@@ -330,10 +330,19 @@ const Profile = ({ userRole, onLogout }) => {
     return p ? p.pltNm : `Plant ID: ${id}`;
   };
 
+  const formatGender = (g) => {
+    if (!g) return "N/A";
+    const str = String(g).toUpperCase();
+    if (str === "MALE") return "Male";
+    if (str === "FEMALE") return "Female";
+    if (str === "OTHER" || str === "OTHERS") return "Others";
+    return String(g).charAt(0).toUpperCase() + String(g).slice(1).toLowerCase();
+  };
+
   const profileDetails = profile ? {
     employeeCode: profile.empCode || "N/A",
     employeeName: `${profile.fstNm || ""} ${profile.lstNm || ""}`.trim() || "N/A",
-    gender: profile.gndr || profile.gender || "N/A",
+    gender: formatGender(profile.gndr || profile.gender),
     dateOfBirth: profile.dob || "N/A",
     email: profile.email || "N/A",
     mobileNumber: profile.mobNum || "N/A",

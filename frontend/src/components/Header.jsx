@@ -368,6 +368,7 @@ const Header = ({ title, subtitle, showSearch = false, statusBadge, progressPerc
         borderBottom: "1px solid #e2e8f0",
         position: "fixed",
         top: 0,
+        zIndex: 1000,
         boxSizing: "border-box"
       }}>
         {/* Left Side: Title */}

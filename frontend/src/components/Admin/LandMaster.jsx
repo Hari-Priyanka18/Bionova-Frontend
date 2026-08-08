@@ -586,6 +586,13 @@ const AgriLandAllocation = ({ userRole, onLogout }) => {
     reader.readAsDataURL(file);
   };
 
+  const handleDeleteLogo = () => {
+    setLogoFile(null);
+    setForm((prev) => ({ ...prev, logo: "" }));
+    const fileInput = document.getElementById("logoUploadHidden");
+    if (fileInput) fileInput.value = "";
+  };
+
   const handleResetForm = (lList = allocations) => {
     setLogoFile(null);
     setForm({
@@ -914,12 +921,28 @@ const AgriLandAllocation = ({ userRole, onLogout }) => {
   };
 
   const toggleDropdown = (id, event) => {
+    if (event) event.stopPropagation();
     if (activeDropdown === id) {
       setActiveDropdown(null);
     } else {
       if (event) {
-        const rect = event.currentTarget.getBoundingClientRect();
-        setDropdownPos({ top: rect.bottom, right: window.innerWidth - rect.right });
+        const btn = event.currentTarget;
+        const rect = btn.getBoundingClientRect();
+        const container = btn.closest('.al-table-container');
+        
+        let spaceBelow = window.innerHeight - rect.bottom;
+        let spaceAbove = rect.top;
+        
+        if (container) {
+          const containerRect = container.getBoundingClientRect();
+          spaceBelow = containerRect.bottom - rect.bottom;
+          spaceAbove = rect.top - containerRect.top;
+        }
+
+        const dropdownHeight = 250;
+        setDropdownPos({
+          isTop: spaceBelow < dropdownHeight && spaceAbove > spaceBelow
+        });
       }
       setActiveDropdown(id);
     }
@@ -1439,7 +1462,7 @@ const AgriLandAllocation = ({ userRole, onLogout }) => {
                           <div className="al-form-layout-row columns-4">
                             <label className="al-field-item">
                               <span>Land Code <b style={{ color: '#ef4444' }}>*</b></span>
-                              <input type="text" name="landCode" value={form.landCode} onChange={handleChange} placeholder="Enter land code" maxLength={10} />
+                              <input type="text" name="landCode" value={form.landCode} readOnly placeholder="Auto-generated code" />
                               {formErrors.landCode && (
                                 <span className="error-text" style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block' }}>{formErrors.landCode}</span>
                               )}
@@ -1457,14 +1480,41 @@ const AgriLandAllocation = ({ userRole, onLogout }) => {
                             </label>
                             <label className="al-field-item" style={{ gridColumn: 'span 2' }}>
                               <span>Land Image</span>
-                              <div className="al-logo-row">
-                                <div className="al-logo-box" style={{ width: '48px', height: '48px', border: '1px solid #e2e8f0', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8fafc', overflow: 'hidden' }}>
+                              <div className="al-logo-row" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <div className="al-logo-box" style={{ width: '48px', height: '48px', border: '1px solid #e2e8f0', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8fafc', overflow: 'hidden', flexShrink: 0 }}>
                                   {form.logo ? <img src={form.logo} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <ImageIcon size={22} style={{ color: '#94a3b8' }} />}
                                 </div>
-                                <input id="logoUploadHidden" type="file" accept="image/*" onChange={handleLogoChange} hidden />
-                                <button type="button" onClick={() => document.getElementById("logoUploadHidden").click()} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 12px', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '13px', color: '#0f172a', cursor: 'pointer' }}>
-                                  <Upload size={14} /> Upload Image
-                                </button>
+                                <input id="logoUploadHidden" type="file" accept="image/*" onChange={handleLogoChange} disabled={isViewing} hidden />
+                                {!isViewing && (
+                                  <>
+                                    <button type="button" onClick={() => document.getElementById("logoUploadHidden").click()} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 12px', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '13px', color: '#0f172a', cursor: 'pointer', height: '38px', whiteSpace: 'nowrap' }}>
+                                      <Upload size={14} /> Upload Image
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={handleDeleteLogo}
+                                      disabled={!form.logo}
+                                      style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        padding: '8px 12px',
+                                        background: form.logo ? '#fef2f2' : '#f8fafc',
+                                        border: form.logo ? '1px solid #fca5a5' : '1px solid #e2e8f0',
+                                        borderRadius: '6px',
+                                        fontSize: '13px',
+                                        color: form.logo ? '#dc2626' : '#94a3b8',
+                                        cursor: form.logo ? 'pointer' : 'not-allowed',
+                                        height: '38px',
+                                        whiteSpace: 'nowrap',
+                                        opacity: form.logo ? 1 : 0.6
+                                      }}
+                                      title="Delete image"
+                                    >
+                                      <Trash2 size={14} /> Delete
+                                    </button>
+                                  </>
+                                )}
                               </div>
                             </label>
                           </div>
@@ -1928,9 +1978,9 @@ const AgriLandAllocation = ({ userRole, onLogout }) => {
                                   <div
                                     className="al-actions-dropdown-backdrop"
                                     onClick={() => setActiveDropdown(null)}
-                                    style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9998 }}
+                                    style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 90 }}
                                   />
-                                  <div className="al-actions-dropdown-menu" style={{ position: 'fixed', right: `${dropdownPos.right}px`, top: `${dropdownPos.top + 4}px`, backgroundColor: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', zIndex: 9999, display: 'flex', flexDirection: 'column', padding: '4px 0', minWidth: '140px' }}>
+                                  <div className="al-actions-dropdown-menu" style={{ position: 'absolute', right: '30px', top: dropdownPos.isTop ? 'auto' : '100%', bottom: dropdownPos.isTop ? '100%' : 'auto', backgroundColor: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', zIndex: 99, display: 'flex', flexDirection: 'column', padding: '4px 0', minWidth: '140px' }}>
                                     <button
                                       type="button"
                                       style={{ padding: '10px 16px', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', color: '#334155', borderRadius: '4px', margin: '2px 4px' }}

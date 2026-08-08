@@ -237,7 +237,7 @@ const MilestoneCreation = ({ onLogout, userRole }) => {
   const [currentStep, setCurrentStep] = useState(1);
   const [completedSteps, setCompletedSteps] = useState(new Set());
 
-  const [alertConfig, setAlertConfig] = useState({ isOpen: false, type: "info", title: "", message: "" });
+  const [alertConfig, setAlertConfig] = useState({ isOpen: false, type: "info", title: "", message: "", onClose: null });
 
   const [milestone, setMilestone] = useState({
     drft_m_id: null, drft_prj_id: "", mlstm_cd: "", mlstm_ttl: "", mlstm_desc: "",
@@ -601,8 +601,8 @@ const MilestoneCreation = ({ onLogout, userRole }) => {
   }, [location.state, milestoneList]);
 
   // ── Alert ────────────────────────────────────────────────────
-  const triggerAlert = (type, title, message) => {
-    setAlertConfig({ isOpen: true, type, title, message });
+  const triggerAlert = (type, title, message, onClose = null) => {
+    setAlertConfig({ isOpen: true, type, title, message, onClose });
   };
 
   // ── Data Loading (Draft + Live) ─────────────────────────────
@@ -796,7 +796,7 @@ const MilestoneCreation = ({ onLogout, userRole }) => {
       if (!milestone.tent_st_dt) {
         errors.tent_st_dt = "Start date is required";
         isValid = false;
-      } else {
+      } else if (!isEditing) {
         const selectedProjectObj = projects.find(p => String(p.prj_id || p.id || p.drftPrjId || p.prjId || p.drft_prj_id) === String(milestone.drft_prj_id || milestone.prj_id));
         const pStDtVal = selectedProjectObj ? (selectedProjectObj.startDate || selectedProjectObj.stDt || selectedProjectObj.tentStDt || selectedProjectObj.st_dt || selectedProjectObj.start_date) : null;
         const pEndDtVal = selectedProjectObj ? (selectedProjectObj.endDate || selectedProjectObj.endDt || selectedProjectObj.tentEndDt || selectedProjectObj.end_date || selectedProjectObj.end_dt) : null;
@@ -1002,7 +1002,7 @@ const MilestoneCreation = ({ onLogout, userRole }) => {
     if (task.task_typ === "EXTERNAL" && !task.ext_emp_id) errors.ext_assignee = "External executor is required";
     if (!task.no_of_days || parseInt(task.no_of_days) <= 0) {
       errors.duration = "Valid duration is required";
-    } else if (task.tent_end_dt && milestone.tent_end_dt) {
+    } else if (task.tent_end_dt && milestone.tent_end_dt && !isEditing) {
       const tEnd = new Date(task.tent_end_dt);
       const mEnd = new Date(milestone.tent_end_dt);
       if (tEnd > mEnd) {
@@ -1596,10 +1596,11 @@ const MilestoneCreation = ({ onLogout, userRole }) => {
       } catch (e) {
         console.error("Failed to refresh list after update:", e);
       }
-      setView("list"); 
-      resetMilestoneForm(); 
       setIsSubmitting(false);
-      triggerAlert("success", "Success", successMsg);
+      triggerAlert("success", "Success", successMsg, () => {
+        setView("list"); 
+        resetMilestoneForm();
+      });
     } catch (err) {
       console.error("Submit error:", err);
       setIsSubmitting(false);
@@ -1865,6 +1866,7 @@ const MilestoneCreation = ({ onLogout, userRole }) => {
     setCurrentStep(1);
     setCompletedSteps(new Set());
     setLoading(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
 
     // Immediate initial population from existing record
     setMilestone({
@@ -2293,7 +2295,7 @@ const MilestoneCreation = ({ onLogout, userRole }) => {
                 id={`taskStartDatePicker_${editingTaskIndex}`}
                 type="date"
                 value={selectedTask.tent_st_dt || ""}
-                min={milestone.tent_st_dt || (projects.find(p => String(p.prj_id || p.id || p.drftPrjId || p.prjId) === String(milestone.drft_prj_id))?.startDate || projects.find(p => String(p.prj_id || p.id || p.drftPrjId || p.prjId) === String(milestone.drft_prj_id))?.stDt || projects.find(p => String(p.prj_id || p.id || p.drftPrjId || p.prjId) === String(milestone.drft_prj_id))?.tentStDt || undefined)}
+                min={isEditing ? undefined : (milestone.tent_st_dt || (projects.find(p => String(p.prj_id || p.id || p.drftPrjId || p.prjId) === String(milestone.drft_prj_id))?.startDate || projects.find(p => String(p.prj_id || p.id || p.drftPrjId || p.prjId) === String(milestone.drft_prj_id))?.stDt || projects.find(p => String(p.prj_id || p.id || p.drftPrjId || p.prjId) === String(milestone.drft_prj_id))?.tentStDt || undefined))}
                 max={milestone.tent_end_dt || (projects.find(p => String(p.prj_id || p.id || p.drftPrjId || p.prjId) === String(milestone.drft_prj_id))?.endDate || projects.find(p => String(p.prj_id || p.id || p.drftPrjId || p.prjId) === String(milestone.drft_prj_id))?.endDt || projects.find(p => String(p.prj_id || p.id || p.drftPrjId || p.prjId) === String(milestone.drft_prj_id))?.tentEndDt || undefined)}
                 onChange={(e) => { const v = e.target.value; updateTask("tent_st_dt", v); const updated = { ...selectedTask, tent_st_dt: v }; const ut = [...tasks]; ut[editingTaskIndex] = updated; setTasks(ut); }}
                 style={{ position: 'absolute', opacity: 0, width: 0, height: 0, pointerEvents: 'none' }}
@@ -2624,7 +2626,7 @@ const MilestoneCreation = ({ onLogout, userRole }) => {
                   id="milestoneStartDatePicker"
                   type="date"
                   value={milestone.tent_st_dt || ""}
-                  min={pStDtVal || undefined}
+                  min={isEditing ? undefined : (pStDtVal || undefined)}
                   max={pEndDtVal || undefined}
                   onChange={(e) => updateMilestone("tent_st_dt", e.target.value)}
                   style={{ position: 'absolute', opacity: 0, width: 0, height: 0, pointerEvents: 'none' }}
@@ -2977,7 +2979,7 @@ const MilestoneCreation = ({ onLogout, userRole }) => {
         <div className="mc-table-panel">
           <div className="mc-table-header">
             <div><h2>Milestone & Tasks</h2><p>View and manage all milestone records (Draft + Live)</p></div>
-            <button type="button" className="mc-add-btn" onClick={() => { resetMilestoneForm(); setView("form"); }}><Plus size={16} /> New Milestone</button>
+            <button type="button" className="mc-add-btn" onClick={() => { resetMilestoneForm(); setView("form"); window.scrollTo({ top: 0, behavior: "smooth" }); }}><Plus size={16} /> New Milestone</button>
           </div>
           <div className="mc-table-filters">
             <div className="mc-filter-group">
@@ -3092,11 +3094,23 @@ const MilestoneCreation = ({ onLogout, userRole }) => {
         </div>
       )}
       {alertConfig.isOpen && (
-        <div className="mc-modal-overlay" onClick={() => setAlertConfig(prev => ({ ...prev, isOpen: false }))}>
+        <div className="mc-modal-overlay" onClick={() => {
+          const cb = alertConfig.onClose;
+          setAlertConfig(prev => ({ ...prev, isOpen: false, onClose: null }));
+          if (cb) cb();
+        }}>
           <div className="mc-modal mc-alert-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="mc-modal-header"><h3>{alertConfig.type === "success" ? <CheckCircle size={18} style={{ color: '#16a34a' }} /> : <AlertCircle size={18} style={{ color: '#ef4444' }} />} {alertConfig.title}</h3><button className="mc-modal-close" onClick={() => setAlertConfig(prev => ({ ...prev, isOpen: false }))}><X size={18} /></button></div>
+            <div className="mc-modal-header"><h3>{alertConfig.type === "success" ? <CheckCircle size={18} style={{ color: '#16a34a' }} /> : <AlertCircle size={18} style={{ color: '#ef4444' }} />} {alertConfig.title}</h3><button className="mc-modal-close" onClick={() => {
+              const cb = alertConfig.onClose;
+              setAlertConfig(prev => ({ ...prev, isOpen: false, onClose: null }));
+              if (cb) cb();
+            }}><X size={18} /></button></div>
             <div className="mc-modal-body"><p>{alertConfig.message}</p></div>
-            <div className="mc-modal-footer"><button className="mc-btn primary" onClick={() => setAlertConfig(prev => ({ ...prev, isOpen: false }))}>OK</button></div>
+            <div className="mc-modal-footer"><button className="mc-btn primary" onClick={() => {
+              const cb = alertConfig.onClose;
+              setAlertConfig(prev => ({ ...prev, isOpen: false, onClose: null }));
+              if (cb) cb();
+            }}>OK</button></div>
           </div>
         </div>
       )}

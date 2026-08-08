@@ -559,6 +559,13 @@ const CompanyCreation = ({ onLogout, userRole }) => {
     reader.readAsDataURL(file);
   };
 
+  const handleDeleteLogo = () => {
+    setLogoFile(null);
+    setFormData((prev) => ({ ...prev, logo: "" }));
+    const fileInput = document.getElementById("logoUploadHidden");
+    if (fileInput) fileInput.value = "";
+  };
+
 
 
   const generateCompanyCode = (cList = companies) => {
@@ -806,12 +813,28 @@ const CompanyCreation = ({ onLogout, userRole }) => {
   };
 
   const toggleDropdown = (id, event) => {
+    if (event) event.stopPropagation();
     if (activeDropdown === id) {
       setActiveDropdown(null);
     } else {
       if (event) {
-        const rect = event.currentTarget.getBoundingClientRect();
-        setDropdownPos({ top: rect.bottom, right: window.innerWidth - rect.right });
+        const btn = event.currentTarget;
+        const rect = btn.getBoundingClientRect();
+        const container = btn.closest('.cc-table-container') || btn.closest('table')?.parentElement;
+        
+        let spaceBelow = window.innerHeight - rect.bottom;
+        let spaceAbove = rect.top;
+        
+        if (container) {
+          const containerRect = container.getBoundingClientRect();
+          spaceBelow = containerRect.bottom - rect.bottom;
+          spaceAbove = rect.top - containerRect.top;
+        }
+
+        const dropdownHeight = 250;
+        setDropdownPos({
+          isTop: spaceBelow < dropdownHeight && spaceAbove > spaceBelow
+        });
       }
       setActiveDropdown(id);
     }
@@ -1671,7 +1694,7 @@ const CompanyCreation = ({ onLogout, userRole }) => {
                         </label>
                         <label className="cc-field-item">
                           <span>Company Code <b style={{ color: '#ef4444' }}>*</b></span>
-                          <input type="text" name="companyCode" value={formData.companyCode} onChange={handleInputChange} placeholder="Enter code" maxLength={10} />
+                          <input type="text" name="companyCode" value={formData.companyCode} readOnly placeholder="Auto-generated code" />
                           {formErrors.companyCode && <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block' }}>{formErrors.companyCode}</span>}
                         </label>
                         <label className="cc-field-item">
@@ -1752,23 +1775,40 @@ const CompanyCreation = ({ onLogout, userRole }) => {
                       <div className="cc-form-layout-row columns-4" style={{ marginTop: '20px' }}>
                         <label className="cc-field-item">
                           <span>Company Logo</span>
-                          <div className="cc-logo-row">
-                            <div className="cc-logo-box" style={{ width: '48px', height: '48px', border: '1px solid #e2e8f0', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8fafc', overflow: 'hidden' }}>
+                          <div className="cc-logo-row" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <div className="cc-logo-box" style={{ width: '48px', height: '48px', border: '1px solid #e2e8f0', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8fafc', overflow: 'hidden', flexShrink: 0 }}>
                               {formData.logo ? <img src={formData.logo} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <ImageIcon size={22} style={{ color: '#94a3b8' }} />}
                             </div>
-                            <input id="logoUploadHidden" type="file" accept="image/*" onChange={handleLogoChange} hidden />
-                            <button type="button" onClick={() => document.getElementById("logoUploadHidden").click()} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 12px', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '13px', color: '#0f172a', cursor: 'pointer' }}>
-                              <Upload size={14} /> Upload Logo
-                            </button>
-                            {formData.logo && (
-                              <button
-                                type="button"
-                                onClick={() => setFormData(prev => ({ ...prev, logo: '' }))}
-                                style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 12px', background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: '6px', fontSize: '13px', color: '#dc2626', cursor: 'pointer' }}
-                                title="Delete logo"
-                              >
-                                <Trash2 size={14} /> Delete Logo
-                              </button>
+                            <input id="logoUploadHidden" type="file" accept="image/*" onChange={handleLogoChange} disabled={isViewing} hidden />
+                            {!isViewing && (
+                              <>
+                                <button type="button" onClick={() => document.getElementById("logoUploadHidden").click()} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 12px', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '13px', color: '#0f172a', cursor: 'pointer', height: '38px', whiteSpace: 'nowrap' }}>
+                                  <Upload size={14} /> Upload Logo
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={handleDeleteLogo}
+                                  disabled={!formData.logo}
+                                  style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    padding: '8px 12px',
+                                    background: formData.logo ? '#fef2f2' : '#f8fafc',
+                                    border: formData.logo ? '1px solid #fca5a5' : '1px solid #e2e8f0',
+                                    borderRadius: '6px',
+                                    fontSize: '13px',
+                                    color: formData.logo ? '#dc2626' : '#94a3b8',
+                                    cursor: formData.logo ? 'pointer' : 'not-allowed',
+                                    height: '38px',
+                                    whiteSpace: 'nowrap',
+                                    opacity: formData.logo ? 1 : 0.6
+                                  }}
+                                  title="Delete logo"
+                                >
+                                  <Trash2 size={14} /> Delete
+                                </button>
+                              </>
                             )}
                           </div>
                         </label>
@@ -2066,12 +2106,8 @@ const CompanyCreation = ({ onLogout, userRole }) => {
 
                               {activeDropdown === company.coyId && (
                                 <>
-                                  <div
-                                    className="cc-actions-dropdown-backdrop"
-                                    onClick={() => setActiveDropdown(null)}
-                                    style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9998 }}
-                                  />
-                                  <div className="cc-actions-dropdown-menu" style={{ position: 'absolute', right: '30px', top: '40px', backgroundColor: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', zIndex: 9999, display: 'flex', flexDirection: 'column', padding: '4px 0', minWidth: '140px' }}>
+                                  <div className="cc-actions-dropdown-backdrop" onClick={() => setActiveDropdown(null)} style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 90 }} />
+                                  <div className="cc-actions-dropdown-menu" style={{ position: 'absolute', right: '30px', top: dropdownPos.isTop ? 'auto' : '100%', bottom: dropdownPos.isTop ? '100%' : 'auto', backgroundColor: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', zIndex: 99, display: 'flex', flexDirection: 'column', padding: '4px 0', minWidth: '140px' }}>
                                     <button
                                       type="button"
                                       style={{ padding: '10px 16px', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', color: '#334155', borderRadius: '4px', margin: '2px 4px' }}

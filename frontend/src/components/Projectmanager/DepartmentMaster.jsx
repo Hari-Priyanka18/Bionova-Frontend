@@ -454,7 +454,7 @@ const DepartmentCreation = ({ userRole, onLogout }) => {
   const toggleDropdown = (e, id) => {
     e.stopPropagation();
     const rect = e.currentTarget.getBoundingClientRect();
-    const dropdownHeight = 150; // approximate height of the dropdown
+    const dropdownHeight = 220; // threshold height (220px) so lower rows open upside
     const spaceBelow = window.innerHeight - rect.bottom;
     const spaceAbove = rect.top;
 
@@ -712,7 +712,7 @@ const DepartmentCreation = ({ userRole, onLogout }) => {
                             <label>Department Code <span className="dept-req-star">*</span></label>
                             <div className="dept-input-icon-wrap">
                               <span className="dept-input-prefix-icon"><Calendar size={16} /></span>
-                              <input type="text" name="code" value={form.code} onChange={handleChange} placeholder="Enter department code" maxLength="10" required />
+                              <input type="text" name="code" value={form.code} readOnly style={{ backgroundColor: '#f1f5f9', cursor: 'not-allowed', color: '#64748b' }} placeholder="Auto-generated code" required />
                             </div>
                             {formErrors.code ? (
                               <span className="error-text" style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block' }}>{formErrors.code}</span>

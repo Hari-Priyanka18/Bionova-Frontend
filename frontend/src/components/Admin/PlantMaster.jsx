@@ -290,6 +290,7 @@ const PlantCreation = ({ userRole, onLogout }) => {
 
   // Table action dropdown trigger state
   const [activeDropdown, setActiveDropdown] = useState(null);
+  const [dropdownPos, setDropdownPos] = useState({ isTop: false });
 
   // Deactivation confirmation modal state
   const [showDeactivateModal, setShowDeactivateModal] = useState(false);
@@ -435,6 +436,13 @@ const PlantCreation = ({ userRole, onLogout }) => {
     if (!file) return;
     setLogoFile(file);
     setForm((prev) => ({ ...prev, logo: URL.createObjectURL(file) }));
+  };
+
+  const handleDeleteLogo = () => {
+    setLogoFile(null);
+    setForm((prev) => ({ ...prev, logo: null }));
+    const fileInput = document.getElementById("logoUploadHidden");
+    if (fileInput) fileInput.value = "";
   };
 
   const handleResetForm = (pList = plants) => {
@@ -664,8 +672,35 @@ const PlantCreation = ({ userRole, onLogout }) => {
     setFormErrors({});
   };
 
-  const toggleDropdown = (id) => {
-    setActiveDropdown(prev => (prev === id ? null : id));
+  const toggleDropdown = (e, id) => {
+    if (e && e.stopPropagation) e.stopPropagation();
+    const targetId = typeof e === 'object' && e !== null && !e.currentTarget ? id : (typeof e !== 'object' ? e : id);
+    const eventObj = typeof e === 'object' && e !== null && e.currentTarget ? e : null;
+
+    if (activeDropdown === targetId) {
+      setActiveDropdown(null);
+    } else {
+      if (eventObj) {
+        const btn = eventObj.currentTarget;
+        const rect = btn.getBoundingClientRect();
+        const container = btn.closest('.pc-table-container') || btn.closest('.table-responsive');
+        
+        let spaceBelow = window.innerHeight - rect.bottom;
+        let spaceAbove = rect.top;
+        
+        if (container) {
+          const containerRect = container.getBoundingClientRect();
+          spaceBelow = containerRect.bottom - rect.bottom;
+          spaceAbove = rect.top - containerRect.top;
+        }
+
+        const dropdownHeight = 220;
+        setDropdownPos({
+          isTop: spaceBelow < dropdownHeight && spaceAbove > spaceBelow
+        });
+      }
+      setActiveDropdown(targetId);
+    }
   };
 
   const triggerDeactivate = (id) => {
@@ -1283,7 +1318,7 @@ const PlantCreation = ({ userRole, onLogout }) => {
                       <div className="pc-form-layout-row columns-4">
                         <label className="pc-field-item">
                           <span>Plant Code <b style={{ color: '#ef4444' }}>*</b></span>
-                          <input type="text" name="plantCode" value={form.plantCode} onChange={handleChange} disabled={isViewing} placeholder="Enter plant code" maxLength={10} />
+                          <input type="text" name="plantCode" value={form.plantCode} readOnly disabled={isViewing} placeholder="Auto-generated code" />
                           {formErrors.plantCode ? (
                             <span className="error-text" style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block' }}>{formErrors.plantCode}</span>
                           ) : (
@@ -1321,15 +1356,40 @@ const PlantCreation = ({ userRole, onLogout }) => {
                         </label>
                         <label className="pc-field-item">
                           <span>Plant Image</span>
-                          <div className="pc-logo-row">
-                            <div className="pc-logo-box" style={{ width: '48px', height: '48px', border: '1px solid #e2e8f0', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8fafc', overflow: 'hidden' }}>
+                          <div className="pc-logo-row" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <div className="pc-logo-box" style={{ width: '48px', height: '48px', border: '1px solid #e2e8f0', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8fafc', overflow: 'hidden', flexShrink: 0 }}>
                               {form.logo ? <img src={form.logo} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <ImageIcon size={22} style={{ color: '#94a3b8' }} />}
                             </div>
                             <input id="logoUploadHidden" type="file" accept="image/*" onChange={handleLogoChange} disabled={isViewing} hidden />
                             {!isViewing && (
-                                <button type="button" onClick={() => document.getElementById("logoUploadHidden").click()} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 12px', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '13px', color: '#0f172a', cursor: 'pointer' }}>
+                              <>
+                                <button type="button" onClick={() => document.getElementById("logoUploadHidden").click()} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 12px', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '13px', color: '#0f172a', cursor: 'pointer', height: '38px', whiteSpace: 'nowrap' }}>
                                   <Upload size={14} /> Upload Image
                                 </button>
+                                <button
+                                  type="button"
+                                  onClick={handleDeleteLogo}
+                                  disabled={!form.logo}
+                                  style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    padding: '8px 12px',
+                                    background: form.logo ? '#fef2f2' : '#f8fafc',
+                                    border: form.logo ? '1px solid #fca5a5' : '1px solid #e2e8f0',
+                                    borderRadius: '6px',
+                                    fontSize: '13px',
+                                    color: form.logo ? '#dc2626' : '#94a3b8',
+                                    cursor: form.logo ? 'pointer' : 'not-allowed',
+                                    height: '38px',
+                                    whiteSpace: 'nowrap',
+                                    opacity: form.logo ? 1 : 0.6
+                                  }}
+                                  title="Delete image"
+                                >
+                                  <Trash2 size={14} /> Delete
+                                </button>
+                              </>
                             )}
                           </div>
                         </label>
@@ -1607,7 +1667,7 @@ const PlantCreation = ({ userRole, onLogout }) => {
                               <button
                                 type="button"
                                 style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', padding: '4px 8px', borderRadius: '4px' }}
-                                onClick={() => toggleDropdown(plant.pltId)}
+                                onClick={(e) => toggleDropdown(e, plant.pltId)}
                                 onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f1f5f9'}
                                 onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                               >
@@ -1622,7 +1682,7 @@ const PlantCreation = ({ userRole, onLogout }) => {
                                     onClick={() => setActiveDropdown(null)}
                                     style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9 }}
                                   />
-                                  <div className="pc-actions-dropdown-menu" style={{ position: 'absolute', right: '30px', top: '8px', backgroundColor: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', zIndex: 10, display: 'flex', flexDirection: 'column', padding: '4px 0', minWidth: '140px' }}>
+                                  <div className="pc-actions-dropdown-menu" style={{ position: 'absolute', right: '30px', top: dropdownPos.isTop ? 'auto' : '8px', bottom: dropdownPos.isTop ? '100%' : 'auto', backgroundColor: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', zIndex: 10, display: 'flex', flexDirection: 'column', padding: '4px 0', minWidth: '140px' }}>
                                     <button
                                       type="button"
                                       style={{ padding: '10px 16px', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', color: '#334155', borderRadius: '4px', margin: '2px 4px' }}

@@ -345,13 +345,22 @@ const DesignationCreation = ({ userRole, onLogout }) => {
 
   const toggleDropdown = (e, id) => {
     e.stopPropagation();
-    const rect = e.currentTarget.getBoundingClientRect();
-    const dropdownHeight = 150;
-    const spaceBelow = window.innerHeight - rect.bottom;
-    const spaceAbove = rect.top;
+    const btn = e.currentTarget;
+    const rect = btn.getBoundingClientRect();
+    const container = btn.closest('.desig-table-container') || btn.closest('table')?.parentElement;
+    
+    let spaceBelow = window.innerHeight - rect.bottom;
+    let spaceAbove = rect.top;
+    
+    if (container) {
+      const containerRect = container.getBoundingClientRect();
+      spaceBelow = containerRect.bottom - rect.bottom;
+      spaceAbove = rect.top - containerRect.top;
+    }
 
+    const dropdownHeight = 150;
     setDropdownPos({
-      isTop: spaceBelow < dropdownHeight && spaceAbove > dropdownHeight
+      isTop: spaceBelow < dropdownHeight && spaceAbove > spaceBelow
     });
     setActiveDropdown((prev) => (prev === id ? null : id));
   };
@@ -449,7 +458,7 @@ const DesignationCreation = ({ userRole, onLogout }) => {
                             <label>Designation Code <span className="desig-req-star">*</span></label>
                             <div className="desig-input-icon-wrap">
                               <span className="desig-input-prefix-icon"><Calendar size={16} /></span>
-                              <input type="text" name="code" value={form.code} onChange={handleChange} placeholder="Enter designation code" maxLength="50" required />
+                              <input type="text" name="code" value={form.code} readOnly style={{ backgroundColor: '#f1f5f9', cursor: 'not-allowed', color: '#64748b' }} placeholder="Auto-generated code" required />
                             </div>
                             {formErrors.code ? (
                               <span className="error-text" style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block' }}>{formErrors.code}</span>

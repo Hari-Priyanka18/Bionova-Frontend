@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Plus, Search, Filter, Edit2, Trash2, Info, X, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Calendar, Plus, Search, Filter, Edit2, Trash2, Info, X, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import Sidebar from "../Sidebar.jsx";
 import Header from "../Header.jsx";
 import AlertModal from "../AlertModal.jsx";
@@ -7,14 +7,14 @@ import { useNavigate } from 'react-router-dom';
 import '../../styles/PublicHoliday.css';
 import { apiGet, apiPost, apiPut, apiDelete } from "../../utils/api";
 import { getScreenPermission } from "../../utils/permissions";
+import DatePicker from "react-datepicker";
+import "react-datepicker/dist/react-datepicker.css";
 
 const formatDateDisplay = (dateStr) => {
   if (!dateStr) return "";
   const parts = dateStr.split('-');
   if (parts.length === 3) {
-    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-    const m = parseInt(parts[1], 10) - 1;
-    return `${parts[2]}-${months[m]}-${parts[0]}`;
+    return `${parts[2]}/${parts[1]}/${parts[0]}`;
   }
   return dateStr;
 };
@@ -73,6 +73,7 @@ const PublicHoliday = ({ userRole, onLogout }) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
   const [editId, setEditId] = useState(null);
+  const datePickerRef = useRef(null);
   const [isLoading, setIsLoading] = useState(true);
 
   const [alertConfig, setAlertConfig] = useState({
@@ -224,32 +225,9 @@ const PublicHoliday = ({ userRole, onLogout }) => {
       return;
     }
 
-    // Check client-side duplicate
-    const isDuplicate = holidays.some(h => {
-      if (editId && h.id === editId) return false;
-      if (h.date !== formData.date) return false;
-
-      const hMandatory = h.mandatory;
-      const formMandatory = formData.mandatory;
-      if (hMandatory !== formMandatory) return false;
-
-      const hCalType = h.calType || "";
-      const formCalType = formData.mandatory ? "" : (formData.calType || "");
-      if (hCalType !== formCalType) return false;
-
-      const hCoyId = h.coyId ? String(h.coyId) : "";
-      const formCoyId = (!formData.mandatory && (formData.calType === "COMPANY" || formData.calType === "PLANT") && formData.coyId) ? String(formData.coyId) : "";
-      if (hCoyId !== formCoyId) return false;
-
-      const hPltId = h.pltId ? String(h.pltId) : "";
-      const formPltId = (!formData.mandatory && formData.calType === "PLANT" && formData.pltId) ? String(formData.pltId) : "";
-      if (hPltId !== formPltId) return false;
-
-      return true;
-    });
-
+    const isDuplicate = holidays.some(h => (!editId || h.id !== editId) && h.date === formData.date);
     if (isDuplicate) {
-      triggerAlert("error", "Duplicate Error", "A holiday with the same date and scope already exists.");
+      triggerAlert("error", "Error", "Already Holiday Exists On This Day");
       return;
     }
 
@@ -267,14 +245,23 @@ const PublicHoliday = ({ userRole, onLogout }) => {
     try {
       if (editId) {
         await apiPut(`/api/calendar/${editId}`, payload);
+        await fetchData();
+        setDrawerOpen(false);
+        triggerAlert("success", "Success", "Holiday updated successfully.");
       } else {
         await apiPost("/api/calendar", payload);
+        await fetchData();
+        setDrawerOpen(false);
+        triggerAlert("success", "Success", "Holiday created successfully.");
       }
-      await fetchData();
-      setDrawerOpen(false);
     } catch (err) {
       console.error("Error saving holiday:", err);
-      triggerAlert("error", "Error", "Failed to save holiday: " + err.message);
+      const msg = err?.message || "";
+      if (msg.toLowerCase().includes("already exists") || msg.toLowerCase().includes("duplicate") || msg.includes("400")) {
+        triggerAlert("error", "Error", "Already Holiday Exists On This Day");
+      } else {
+        triggerAlert("error", "Error", "Failed to save holiday: " + err.message);
+      }
     }
   };
 
@@ -444,14 +431,41 @@ const PublicHoliday = ({ userRole, onLogout }) => {
                 <div className="ph-drawer-body">
                   <div className="ph-form-group">
                     <label>Holiday Date <span>*</span></label>
-                    <input 
-                      type="date" 
-                      className="ph-input" 
-                      value={formData.date}
-                      min={`${new Date().getFullYear()}-01-01`}
-                      max={`${new Date().getFullYear()}-12-31`}
-                      onChange={(e) => setFormData({...formData, date: e.target.value})}
-                    />
+                    <div style={{ position: 'relative', display: 'flex', alignItems: 'center', width: '100%' }}>
+                      <DatePicker
+                        ref={datePickerRef}
+                        selected={formData.date ? new Date(formData.date + "T00:00:00") : null}
+                        onChange={(date) => {
+                          if (date) {
+                            const year = date.getFullYear();
+                            const month = String(date.getMonth() + 1).padStart(2, '0');
+                            const day = String(date.getDate()).padStart(2, '0');
+                            setFormData({ ...formData, date: `${year}-${month}-${day}` });
+                          } else {
+                            setFormData({ ...formData, date: "" });
+                          }
+                        }}
+                        dateFormat="dd/MM/yyyy"
+                        placeholderText="dd/mm/yyyy"
+                        className="ph-input"
+                        wrapperClassName="ph-datepicker-wrapper"
+                      />
+                      <Calendar
+                        size={18}
+                        onClick={() => {
+                          if (datePickerRef.current) {
+                            datePickerRef.current.setOpen(true);
+                          }
+                        }}
+                        style={{
+                          position: 'absolute',
+                          right: '12px',
+                          color: '#64748b',
+                          cursor: 'pointer',
+                          zIndex: 2
+                        }}
+                      />
+                    </div>
                   </div>
 
                   <div className="ph-form-group">

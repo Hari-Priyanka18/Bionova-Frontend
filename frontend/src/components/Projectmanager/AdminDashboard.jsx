@@ -93,16 +93,24 @@ const AdminDashboard = ({ userRole, onLogout }) => {
   // User Name State
   const [userName, setUserName] = useState("Syed Mohammad Johny Basha");
 
+  // Selected Member Performance Modal State
+  const [selectedMemberModal, setSelectedMemberModal] = useState(null);
+
+  // Employees & Person Filter State
+  const [employeesList, setEmployeesList] = useState([]);
+  const [personFilter, setPersonFilter] = useState("All Persons");
+
   const fetchMetrics = async () => {
     try {
       const headers = authHeaders();
-      const [resMetrics, resCompanies, resPlants, resProjLive, resMileLive, resTaskLive] = await Promise.all([
+      const [resMetrics, resCompanies, resPlants, resProjLive, resMileLive, resTaskLive, resEmp] = await Promise.all([
         fetch(`${API_BASE}/admin/dashboard/metrics`, { headers }),
         fetch(`${API_BASE}/companies`, { headers }),
         fetch(`${API_BASE}/plants`, { headers }),
         fetch(`${API_BASE}/project-live`, { headers }),
         fetch(`${API_BASE}/milestone-live`, { headers }),
-        fetch(`${API_BASE}/task-live`, { headers })
+        fetch(`${API_BASE}/task-live`, { headers }),
+        fetch(`${API_BASE}/employees`, { headers })
       ]);
 
       if (resMetrics.ok) {
@@ -129,6 +137,10 @@ const AdminDashboard = ({ userRole, onLogout }) => {
       if (resTaskLive.ok) {
         const taskData = await resTaskLive.json();
         setTasksList(taskData);
+      }
+      if (resEmp.ok) {
+        const empData = await resEmp.json();
+        setEmployeesList(empData);
       }
     } catch (err) {
       console.error("Error fetching dashboard metrics:", err);
@@ -275,31 +287,70 @@ const AdminDashboard = ({ userRole, onLogout }) => {
 
   const pd = {
     total: filteredProjects.length,
-    track: filteredProjects.filter(p => {
-      if (p.prjSts === "CLOSED") return false;
-      if (!p.endDt) return true;
-      const end = new Date(p.endDt);
-      const diffTime = end.getTime() - now.getTime();
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      return diffDays >= 7;
+    completed: filteredProjects.filter(p => {
+      const s = (p.prjSts || "").toUpperCase();
+      return s === "CLOSED" || s === "COMPLETED";
     }).length,
-    risk: filteredProjects.filter(p => {
-      if (p.prjSts === "CLOSED") return false;
+    delayed: filteredProjects.filter(p => {
+      const s = (p.prjSts || "").toUpperCase();
+      if (s === "CLOSED" || s === "COMPLETED") return false;
       if (!p.endDt) return false;
       const end = new Date(p.endDt);
-      const diffTime = end.getTime() - now.getTime();
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      end.setHours(23, 59, 59, 999);
+      return end.getTime() < now.getTime();
+    }).length,
+    risk: filteredProjects.filter(p => {
+      const s = (p.prjSts || "").toUpperCase();
+      if (s === "CLOSED" || s === "COMPLETED") return false;
+      if (!p.endDt) return false;
+      const end = new Date(p.endDt);
+      end.setHours(23, 59, 59, 999);
+      if (end.getTime() < now.getTime()) return false;
+      const diffDays = Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
       return diffDays >= 0 && diffDays < 7;
     }).length,
-    delayed: filteredProjects.filter(p => p.prjSts !== "CLOSED" && p.endDt && new Date(p.endDt) < now).length,
-    completed: filteredProjects.filter(p => p.prjSts === "CLOSED").length
+    track: filteredProjects.filter(p => {
+      const s = (p.prjSts || "").toUpperCase();
+      if (s === "CLOSED" || s === "COMPLETED") return false;
+      if (!p.endDt) return true;
+      const end = new Date(p.endDt);
+      end.setHours(23, 59, 59, 999);
+      if (end.getTime() < now.getTime()) return false;
+      const diffDays = Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+      return diffDays >= 7;
+    }).length
+  };
+
+  const isMilestoneClosed = (m) => {
+    const s = (m.mlstnSts || "").toUpperCase();
+    if (s === "COMPLETED" || s === "CLOSED") return true;
+
+    const mId = m.mid || m.mId || m.id || m.mlstnId;
+    const mTasks = filteredTasks.filter(t => 
+      t.mid === mId || t.mId === mId || t.m_id === mId || 
+      t.drftMId === mId || t.drft_m_id === mId
+    );
+    if (mTasks.length > 0) {
+      const closedTasks = mTasks.filter(t => {
+        const ts = (t.taskSts || "").toUpperCase();
+        return ts === "CLOSED" || ts === "COMPLETED";
+      }).length;
+      return closedTasks === mTasks.length;
+    }
+    return false;
   };
 
   const md = {
     total: filteredMilestones.length,
-    completed: filteredMilestones.filter(m => m.mlstnSts === "COMPLETED" || m.mlstnSts === "CLOSED").length,
-    progress: filteredMilestones.filter(m => m.mlstnSts !== "COMPLETED" && m.mlstnSts !== "CLOSED").length,
-    overdue: filteredMilestones.filter(m => m.mlstnSts !== "COMPLETED" && m.mlstnSts !== "CLOSED" && m.endDt && new Date(m.endDt) < now).length
+    completed: filteredMilestones.filter(m => isMilestoneClosed(m)).length,
+    progress: filteredMilestones.filter(m => !isMilestoneClosed(m)).length,
+    overdue: filteredMilestones.filter(m => {
+      if (isMilestoneClosed(m)) return false;
+      if (!m.endDt) return false;
+      const end = new Date(m.endDt);
+      end.setHours(23, 59, 59, 999);
+      return end < now;
+    }).length
   };
 
   const wipStatuses = ["WIP", "IN_PROGRESS", "IN PROGRESS", "SUBMIT_REVIEW", "UNDER_REVIEW", "UNDER REVIEW"];
@@ -309,11 +360,32 @@ const AdminDashboard = ({ userRole, onLogout }) => {
     completed: filteredTasks.filter(t => { const s = (t.taskSts || "").toUpperCase(); return s === "COMPLETED" || s === "CLOSED"; }).length,
     progress: filteredTasks.filter(t => wipStatuses.includes((t.taskSts || "").toUpperCase())).length,
     todo: filteredTasks.filter(t => !["COMPLETED", "CLOSED", ...wipStatuses].includes((t.taskSts || "").toUpperCase())).length,
-    overdue: filteredTasks.filter(t => { const s = (t.taskSts || "").toUpperCase(); return s !== "COMPLETED" && s !== "CLOSED" && t.endDt && new Date(t.endDt) < now; }).length
+    overdue: filteredTasks.filter(t => { 
+      const s = (t.taskSts || "").toUpperCase(); 
+      if (s === "COMPLETED" || s === "CLOSED") return false;
+      if (!t.endDt) return false;
+      const end = new Date(t.endDt);
+      end.setHours(23, 59, 59, 999);
+      return end < now;
+    }).length
   };
 
-  const overdueWip = filteredTasks.filter(t => wipStatuses.includes((t.taskSts || "").toUpperCase()) && t.endDt && new Date(t.endDt) < now).length;
-  const overdueTodo = filteredTasks.filter(t => !["COMPLETED", "CLOSED", ...wipStatuses].includes((t.taskSts || "").toUpperCase()) && t.endDt && new Date(t.endDt) < now).length;
+  const overdueWip = filteredTasks.filter(t => {
+    const s = (t.taskSts || "").toUpperCase();
+    if (!wipStatuses.includes(s) || !t.endDt) return false;
+    const end = new Date(t.endDt);
+    end.setHours(23, 59, 59, 999);
+    return end < now;
+  }).length;
+
+  const overdueTodo = filteredTasks.filter(t => {
+    const s = (t.taskSts || "").toUpperCase();
+    if (["COMPLETED", "CLOSED", ...wipStatuses].includes(s) || !t.endDt) return false;
+    const end = new Date(t.endDt);
+    end.setHours(23, 59, 59, 999);
+    return end < now;
+  }).length;
+
   const progressOnTime = Math.max(0, td.progress - overdueWip);
   const todoOnTime = Math.max(0, td.todo - overdueTodo);
 
@@ -335,18 +407,14 @@ const AdminDashboard = ({ userRole, onLogout }) => {
         if (mTasks.length > 0) {
           let mTaskProgress = 0;
           mTasks.forEach(t => {
-            if ((t.taskSts || "").toUpperCase() === "COMPLETED") {
+            if ((t.taskSts || "").toUpperCase() === "COMPLETED" || (t.taskSts || "").toUpperCase() === "CLOSED") {
               mTaskProgress += 100;
             } else {
-              // Capture partial progress from the task object if available
               const partial = parseFloat(t.progress || t.progressPercent || t.pctComplete || 0);
               mTaskProgress += isNaN(partial) ? 0 : partial;
             }
           });
           totalProgress += (mTaskProgress / mTasks.length);
-        } else {
-           // If a milestone has no tasks, consider it 0% (or maybe 10% if it's 'WIP'?)
-           // We'll leave it at 0 to be strictly real-time task-based.
         }
       }
     });
@@ -365,8 +433,9 @@ const AdminDashboard = ({ userRole, onLogout }) => {
 
   const getMileGradient = () => {
     const total = md.total || 1;
+    const onTimeProgress = Math.max(0, md.progress - md.overdue);
     let p1 = (md.completed / total) * 100;
-    let p2 = p1 + ((md.progress - md.overdue) / total) * 100;
+    let p2 = p1 + (onTimeProgress / total) * 100;
     let p3 = p2 + (md.overdue / total) * 100;
     return `conic-gradient(#10b981 0% ${p1}%, #3b82f6 ${p1}% ${p2}%, #ef4444 ${p2}% 100%)`;
   };
@@ -438,7 +507,125 @@ const AdminDashboard = ({ userRole, onLogout }) => {
   }, [metrics?.systemActivities, tasksList, projectsList]);
 
   const deadlinesToRender = metrics?.upcomingDeadlines || [];
-  const topProjectsToRender = metrics?.topProjects || [];
+
+  const topProjectsToRender = React.useMemo(() => {
+    if (metrics?.topProjects && metrics.topProjects.length >= 3) {
+      return metrics.topProjects;
+    }
+    if (!projectsList || projectsList.length === 0) return [];
+
+    return projectsList.map(p => {
+      const pId = p.prjId || p.id;
+      const pTasks = tasksList.filter(t => 
+        t.prjId === pId || t.prj_id === pId || t.drftPrjId === pId
+      );
+      let progressPercent = 0;
+      if (pTasks.length > 0) {
+        const closedTasks = pTasks.filter(t => {
+          const s = (t.taskSts || "").toUpperCase();
+          return s === "CLOSED" || s === "COMPLETED";
+        }).length;
+        progressPercent = Math.round((closedTasks / pTasks.length) * 100);
+      } else if ((p.prjSts || "").toUpperCase() === "CLOSED" || (p.prjSts || "").toUpperCase() === "COMPLETED") {
+        progressPercent = 100;
+      }
+      return {
+        projectId: pId,
+        projectName: p.prjNm || p.name || "Project",
+        projectCode: p.prjCd || p.code || "",
+        progressPercent: progressPercent
+      };
+    }).sort((a, b) => b.progressPercent - a.progressPercent).slice(0, 4);
+  }, [metrics?.topProjects, projectsList, tasksList]);
+
+  const empMapById = React.useMemo(() => {
+    const map = {};
+    (employeesList || []).forEach(e => {
+      const name = `${e.fstNm || ''} ${e.lstNm || ''}`.trim() || e.empCode || `Employee #${e.empId}`;
+      map[String(e.empId)] = name;
+    });
+    return map;
+  }, [employeesList]);
+
+  const allPersonNames = React.useMemo(() => {
+    const names = new Set();
+    (employeesList || []).forEach(e => {
+      const name = `${e.fstNm || ''} ${e.lstNm || ''}`.trim();
+      if (name) names.add(name);
+    });
+    tasksList.forEach(t => {
+      if (t.empId && empMapById[String(t.empId)]) {
+        names.add(empMapById[String(t.empId)]);
+      }
+    });
+    return Array.from(names).sort();
+  }, [employeesList, tasksList, empMapById]);
+
+  const teamPerformanceToRender = React.useMemo(() => {
+    if (!tasksList || tasksList.length === 0) return [];
+
+    const empMap = {};
+
+    tasksList.forEach(t => {
+      let empName = null;
+      if (t.empId && empMapById[String(t.empId)]) {
+        empName = empMapById[String(t.empId)];
+      } else {
+        empName = t.executorNm || t.assignedByNm || t.createdByName || t.assignedTo;
+      }
+      if (!empName || empName.trim() === "") empName = "Unassigned / Team";
+
+      if (!empMap[empName]) {
+        empMap[empName] = {
+          name: empName,
+          empId: t.empId || null,
+          totalTasks: 0,
+          completed: 0,
+          overdue: 0,
+          onTime: 0,
+          taskList: []
+        };
+      }
+      empMap[empName].totalTasks += 1;
+      empMap[empName].taskList.push(t);
+
+      const s = (t.taskSts || "").toUpperCase();
+      if (s === "CLOSED" || s === "COMPLETED") {
+        empMap[empName].completed += 1;
+      } else {
+        if (t.endDt && new Date(t.endDt).setHours(23, 59, 59, 999) < now.getTime()) {
+          empMap[empName].overdue += 1;
+        } else {
+          empMap[empName].onTime += 1;
+        }
+      }
+    });
+
+    let list = Object.values(empMap).map(e => {
+      let statusLabel = "On Track";
+      let statusColor = "#2563eb";
+      let statusBg = "#eff6ff";
+
+      if (e.overdue > 0) {
+        statusLabel = `Lagging (${e.overdue} Overdue)`;
+        statusColor = "#dc2626";
+        statusBg = "#fef2f2";
+      } else if (e.completed > 0 && e.overdue === 0) {
+        statusLabel = "Lead (Ahead)";
+        statusColor = "#16a34a";
+        statusBg = "#f0fdf4";
+      }
+
+      const scorePct = e.totalTasks > 0 ? Math.round((e.completed / e.totalTasks) * 100) : 0;
+      return { ...e, statusLabel, statusColor, statusBg, scorePct };
+    });
+
+    if (personFilter !== "All Persons") {
+      list = list.filter(e => e.name === personFilter);
+    }
+
+    return list.sort((a, b) => b.overdue - a.overdue);
+  }, [tasksList, empMapById, personFilter, now]);
 
   return (
     <div className="db-shell-container">
@@ -678,9 +865,221 @@ const AdminDashboard = ({ userRole, onLogout }) => {
                 ))}
               </div>
             </div>
+
+            <div className="db-card list-card" style={{ gridColumn: 'span 3 / span 3' }}>
+              <div className="db-card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <h3 style={{ margin: 0 }}>Team Performance & Bottlenecks (Lead / Lag)</h3>
+                  <span style={{ fontSize: '12px', color: '#64748b' }}>Select a person or click any card for detailed performance breakdown</span>
+                </div>
+                <CustomDropdown
+                  value={personFilter}
+                  options={["All Persons", ...allPersonNames]}
+                  onChange={setPersonFilter}
+                />
+              </div>
+              <div className="db-list" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '12px', padding: '16px' }}>
+                {teamPerformanceToRender.map((member, idx) => (
+                  <div
+                    key={idx}
+                    onClick={() => setSelectedMemberModal(member)}
+                    style={{
+                      background: '#ffffff',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: '10px',
+                      padding: '14px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '10px',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease',
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 6px 16px rgba(0,0,0,0.08)'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.04)'; }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <div style={{ width: '34px', height: '34px', borderRadius: '50%', background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: 'bold' }}>
+                          {member.name.charAt(0).toUpperCase()}
+                        </div>
+                        <div>
+                          <strong style={{ fontSize: '14px', color: '#0f172a', display: 'block' }}>{member.name}</strong>
+                          <span style={{ fontSize: '11px', color: '#64748b' }}>Click to view details</span>
+                        </div>
+                      </div>
+                      <span style={{ fontSize: '11px', fontWeight: '600', padding: '4px 10px', borderRadius: '12px', background: member.statusBg, color: member.statusColor }}>
+                        {member.statusLabel}
+                      </span>
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#64748b', borderTop: '1px solid #f1f5f9', paddingTop: '10px' }}>
+                      <span>Total Tasks: <strong>{member.totalTasks}</strong></span>
+                      <span>Done: <strong style={{ color: '#16a34a' }}>{member.completed}</strong></span>
+                      <span>Lag: <strong style={{ color: member.overdue > 0 ? '#dc2626' : '#64748b' }}>{member.overdue}</strong></span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </main>
       </div>
+
+      {/* ===== EMPLOYEE PERFORMANCE DETAIL MODAL ===== */}
+      {selectedMemberModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(15, 23, 42, 0.65)',
+          backdropFilter: 'blur(4px)',
+          zIndex: 9999,
+          display: 'flex',
+          alignItems: 'center',
+          justify: 'center',
+          padding: '20px'
+        }}>
+          <div style={{
+            background: '#ffffff',
+            borderRadius: '16px',
+            width: '100%',
+            maxWidth: '650px',
+            maxHeight: '90vh',
+            overflowY: 'auto',
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+            border: '1px solid #e2e8f0'
+          }}>
+            {/* Modal Header */}
+            <div style={{
+              padding: '20px 24px',
+              borderBottom: '1px solid #f1f5f9',
+              display: 'flex',
+              justify: 'space-between',
+              alignItems: 'center',
+              background: '#f8fafc',
+              borderTopLeftRadius: '16px',
+              borderTopRightRadius: '16px'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div style={{ width: '42px', height: '42px', borderRadius: '50%', background: 'linear-gradient(135deg, #2563eb, #1d4ed8)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px', fontWeight: 'bold' }}>
+                  {selectedMemberModal.name.charAt(0).toUpperCase()}
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '18px', color: '#0f172a', fontWeight: '700' }}>{selectedMemberModal.name}</h3>
+                  <span style={{ fontSize: '12px', color: '#64748b' }}>Team Member Performance & Schedule Health</span>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedMemberModal(null)}
+                style={{
+                  background: '#f1f5f9',
+                  border: 'none',
+                  borderRadius: '50%',
+                  width: '32px',
+                  height: '32px',
+                  cursor: 'pointer',
+                  fontSize: '16px',
+                  color: '#64748b',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              {/* Performance Score Summary Pill */}
+              <div style={{
+                background: selectedMemberModal.statusBg,
+                border: `1px solid ${selectedMemberModal.statusColor}33`,
+                borderRadius: '12px',
+                padding: '16px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between'
+              }}>
+                <div>
+                  <span style={{ fontSize: '12px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: '600' }}>Current Health Status</span>
+                  <h4 style={{ margin: '4px 0 0 0', color: selectedMemberModal.statusColor, fontSize: '18px', fontWeight: '700' }}>
+                    {selectedMemberModal.statusLabel}
+                  </h4>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <span style={{ fontSize: '12px', color: '#64748b' }}>Completion Rate</span>
+                  <div style={{ fontSize: '22px', fontWeight: '800', color: '#0f172a' }}>{selectedMemberModal.scorePct}%</div>
+                </div>
+              </div>
+
+              {/* Metrics Grid */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
+                <div style={{ background: '#f8fafc', padding: '12px 16px', borderRadius: '10px', border: '1px solid #e2e8f0', textAlign: 'center' }}>
+                  <span style={{ fontSize: '12px', color: '#64748b' }}>Total Assigned</span>
+                  <h3 style={{ margin: '4px 0 0 0', color: '#1e293b' }}>{selectedMemberModal.totalTasks}</h3>
+                </div>
+                <div style={{ background: '#f0fdf4', padding: '12px 16px', borderRadius: '10px', border: '1px solid #bbf7d0', textAlign: 'center' }}>
+                  <span style={{ fontSize: '12px', color: '#166534' }}>Completed</span>
+                  <h3 style={{ margin: '4px 0 0 0', color: '#15803d' }}>{selectedMemberModal.completed}</h3>
+                </div>
+                <div style={{ background: selectedMemberModal.overdue > 0 ? '#fef2f2' : '#f8fafc', padding: '12px 16px', borderRadius: '10px', border: selectedMemberModal.overdue > 0 ? '1px solid #fecaca' : '1px solid #e2e8f0', textAlign: 'center' }}>
+                  <span style={{ fontSize: '12px', color: selectedMemberModal.overdue > 0 ? '#991b1b' : '#64748b' }}>Lagging (Overdue)</span>
+                  <h3 style={{ margin: '4px 0 0 0', color: selectedMemberModal.overdue > 0 ? '#dc2626' : '#1e293b' }}>{selectedMemberModal.overdue}</h3>
+                </div>
+              </div>
+
+              {/* Task Breakdown List */}
+              <div>
+                <h4 style={{ margin: '0 0 12px 0', fontSize: '14px', color: '#1e293b' }}>Assigned Tasks Breakdown ({selectedMemberModal.taskList?.length || 0})</h4>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '250px', overflowY: 'auto' }}>
+                  {selectedMemberModal.taskList && selectedMemberModal.taskList.length > 0 ? (
+                    selectedMemberModal.taskList.map((t, idx) => {
+                      const sts = (t.taskSts || "").toUpperCase();
+                      const isDone = sts === "CLOSED" || sts === "COMPLETED";
+                      const isLate = !isDone && t.endDt && new Date(t.endDt).setHours(23, 59, 59, 999) < now.getTime();
+
+                      return (
+                        <div key={idx} style={{
+                          padding: '10px 14px',
+                          borderRadius: '8px',
+                          background: isLate ? '#fef2f2' : isDone ? '#f0fdf4' : '#f8fafc',
+                          border: isLate ? '1px solid #fecaca' : isDone ? '1px solid #bbf7d0' : '1px solid #e2e8f0',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center'
+                        }}>
+                          <div>
+                            <strong style={{ fontSize: '13px', color: '#1e293b', display: 'block' }}>{t.taskNm || t.name || 'Task'}</strong>
+                            <span style={{ fontSize: '11px', color: '#64748b' }}>
+                              Due: {t.endDt ? new Date(t.endDt).toLocaleDateString() : 'No Deadline'}
+                            </span>
+                          </div>
+                          <span style={{
+                            fontSize: '11px',
+                            fontWeight: '600',
+                            padding: '3px 8px',
+                            borderRadius: '10px',
+                            background: isLate ? '#fee2e2' : isDone ? '#dcfce7' : '#e2e8f0',
+                            color: isLate ? '#991b1b' : isDone ? '#166534' : '#475569'
+                          }}>
+                            {isLate ? 'OVERDUE (LAG)' : isDone ? 'COMPLETED' : 'IN PROGRESS'}
+                          </span>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <div style={{ fontSize: '13px', color: '#64748b' }}>No tasks assigned.</div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

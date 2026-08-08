@@ -140,16 +140,7 @@ const DepartmentMapping = ({ onLogout, userRole }) => {
   const [showDeptPopup, setShowDeptPopup] = useState(false);
   const [newDeptData, setNewDeptData] = useState({ deptCode: "", deptNm: "", descr: "", sts: true });
 
-  // Close dropdowns on outside click or scroll
-  useEffect(() => {
-    const closeDropdown = () => setActiveDropdown(null);
-    window.addEventListener("scroll", closeDropdown, true);
-    window.addEventListener("click", closeDropdown);
-    return () => {
-      window.removeEventListener("scroll", closeDropdown, true);
-      window.removeEventListener("click", closeDropdown);
-    };
-  }, []);
+
 
   // Alert settings
   const [alertConfig, setAlertConfig] = useState({
@@ -423,8 +414,23 @@ const DepartmentMapping = ({ onLogout, userRole }) => {
     if (activeDropdown === id) {
       setActiveDropdown(null);
     } else {
-      const rect = e.currentTarget.getBoundingClientRect();
-      setDropdownPos({ top: rect.bottom + window.scrollY, right: window.innerWidth - rect.right });
+      const btn = e.currentTarget;
+      const rect = btn.getBoundingClientRect();
+      const container = btn.closest('.cc-table-container');
+      
+      let spaceBelow = window.innerHeight - rect.bottom;
+      let spaceAbove = rect.top;
+      
+      if (container) {
+        const containerRect = container.getBoundingClientRect();
+        spaceBelow = containerRect.bottom - rect.bottom;
+        spaceAbove = rect.top - containerRect.top;
+      }
+
+      const dropdownHeight = 250;
+      setDropdownPos({
+        isTop: spaceBelow < dropdownHeight && spaceAbove > spaceBelow
+      });
       setActiveDropdown(id);
     }
   };
@@ -751,7 +757,9 @@ const DepartmentMapping = ({ onLogout, userRole }) => {
                             </button>
 
                             {activeDropdown === item.mapId && (
-                              <div className="cc-actions-dropdown-menu" style={{ position: "fixed", right: `${dropdownPos.right}px`, top: `${dropdownPos.top}px`, backgroundColor: "white", border: "1px solid #e2e8f0", borderRadius: "8px", boxShadow: "0 4px 12px rgba(0,0,0,0.15)", zIndex: 9999, display: "flex", flexDirection: "column", padding: "4px 0", minWidth: "140px" }}>
+                              <>
+                                <div className="cc-actions-dropdown-backdrop" onClick={() => setActiveDropdown(null)} style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 90 }} />
+                                <div className="cc-actions-dropdown-menu" style={{ position: 'absolute', right: '30px', top: dropdownPos.isTop ? 'auto' : '100%', bottom: dropdownPos.isTop ? '100%' : 'auto', backgroundColor: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', zIndex: 99, display: 'flex', flexDirection: 'column', padding: '4px 0', minWidth: '140px' }}>
                                   <button
                                     type="button"
                                     style={{ padding: "10px 16px", textAlign: "left", background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: "10px", fontSize: "14px", color: "#334155", borderRadius: "4px", margin: "2px 4px" }}
@@ -778,6 +786,7 @@ const DepartmentMapping = ({ onLogout, userRole }) => {
                                     </button>
                                   )}
                                 </div>
+                              </>
                             )}
                           </td>
                         </tr>
@@ -844,9 +853,9 @@ const DepartmentMapping = ({ onLogout, userRole }) => {
                 <input 
                   type="text" 
                   value={newDeptData.deptCode}
-                  onChange={(e) => setNewDeptData(p => ({...p, deptCode: e.target.value}))}
+                  readOnly
                   style={{ padding: "10px 12px", border: "1px solid #cbd5e1", borderRadius: "6px", fontSize: "14px", outline: "none" }}
-                  placeholder="e.g. HR"
+                  placeholder="Auto-generated code"
                 />
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>

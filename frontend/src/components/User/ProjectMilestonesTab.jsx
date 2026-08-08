@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Flag, ListTodo, CheckSquare, RefreshCcw, HelpCircle, Clock, Plus, Filter, Search, Eye, Edit2, Trash2, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import '../../styles/project-milestones-tab.css';
 import ProjectGanttChart from './ProjectGanttChart.jsx';
@@ -12,13 +11,12 @@ const authHeaders = () => ({
 });
 
 const ProjectMilestonesTab = ({ project, userRole }) => {
-  const navigate = useNavigate();
   const [milestones, setMilestones] = useState([]);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [collapseAll, setCollapseAll] = useState(false);
   const [tasks, setTasks] = useState([]);
   const [employees, setEmployees] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [selectedMilestone, setSelectedMilestone] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [viewTaskModal, setViewTaskModal] = useState(null);
@@ -43,7 +41,6 @@ const ProjectMilestonesTab = ({ project, userRole }) => {
 
   useEffect(() => {
     const fetchData = async () => {
-      setLoading(true);
       try {
         const isDraft = project?.status === "DRAFT" || project?.status === "Draft";
         const mlUrl = isDraft
@@ -116,7 +113,6 @@ const ProjectMilestonesTab = ({ project, userRole }) => {
       }
     };
     if (project?.id) fetchData();
-    else setLoading(false);
   }, [project, userRole]);
 
   const getTasksForMilestone = (milestoneId) => {
@@ -291,7 +287,7 @@ const ProjectMilestonesTab = ({ project, userRole }) => {
             {collapseAll ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
             {collapseAll ? 'Expand All' : 'Collapse All'}
           </button>
-          <button className="mt-btn-primary" onClick={() => navigate('/milestone-creation', { state: { createMode: true, projectId: project?.id || project?.prj_id || project?.prjId } })}>
+          <button className="mt-btn-primary" onClick={() => window.open('/milestone-creation', '_self')}>
             <Plus size={14} /> Add Milestone
           </button>
         </div>
@@ -400,7 +396,17 @@ const ProjectMilestonesTab = ({ project, userRole }) => {
                   const mId = getMilestoneId(m);
                   const isActive = String(selectedMilestone) === String(mId);
                   const mTasks = getTasksForMilestone(mId);
-                  const st = (m.mlstnSts || m.mlstn_sts || m.mlstmSts || m.mlstm_sts || 'DRAFT').toUpperCase();
+                  const rawSt = (m.mlstnSts || m.mlstn_sts || m.mlstmSts || m.mlstm_sts || 'DRAFT').toUpperCase();
+                  let st = rawSt;
+                  if (mTasks.length > 0) {
+                    const closedMTasks = mTasks.filter(t => {
+                      const s = getTaskStatusStr(t);
+                      return s === 'COMPLETED' || s === 'CLOSED' || s === 'DONE' || s === 'COMPLETE';
+                    }).length;
+                    if (closedMTasks === mTasks.length) {
+                      st = 'CLOSED';
+                    }
+                  }
                   const mDur = m.mlstnDays || m.mlstn_days || m.mlstm_days || m.mlstmDays || 0;
                   const sDt = formatDate(m.stDt || m.st_dt || m.tent_st_dt || m.tentStDt);
                   const eDt = formatDate(m.endDt || m.end_dt || m.tent_end_dt || m.tentEndDt);
@@ -412,7 +418,7 @@ const ProjectMilestonesTab = ({ project, userRole }) => {
                       onClick={() => setSelectedMilestone(mId)}
                     >
                       <div className="mt-milestone-index-wrap">
-                        <div className={`mt-milestone-index c-${(idx % 5) + 1} ${isActive ? 'active' : ''}`}>
+                        <div className={`mt-milestone-index ${isActive ? 'active' : `c-${(idx % 5) + 1}`}`}>
                           {idx + 1}
                         </div>
                       </div>

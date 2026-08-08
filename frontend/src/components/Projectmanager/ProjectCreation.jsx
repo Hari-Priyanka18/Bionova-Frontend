@@ -1270,7 +1270,7 @@ const ProjectCreation = ({ userRole, onLogout }) => {
                       <div className="proj-form-layout-row columns-4">
                         <label className="proj-field-item">
                           <span>Project Code <b style={{ color: '#ef4444' }}>*</b></span>
-                          <input type="text" name="projectCode" value={form.projectCode} onChange={handleChange} placeholder="Enter project code" maxLength={10} />
+                          <input type="text" name="projectCode" value={form.projectCode} readOnly style={{ backgroundColor: '#f1f5f9', cursor: 'not-allowed', color: '#64748b' }} placeholder="Auto-generated code" />
                           <small style={{ color: '#64748b', fontSize: '12px', marginTop: '4px' }}>Must be unique.</small>
                         </label>
                         <label className="proj-field-item">

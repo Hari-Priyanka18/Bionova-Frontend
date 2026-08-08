@@ -449,6 +449,9 @@ body.sidebar-collapsed .ph-shell {
   outline: none;
   color: #0f172a;
 }
+.ph-datepicker-wrapper {
+  width: 100%;
+}
 .ph-textarea {
   min-height: 100px;
   resize: vertical;

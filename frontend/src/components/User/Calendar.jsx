@@ -1,5 +1,6 @@
 // src/components/User/Calendar.jsx
 import React, { useState, useRef, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import Sidebar from "../Sidebar.jsx";
 import Header from "../Header.jsx";
 import "../../styles/calendar.css";
@@ -11,7 +12,8 @@ import {
   Filter,
   Calendar as CalendarIcon,
   Check,
-  Menu
+  Menu,
+  ArrowRight
 } from "lucide-react";
 import { apiGet } from "../../utils/api";
 import { getScreenPermission } from "../../utils/permissions";
@@ -25,6 +27,7 @@ const EVENT_COLORS = {
 };
 
 const Calendar = ({ userRole, onLogout }) => {
+  const navigate = useNavigate();
   const screenPerm = getScreenPermission('CALENDAR');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [view, setView] = useState("month"); // 'month', 'week', 'day'
@@ -38,6 +41,7 @@ const Calendar = ({ userRole, onLogout }) => {
 
   // Filter States
   const [filterTasks, setFilterTasks] = useState(true);
+  const [filterMilestones, setFilterMilestones] = useState(true);
   const [filterOverdue, setFilterOverdue] = useState(true);
   const [showCompleted, setShowCompleted] = useState(false);
 
@@ -75,6 +79,16 @@ const Calendar = ({ userRole, onLogout }) => {
     return new Date(year, month - 1, day);
   };
 
+  const formatModalDateHeader = (dateObj) => {
+    if (!dateObj) return "";
+    return dateObj.toLocaleDateString('en-US', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric'
+    });
+  };
+
   // Close month picker on outside click
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -106,13 +120,41 @@ const Calendar = ({ userRole, onLogout }) => {
     fetchCalendarData();
   }, [currentDate, view]);
 
+  // Robust Helper to extract status string
+  const getEventStatusString = (evt) => {
+    if (!evt) return "";
+    let rawStatus = evt.status || evt.taskSts || evt.subStatus || evt.projectStatus || "";
+    if (typeof rawStatus === 'object' && rawStatus !== null) {
+      rawStatus = rawStatus.statusNm || rawStatus.name || rawStatus.status || "";
+    }
+    return String(rawStatus).toUpperCase();
+  };
+
+  // Helper to check if event is closed/completed
+  const isEventClosed = (evt) => {
+    if (!evt) return false;
+    const statusUpper = getEventStatusString(evt);
+    const completedStatuses = [
+      'COMPLETED', 'DONE', 'CLOSE', 'CLOSED', 'COMPLETE', 'FINISHED', 
+      '100%', 'INACTIVE', 'IN_ACTIVE', 'DEACTIVATED', 'RESOLVED', 'APPROVED', 'CANCELLED', 'ARCHIVED'
+    ];
+    const isCompletedStatus = completedStatuses.includes(statusUpper);
+    const isCompletedBool = evt.completed === true || evt.closed === true || evt.isClosed === true || evt.progress === 100;
+    const isInactiveSts = evt.sts === false || evt.sts === 0 || evt.sts === "0" || evt.sts === "false" || evt.sts === "Inactive";
+
+    return isCompletedStatus || isCompletedBool || isInactiveSts;
+  };
+
   // Determine event type (with overdue check)
   const getEventType = (evt) => {
     if (!evt) return 'task';
     const typeLower = (evt.type || "").toLowerCase();
-    const statusUpper = (evt.status || evt.taskSts || evt.subStatus || "").toString().toUpperCase();
-    const completedStatuses = ['COMPLETED', 'DONE', 'CLOSE', 'CLOSED', 'COMPLETE', 'FINISHED', '100%'];
-    const isCompleted = completedStatuses.includes(statusUpper) || evt.completed === true || evt.progress === 100;
+    const isClosed = isEventClosed(evt);
+
+    const isMilestone = typeLower === 'milestone' || typeLower.includes('milestone') || (evt.id && evt.id.toString().toUpperCase().includes('MILESTONE'));
+    if (isMilestone) {
+      return 'milestone';
+    }
 
     const isTask = typeLower === 'task' || 
                    typeLower === 'overdue' || 
@@ -121,6 +163,7 @@ const Calendar = ({ userRole, onLogout }) => {
                    evt.taskId || evt.taskCd || evt.empTaskId;
 
     if (isTask) {
+      const statusUpper = getEventStatusString(evt);
       const isExplicitOverdue = typeLower === 'overdue' || statusUpper === 'OVERDUE' || evt.isOverdue === true || evt.overdue === true;
       const dateVal = evt.date || evt.dueDate || evt.tentEndDt || evt.endDate;
       const taskDate = parseLocalDate(dateVal);
@@ -132,14 +175,10 @@ const Calendar = ({ userRole, onLogout }) => {
       
       const isPast = taskDate ? taskDate < todayStart : false;
 
-      if (!isCompleted && (isExplicitOverdue || isPast)) {
+      if (!isClosed && (isExplicitOverdue || isPast)) {
         return 'overdue';
       }
       return 'task';
-    }
-
-    if (typeLower === 'milestone') {
-      return 'milestone';
     }
 
     return 'meeting'; 
@@ -148,17 +187,17 @@ const Calendar = ({ userRole, onLogout }) => {
   // Filter events
   const getFilteredEvents = () => {
     return eventsList.filter(evt => {
-      const eventType = getEventType(evt);
-      const statusUpper = (evt.status || evt.taskSts || evt.subStatus || "").toString().toUpperCase();
-      const completedStatuses = ['COMPLETED', 'DONE', 'CLOSE', 'CLOSED', 'COMPLETE', 'FINISHED', '100%'];
-      const isCompleted = completedStatuses.includes(statusUpper) || evt.completed === true || evt.progress === 100;
+      const isClosed = isEventClosed(evt);
 
-      if (isCompleted && !showCompleted) {
+      if (isClosed && !showCompleted) {
         return false;
       }
 
+      const eventType = getEventType(evt);
+
       if (eventType === 'task' && !filterTasks) return false;
       if (eventType === 'overdue' && !filterOverdue) return false;
+      if (eventType === 'milestone' && !filterMilestones) return false;
 
       return true;
     });
@@ -178,10 +217,13 @@ const Calendar = ({ userRole, onLogout }) => {
 
     return eventsList
       .filter(evt => {
-        const statusUpper = (evt.status || evt.taskSts || evt.subStatus || "").toString().toUpperCase();
-        const completedStatuses = ['COMPLETED', 'DONE', 'CLOSE', 'CLOSED', 'COMPLETE', 'FINISHED', '100%'];
-        const isCompleted = completedStatuses.includes(statusUpper) || evt.completed === true || evt.progress === 100;
-        if (isCompleted && !showCompleted) return false;
+        const isClosed = isEventClosed(evt);
+        if (isClosed && !showCompleted) return false;
+
+        const eventType = getEventType(evt);
+        if (eventType === 'task' && !filterTasks) return false;
+        if (eventType === 'overdue' && !filterOverdue) return false;
+        if (eventType === 'milestone' && !filterMilestones) return false;
 
         const dateVal = evt.date || evt.dueDate || evt.tentEndDt || evt.endDate;
         const evtDate = parseLocalDate(dateVal);
@@ -355,9 +397,7 @@ const Calendar = ({ userRole, onLogout }) => {
 
                     return (
                       <div key={index} className={`calendar-day ${isToday ? "today-cell" : ""}`} onClick={(e) => {
-                        if (dayEvents.length > 0) {
-                          setSelectedDateEvents({ date: dayObj, events: dayEvents });
-                        }
+                        setSelectedDateEvents({ date: dayObj, events: dayEvents });
                       }}>
                         <div className="day-number-wrapper">
                           <span className={`day-number ${isToday ? "today-number" : ""}`}>{day}</span>
@@ -409,7 +449,10 @@ const Calendar = ({ userRole, onLogout }) => {
                   <span className="legend-dot" style={{ backgroundColor: EVENT_COLORS.task }}></span>
                   Task Due Date
                 </div>
-
+                <div className="legend-item">
+                  <span className="legend-dot" style={{ backgroundColor: EVENT_COLORS.milestone }}></span>
+                  Milestones
+                </div>
                 <div className="legend-item">
                   <span className="legend-dot" style={{ backgroundColor: EVENT_COLORS.overdue }}></span>
                   Overdue
@@ -519,6 +562,19 @@ const Calendar = ({ userRole, onLogout }) => {
                   <label className="filter-checkbox">
                     <input 
                       type="checkbox" 
+                      checked={filterMilestones} 
+                      onChange={(e) => setFilterMilestones(e.target.checked)} 
+                    />
+                    <span className="checkmark" style={{ 
+                      backgroundColor: filterMilestones ? EVENT_COLORS.milestone : "transparent", 
+                      borderColor: EVENT_COLORS.milestone 
+                    }}>{filterMilestones && <Check size={12} color="white"/>}</span>
+                    Milestones
+                  </label>
+
+                  <label className="filter-checkbox">
+                    <input 
+                      type="checkbox" 
                       checked={filterOverdue} 
                       onChange={(e) => setFilterOverdue(e.target.checked)} 
                     />
@@ -610,87 +666,136 @@ const Calendar = ({ userRole, onLogout }) => {
       {/* Date Events Modal */}
       {selectedDateEvents && (
         <div className="event-modal-overlay" onClick={() => setSelectedDateEvents(null)}>
-          <div className="event-modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '600px', width: '90%' }}>
-            <div className="event-modal-header">
-              <h3 style={{ margin: 0, fontSize: '16px', color: '#1e293b' }}>
-                Tasks for {formatDateStr(selectedDateEvents.date)}
-              </h3>
-              <button className="close-modal-btn" onClick={() => setSelectedDateEvents(null)}>&times;</button>
+          <div className="event-modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '550px', width: '90%', borderRadius: '16px', padding: '24px' }}>
+            <div className="event-modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', paddingBottom: '16px', borderBottom: '1px solid #f1f5f9' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div style={{
+                  width: '42px',
+                  height: '42px',
+                  borderRadius: '10px',
+                  backgroundColor: '#eff6ff',
+                  border: '1px solid #bfdbfe',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#2563eb'
+                }}>
+                  <CalendarIcon size={20} />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '17px', fontWeight: '700', color: '#0f172a' }}>
+                    {formatModalDateHeader(selectedDateEvents.date)}
+                  </h3>
+                  <span style={{ fontSize: '13px', fontWeight: '600', color: '#2563eb', marginTop: '2px', display: 'block' }}>
+                    {selectedDateEvents.events.length} {selectedDateEvents.events.length === 1 ? 'Event & Task' : 'Events & Tasks'}
+                  </span>
+                </div>
+              </div>
+              <button className="close-modal-btn" onClick={() => setSelectedDateEvents(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', fontSize: '24px', lineHeight: 1 }}>&times;</button>
             </div>
-            <div className="event-modal-body" style={{ maxHeight: '60vh', overflowY: 'auto' }}>
-              {selectedDateEvents.events.map((evt, idx) => {
-                const eventType = getEventType(evt);
-                return (
-                  <div 
-                    key={idx} 
-                    style={{ 
-                      paddingBottom: '20px', 
-                      marginBottom: '20px',
-                      borderBottom: idx !== selectedDateEvents.events.length - 1 ? '1px dashed #cbd5e1' : 'none'
+            
+            <div className="event-modal-body" style={{ maxHeight: '60vh', overflowY: 'auto', paddingTop: '16px' }}>
+              {selectedDateEvents.events.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '36px 20px 20px 20px' }}>
+                  <p style={{ fontSize: '15px', color: '#64748b', margin: '0 0 24px 0', fontWeight: '500' }}>
+                    No events or tasks scheduled for this day.
+                  </p>
+                  <button 
+                    type="button"
+                    onClick={() => {
+                      setSelectedDateEvents(null);
+                      navigate('/my-tasks');
+                    }}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#2563eb',
+                      fontWeight: '600',
+                      fontSize: '14px',
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px'
                     }}
                   >
-                    <div style={{ marginBottom: '12px' }}>
-                      <span className="event-modal-badge" style={{ 
-                        backgroundColor: (EVENT_COLORS[eventType] || EVENT_COLORS.task) + '20', 
-                        color: EVENT_COLORS[eventType] || EVENT_COLORS.task,
-                        display: 'inline-block',
-                        padding: '4px 8px',
-                        borderRadius: '4px',
-                        fontSize: '11px',
-                        fontWeight: '700',
-                        textTransform: 'uppercase'
-                      }}>
-                        {evt.type || 'TASK'}
-                      </span>
+                    View all tasks <ArrowRight size={16} />
+                  </button>
+                </div>
+              ) : (
+                selectedDateEvents.events.map((evt, idx) => {
+                  const eventType = getEventType(evt);
+                  return (
+                    <div 
+                      key={idx} 
+                      style={{ 
+                        paddingBottom: '20px', 
+                        marginBottom: '20px',
+                        borderBottom: idx !== selectedDateEvents.events.length - 1 ? '1px dashed #cbd5e1' : 'none'
+                      }}
+                    >
+                      <div style={{ marginBottom: '12px' }}>
+                        <span className="event-modal-badge" style={{ 
+                          backgroundColor: (EVENT_COLORS[eventType] || EVENT_COLORS.task) + '20', 
+                          color: EVENT_COLORS[eventType] || EVENT_COLORS.task,
+                          display: 'inline-block',
+                          padding: '4px 8px',
+                          borderRadius: '4px',
+                          fontSize: '11px',
+                          fontWeight: '700',
+                          textTransform: 'uppercase'
+                        }}>
+                          {evt.type || 'TASK'}
+                        </span>
+                      </div>
+                      
+                      <h3 className="event-modal-title">{evt.title}</h3>
+                      
+                      {evt.code && (
+                        <div className="event-modal-meta">
+                          <strong>Code:</strong> {evt.code}
+                        </div>
+                      )}
+                      
+                      <div className="event-modal-meta">
+                        <strong>Date:</strong> {evt.date} {evt.time ? `@ ${evt.time}` : ''}
+                      </div>
+                      
+                      {evt.status && (
+                        <div className="event-modal-meta">
+                          <strong>Status:</strong> <span className={`status-badge status-${evt.status.toLowerCase()}`}>{evt.status}</span>
+                        </div>
+                      )}
+                      
+                      {(evt.subStatus || evt.processStatus || evt.taskSts) && (
+                        <div className="event-modal-meta">
+                          <strong>Process Status:</strong> <span className="status-badge" style={{ backgroundColor: "#e2e8f0", color: "#475569" }}>{evt.subStatus || evt.processStatus || evt.taskSts}</span>
+                        </div>
+                      )}
+                      
+                      {evt.subTasks && evt.subTasks.length > 0 && (
+                        <div className="event-modal-description">
+                          <strong>Sub Tasks:</strong>
+                          <ul style={{ paddingLeft: "20px", marginTop: "4px" }}>
+                            {evt.subTasks.map((st, i) => (
+                              <li key={i} style={{ marginBottom: "4px" }}>
+                                {st.name || st.title} 
+                                {st.status && <span style={{ marginLeft: "8px", fontSize: "11px", backgroundColor: "#e2e8f0", padding: "2px 6px", borderRadius: "10px" }}>{st.status}</span>}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      
+                      {evt.description && (
+                        <div className="event-modal-description">
+                          <strong>Description:</strong>
+                          <p>{evt.description}</p>
+                        </div>
+                      )}
                     </div>
-                    
-                    <h3 className="event-modal-title">{evt.title}</h3>
-                    
-                    {evt.code && (
-                      <div className="event-modal-meta">
-                        <strong>Code:</strong> {evt.code}
-                      </div>
-                    )}
-                    
-                    <div className="event-modal-meta">
-                      <strong>Date:</strong> {evt.date} {evt.time ? `@ ${evt.time}` : ''}
-                    </div>
-                    
-                    {evt.status && (
-                      <div className="event-modal-meta">
-                        <strong>Status:</strong> <span className={`status-badge status-${evt.status.toLowerCase()}`}>{evt.status}</span>
-                      </div>
-                    )}
-                    
-                    {(evt.subStatus || evt.processStatus || evt.taskSts) && (
-                      <div className="event-modal-meta">
-                        <strong>Process Status:</strong> <span className="status-badge" style={{ backgroundColor: "#e2e8f0", color: "#475569" }}>{evt.subStatus || evt.processStatus || evt.taskSts}</span>
-                      </div>
-                    )}
-                    
-                    {evt.subTasks && evt.subTasks.length > 0 && (
-                      <div className="event-modal-description">
-                        <strong>Sub Tasks:</strong>
-                        <ul style={{ paddingLeft: "20px", marginTop: "4px" }}>
-                          {evt.subTasks.map((st, i) => (
-                            <li key={i} style={{ marginBottom: "4px" }}>
-                              {st.name || st.title} 
-                              {st.status && <span style={{ marginLeft: "8px", fontSize: "11px", backgroundColor: "#e2e8f0", padding: "2px 6px", borderRadius: "10px" }}>{st.status}</span>}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                    
-                    {evt.description && (
-                      <div className="event-modal-description">
-                        <strong>Description:</strong>
-                        <p>{evt.description}</p>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+                  );
+                })
+              )}
             </div>
           </div>
         </div>
