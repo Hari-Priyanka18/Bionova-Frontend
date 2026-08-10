@@ -7,32 +7,47 @@ import loginBg from '/login bg.png';
 import loginIcon from '/BioNova.png'; // Your login icon
 import resetIcon from '/BioNova.png'; // Your reset icon
 
+// Helper functions for cookies
+const setCookie = (name, value, days) => {
+  let expires = "";
+  if (days) {
+    const date = new Date();
+    date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+    expires = "; expires=" + date.toUTCString();
+  }
+  document.cookie = name + "=" + (value || "")  + expires + "; path=/";
+}
+
+const getCookie = (name) => {
+  const nameEQ = name + "=";
+  const ca = document.cookie.split(';');
+  for(let i=0; i < ca.length; i++) {
+    let c = ca[i];
+    while (c.charAt(0) === ' ') c = c.substring(1, c.length);
+    if (c.indexOf(nameEQ) === 0) return c.substring(nameEQ.length, c.length);
+  }
+  return null;
+}
+
+const eraseCookie = (name) => {   
+  document.cookie = name + '=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;';
+}
+
 const Login = ({ onLogin }) => {
   const [currentView, setCurrentView] = useState('login');
   
   const [formData, setFormData] = useState({
-    email: '',
-    password: ''
+    email: getCookie('rememberedEmail') || '',
+    password: getCookie('rememberedPassword') || ''
   });
   const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(false);
+  const [rememberMe, setRememberMe] = useState(
+    !!(getCookie('rememberedEmail') && getCookie('rememberedPassword'))
+  );
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
   const [resetEmail, setResetEmail] = useState('');
-
-  useEffect(() => {
-    const savedEmail = localStorage.getItem('rememberedEmail');
-    const savedPassword = localStorage.getItem('rememberedPassword');
-    
-    if (savedEmail && savedPassword) {
-      setFormData({
-        email: savedEmail,
-        password: savedPassword
-      });
-      setRememberMe(true);
-    }
-  }, []);
   const [successMsg, setSuccessMsg] = useState('');
 
   const handleChange = (e) => {
@@ -49,6 +64,14 @@ const Login = ({ onLogin }) => {
       setError("Please enter your email address");
       return;
     }
+    
+    // Add regex validation for email
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (!emailRegex.test(formData.email.trim())) {
+      setError("Invalid Email");
+      return;
+    }
+
     if (!formData.password) {
       setError("Please enter your password");
       return;
@@ -96,16 +119,20 @@ const Login = ({ onLogin }) => {
         localStorage.setItem("userName", formattedName);
         
         if (rememberMe) {
-          localStorage.setItem('rememberedEmail', formData.email.trim());
-          localStorage.setItem('rememberedPassword', formData.password);
+          setCookie('rememberedEmail', formData.email.trim(), 30);
+          setCookie('rememberedPassword', formData.password, 30);
         } else {
-          localStorage.removeItem('rememberedEmail');
-          localStorage.removeItem('rememberedPassword');
+          eraseCookie('rememberedEmail');
+          eraseCookie('rememberedPassword');
         }
 
         onLogin(true, data.role || "full_access");
       } else {
-        setError(data.message || "Invalid Email or Password");
+        if (data.message && data.message.toLowerCase().includes("user not found")) {
+          setError("Invalid Email");
+        } else {
+          setError(data.message || "Invalid Email or Password");
+        }
       }
     } catch (err) {
       console.error("Login failed:", err);
@@ -159,7 +186,14 @@ const Login = ({ onLogin }) => {
     setCurrentView(view);
     setError('');
     setSuccessMsg('');
-    setFormData({ email: '', password: '' });
+    if (view === 'login') {
+      setFormData({
+        email: getCookie('rememberedEmail') || '',
+        password: getCookie('rememberedPassword') || ''
+      });
+    } else {
+      setFormData({ email: '', password: '' });
+    }
     setResetEmail('');
   };
 
@@ -211,7 +245,7 @@ const Login = ({ onLogin }) => {
                         value={formData.email} 
                         onChange={handleChange}
                         placeholder="enter your email" 
-                        autoComplete="off"
+                        autoComplete="email"
                       />
                     </div>
                   </div>
@@ -227,6 +261,7 @@ const Login = ({ onLogin }) => {
                         onChange={handleChange} 
                         placeholder="enter your password"
                         className="password-input"
+                        autoComplete="current-password"
                       />
                       <button 
                         type="button"

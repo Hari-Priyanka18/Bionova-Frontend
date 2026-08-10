@@ -235,6 +235,8 @@ const EmployeeCreation = ({ userRole, onLogout }) => {
   const [extFormErrors, setExtFormErrors] = useState({});
   const [showExtModal, setShowExtModal] = useState(false);
   const [tableSearchQuery, setTableSearchQuery] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const recordsPerPage = 10;
 
   const [alertConfig, setAlertConfig] = useState({
     isOpen: false,
@@ -1466,12 +1468,13 @@ const EmployeeCreation = ({ userRole, onLogout }) => {
   const toggleDropdown = (e, id) => {
     e.stopPropagation();
     const rect = e.currentTarget.getBoundingClientRect();
-    const dropdownHeight = 220; // threshold height (220px) so lower rows open upside
     const spaceBelow = window.innerHeight - rect.bottom;
-    const spaceAbove = rect.top;
-
+    const dropdownHeight = 150;
+    const isTop = spaceBelow < dropdownHeight;
+    
     setDropdownPos({
-      isTop: spaceBelow < dropdownHeight && spaceAbove > dropdownHeight
+      top: isTop ? rect.top - dropdownHeight : rect.bottom,
+      right: window.innerWidth - rect.right
     });
     setActiveActionsMenu((prev) => (prev === id ? null : id));
   };
@@ -1544,6 +1547,15 @@ const EmployeeCreation = ({ userRole, onLogout }) => {
       (emp.email && emp.email.toLowerCase().includes(tableSearchQuery.toLowerCase())) ||
       (emp.companyNm && emp.companyNm.toLowerCase().includes(tableSearchQuery.toLowerCase()))
     ) : externalEmployees) || [];
+
+  const indexOfLastRecord = currentPage * recordsPerPage;
+  const indexOfFirstRecord = indexOfLastRecord - recordsPerPage;
+  
+  const currentEmployees = filteredEmployees.slice(indexOfFirstRecord, indexOfLastRecord);
+  const totalPages = Math.ceil(filteredEmployees.length / recordsPerPage);
+
+  const currentExtEmployees = filteredExternalEmployees.slice(indexOfFirstRecord, indexOfLastRecord);
+  const totalExtPages = Math.ceil(filteredExternalEmployees.length / recordsPerPage);
 
   return (
     <div className="emp-shell-container">
@@ -1740,26 +1752,21 @@ const EmployeeCreation = ({ userRole, onLogout }) => {
                       <div className="emp-form-item">
                         <label>Date of Birth <span className="emp-req-star">*</span></label>
                         <div className="emp-input-icon-wrap">
-                          <span className="emp-input-prefix-icon"><Calendar size={16} /></span>
-                          <DatePicker
-                            selected={form.dateOfBirth ? new Date(form.dateOfBirth) : null}
-                            onChange={(date) => {
-                              if (date) {
-                                const offset = date.getTimezoneOffset();
-                                const adjustedDate = new Date(date.getTime() - (offset * 60 * 1000));
-                                const dateString = adjustedDate.toISOString().split('T')[0];
-                                handleChange({ target: { name: 'dateOfBirth', value: dateString } });
-                              } else {
-                                handleChange({ target: { name: 'dateOfBirth', value: '' } });
-                              }
+                          <input
+                            type="date"
+                            name="dateOfBirth"
+                            value={form.dateOfBirth}
+                            onChange={handleChange}
+                            max={new Date().toISOString().split("T")[0]}
+                            style={{
+                              width: '100%',
+                              padding: '8px 12px',
+                              border: '1px solid #cbd5e1',
+                              borderRadius: '6px',
+                              fontSize: '14px',
+                              outline: 'none',
+                              color: '#0f172a'
                             }}
-                            dateFormat="dd/MM/yyyy"
-                            placeholderText="DD/MM/YYYY"
-                            maxDate={new Date()}
-                            customInput={<MaskedDateInput />}
-                            showMonthDropdown
-                            showYearDropdown
-                            dropdownMode="select"
                           />
                         </div>
                       </div>
@@ -1879,26 +1886,21 @@ const EmployeeCreation = ({ userRole, onLogout }) => {
                       <div className="emp-form-item">
                         <label>Joining Date <span className="emp-req-star">*</span></label>
                         <div className="emp-input-icon-wrap">
-                          <span className="emp-input-prefix-icon"><Calendar size={16} /></span>
-                          <DatePicker
-                            selected={form.joiningDate ? new Date(form.joiningDate) : null}
-                            onChange={(date) => {
-                              if (date) {
-                                const offset = date.getTimezoneOffset();
-                                const adjustedDate = new Date(date.getTime() - (offset * 60 * 1000));
-                                const dateString = adjustedDate.toISOString().split('T')[0];
-                                handleChange({ target: { name: 'joiningDate', value: dateString } });
-                              } else {
-                                handleChange({ target: { name: 'joiningDate', value: '' } });
-                              }
+                          <input
+                            type="date"
+                            name="joiningDate"
+                            value={form.joiningDate}
+                            onChange={handleChange}
+                            min={new Date().toISOString().split("T")[0]}
+                            style={{
+                              width: '100%',
+                              padding: '8px 12px',
+                              border: '1px solid #cbd5e1',
+                              borderRadius: '6px',
+                              fontSize: '14px',
+                              outline: 'none',
+                              color: '#0f172a'
                             }}
-                            dateFormat="dd/MM/yyyy"
-                            placeholderText="DD/MM/YYYY"
-                            minDate={new Date()}
-                            customInput={<MaskedDateInput />}
-                            showMonthDropdown
-                            showYearDropdown
-                            dropdownMode="select"
                           />
                         </div>
                       </div>
@@ -2274,13 +2276,13 @@ const EmployeeCreation = ({ userRole, onLogout }) => {
                     <p style={{ color: '#64748b', margin: '4px 0 0 0', fontSize: '14px' }}>View and manage all employees</p>
                     <div style={{ display: 'flex', gap: '16px', marginTop: '12px' }}>
                       <button 
-                        onClick={() => setActiveEmployeeTab("INTERNAL")}
+                        onClick={() => { setActiveEmployeeTab("INTERNAL"); setCurrentPage(1); }}
                         style={{ padding: '6px 12px', border: 'none', background: activeEmployeeTab === "INTERNAL" ? '#2563eb' : 'transparent', color: activeEmployeeTab === "INTERNAL" ? 'white' : '#64748b', borderRadius: '4px', cursor: 'pointer', fontWeight: '600', fontSize: '13px' }}
                       >
                         Internal Employees
                       </button>
                       <button 
-                        onClick={() => setActiveEmployeeTab("EXTERNAL")}
+                        onClick={() => { setActiveEmployeeTab("EXTERNAL"); setCurrentPage(1); }}
                         style={{ padding: '6px 12px', border: 'none', background: activeEmployeeTab === "EXTERNAL" ? '#2563eb' : 'transparent', color: activeEmployeeTab === "EXTERNAL" ? 'white' : '#64748b', borderRadius: '4px', cursor: 'pointer', fontWeight: '600', fontSize: '13px' }}
                       >
                         External Employees
@@ -2316,6 +2318,7 @@ const EmployeeCreation = ({ userRole, onLogout }) => {
                 </div>
 
                 {activeEmployeeTab === "INTERNAL" ? (
+                <>
                 <div className="emp-table-container" style={{ overflowX: 'auto' }}>
                   <table className="emp-list-table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '2200px' }}>
                     <thead style={{ backgroundColor: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
@@ -2351,12 +2354,12 @@ const EmployeeCreation = ({ userRole, onLogout }) => {
                             </div>
                           </td>
                         </tr>
-                      ) : filteredEmployees.length === 0 ? (
+                      ) : currentEmployees.length === 0 ? (
                         <tr><td colSpan="19" style={{ textAlign: "center", padding: "60px 20px", color: '#64748b', fontSize: '14px' }}>No employee records found. Add a new employee using the button above.</td></tr>
                       ) : (
-                        filteredEmployees.map((emp, index) => (
+                        currentEmployees.map((emp, index) => (
                           <tr key={emp.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                            <td style={{ padding: '14px 16px', fontSize: '14px', color: '#334155' }}>{index + 1}</td>
+                            <td style={{ padding: '14px 16px', fontSize: '14px', color: '#334155' }}>{indexOfFirstRecord + index + 1}</td>
                             <td style={{ padding: '14px 16px', fontSize: '14px', color: '#334155' }}><span style={{ backgroundColor: '#f1f5f9', padding: '4px 10px', borderRadius: '4px', fontWeight: '600', color: '#0f172a', border: '1px solid #e2e8f0', fontSize: '13px' }}>{emp.employeeCode}</span></td>
                             <td style={{ padding: '14px 16px', fontSize: '14px', color: '#334155' }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -2393,7 +2396,7 @@ const EmployeeCreation = ({ userRole, onLogout }) => {
                               {activeActionsMenu === emp.id && (
                                 <>
                                   <div className="emp-actions-dropdown-backdrop" onClick={() => setActiveActionsMenu(null)} style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9 }} />
-                                  <div className="emp-actions-dropdown-menu" style={{ position: 'absolute', right: '30px', top: dropdownPos.isTop ? 'auto' : '8px', bottom: dropdownPos.isTop ? '100%' : 'auto', backgroundColor: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', zIndex: 10, display: 'flex', flexDirection: 'column', padding: '4px 0', minWidth: '140px' }}>
+                                  <div className="emp-actions-dropdown-menu" style={{ position: 'fixed', right: `${dropdownPos.right}px`, top: `${dropdownPos.top}px`, backgroundColor: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', zIndex: 9999, display: 'flex', flexDirection: 'column', padding: '4px 0', minWidth: '140px' }}>
                                     <button type="button" style={{ padding: '10px 16px', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', color: '#334155', borderRadius: '4px', margin: '2px 4px' }} onClick={() => handleView(emp)} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f1f5f9'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}> <Eye size={15} /> View </button>
                                     {screenPerm.canEdit && (
                                       <button type="button" style={{ padding: '10px 16px', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', color: '#334155', borderRadius: '4px', margin: '2px 4px' }} onClick={() => handleEdit(emp)} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f1f5f9'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}> <Edit size={15} /> Edit </button>
@@ -2411,30 +2414,60 @@ const EmployeeCreation = ({ userRole, onLogout }) => {
                     </tbody>
                   </table>
                 </div>
+                {totalPages > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 24px', borderTop: '1px solid #e2e8f0', backgroundColor: '#fafbfc' }}>
+                    <span style={{ fontSize: '14px', color: '#64748b' }}>
+                      Showing {indexOfFirstRecord + 1} to {Math.min(indexOfLastRecord, filteredEmployees.length)} of {filteredEmployees.length} entries
+                    </span>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button
+                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                        disabled={currentPage === 1}
+                        style={{ padding: '6px 12px', border: '1px solid #cbd5e1', borderRadius: '6px', background: currentPage === 1 ? '#f8fafc' : 'white', color: currentPage === 1 ? '#94a3b8' : '#334155', cursor: currentPage === 1 ? 'not-allowed' : 'pointer' }}
+                      >
+                        Previous
+                      </button>
+                      <button
+                        style={{ padding: '6px 12px', border: '1px solid #2563eb', borderRadius: '6px', background: '#2563eb', color: 'white', fontWeight: '600' }}
+                      >
+                        {currentPage}
+                      </button>
+                      <button
+                        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                        disabled={currentPage === totalPages}
+                        style={{ padding: '6px 12px', border: '1px solid #cbd5e1', borderRadius: '6px', background: currentPage === totalPages ? '#f8fafc' : 'white', color: currentPage === totalPages ? '#94a3b8' : '#334155', cursor: currentPage === totalPages ? 'not-allowed' : 'pointer' }}
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                )}
+                </>
                 ) : (
+                <>
                 <div className="emp-table-container" style={{ overflowX: 'auto' }}>
                   <table className="emp-list-table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '1000px' }}>
                     <thead style={{ backgroundColor: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
                       <tr>
-                        <th style={{ width: "50px", padding: '14px 16px', fontSize: '11px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase' }}>S.NO</th>
-                        <th style={{ padding: '14px 16px', fontSize: '11px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase' }}>Ext Code</th>
-                        <th style={{ padding: '14px 16px', fontSize: '11px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase' }}>Name</th>
-                        <th style={{ padding: '14px 16px', fontSize: '11px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase' }}>Company</th>
-                        <th style={{ padding: '14px 16px', fontSize: '11px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase' }}>Email</th>
-                        <th style={{ padding: '14px 16px', fontSize: '11px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase' }}>Mobile</th>
-                        <th style={{ padding: '14px 16px', fontSize: '11px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase' }}>Status</th>
+                        <th style={{ width: "50px", padding: '14px 16px', fontSize: '11px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>S.NO</th>
+                        <th style={{ padding: '14px 16px', fontSize: '11px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Ext Code</th>
+                        <th style={{ padding: '14px 16px', fontSize: '11px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Name</th>
+                        <th style={{ padding: '14px 16px', fontSize: '11px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Company</th>
+                        <th style={{ padding: '14px 16px', fontSize: '11px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Email</th>
+                        <th style={{ padding: '14px 16px', fontSize: '11px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Mobile</th>
+                        <th style={{ padding: '14px 16px', fontSize: '11px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Status</th>
                         <th style={{ textAlign: "center", width: "100px", padding: '14px 16px', fontSize: '11px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>ACTIONS</th>
                       </tr>
                     </thead>
                     <tbody>
                       {loading ? (
                         <tr><td colSpan="8" style={{ textAlign: "center", padding: "60px 20px" }}>Loading...</td></tr>
-                      ) : filteredExternalEmployees.length === 0 ? (
+                      ) : currentExtEmployees.length === 0 ? (
                         <tr><td colSpan="8" style={{ textAlign: "center", padding: "60px 20px", color: '#64748b' }}>No external employees found.</td></tr>
                       ) : (
-                        filteredExternalEmployees.map((emp, index) => (
+                        currentExtEmployees.map((emp, index) => (
                           <tr key={emp.extEmpId || index} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                            <td style={{ padding: '14px 16px', fontSize: '14px' }}>{index + 1}</td>
+                            <td style={{ padding: '14px 16px', fontSize: '14px' }}>{indexOfFirstRecord + index + 1}</td>
                             <td style={{ padding: '14px 16px', fontSize: '14px' }}><span style={{ backgroundColor: '#f1f5f9', padding: '4px 10px', borderRadius: '4px', fontWeight: '600', fontSize: '13px' }}>{emp.extEmpCode || "-"}</span></td>
                             <td style={{ padding: '14px 16px', fontSize: '14px' }}><strong>{emp.extEmpNm}</strong></td>
                             <td style={{ padding: '14px 16px', fontSize: '14px' }}>{emp.companyNm}</td>
@@ -2450,7 +2483,7 @@ const EmployeeCreation = ({ userRole, onLogout }) => {
                               {activeActionsMenu === `ext-${emp.extEmpId || index}` && (
                                 <>
                                   <div className="emp-actions-dropdown-backdrop" onClick={() => setActiveActionsMenu(null)} style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9 }} />
-                                  <div className="emp-actions-dropdown-menu" style={{ position: 'absolute', right: '30px', top: dropdownPos.isTop ? 'auto' : '8px', bottom: dropdownPos.isTop ? '100%' : 'auto', backgroundColor: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', zIndex: 10, display: 'flex', flexDirection: 'column', padding: '4px 0', minWidth: '140px' }}>
+                                  <div className="emp-actions-dropdown-menu" style={{ position: 'fixed', right: `${dropdownPos.right}px`, top: `${dropdownPos.top}px`, backgroundColor: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', zIndex: 9999, display: 'flex', flexDirection: 'column', padding: '4px 0', minWidth: '140px' }}>
                                     <button onClick={() => viewExternalEmployee(emp)} style={{ background: 'none', border: 'none', padding: '8px 16px', textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', color: '#475569', fontSize: '13px' }} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f1f5f9'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
                                       <Eye size={14} /> View
                                     </button>
@@ -2470,6 +2503,35 @@ const EmployeeCreation = ({ userRole, onLogout }) => {
                     </tbody>
                   </table>
                 </div>
+                {totalExtPages > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 24px', borderTop: '1px solid #e2e8f0', backgroundColor: '#fafbfc' }}>
+                    <span style={{ fontSize: '14px', color: '#64748b' }}>
+                      Showing {indexOfFirstRecord + 1} to {Math.min(indexOfLastRecord, filteredExternalEmployees.length)} of {filteredExternalEmployees.length} entries
+                    </span>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button
+                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                        disabled={currentPage === 1}
+                        style={{ padding: '6px 12px', border: '1px solid #cbd5e1', borderRadius: '6px', background: currentPage === 1 ? '#f8fafc' : 'white', color: currentPage === 1 ? '#94a3b8' : '#334155', cursor: currentPage === 1 ? 'not-allowed' : 'pointer' }}
+                      >
+                        Previous
+                      </button>
+                      <button
+                        style={{ padding: '6px 12px', border: '1px solid #2563eb', borderRadius: '6px', background: '#2563eb', color: 'white', fontWeight: '600' }}
+                      >
+                        {currentPage}
+                      </button>
+                      <button
+                        onClick={() => setCurrentPage(p => Math.min(totalExtPages, p + 1))}
+                        disabled={currentPage === totalExtPages}
+                        style={{ padding: '6px 12px', border: '1px solid #cbd5e1', borderRadius: '6px', background: currentPage === totalExtPages ? '#f8fafc' : 'white', color: currentPage === totalExtPages ? '#94a3b8' : '#334155', cursor: currentPage === totalExtPages ? 'not-allowed' : 'pointer' }}
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                )}
+                </>
                 )}
 
               </div>

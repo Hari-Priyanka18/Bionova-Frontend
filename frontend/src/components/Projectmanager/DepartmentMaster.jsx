@@ -169,6 +169,7 @@ const DepartmentCreation = ({ userRole, onLogout }) => {
   // Sorting & Search
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
   const [tableSearchQuery, setTableSearchQuery] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
   const [formErrors, setFormErrors] = useState({});
 
   const validateField = (name, value) => {
@@ -454,12 +455,15 @@ const DepartmentCreation = ({ userRole, onLogout }) => {
   const toggleDropdown = (e, id) => {
     e.stopPropagation();
     const rect = e.currentTarget.getBoundingClientRect();
-    const dropdownHeight = 220; // threshold height (220px) so lower rows open upside
     const spaceBelow = window.innerHeight - rect.bottom;
     const spaceAbove = rect.top;
+    const dropdownHeight = 220; // threshold height (220px) so lower rows open upside
 
     setDropdownPos({
-      isTop: spaceBelow < dropdownHeight && spaceAbove > dropdownHeight
+      isTop: spaceBelow < dropdownHeight && spaceAbove > spaceBelow,
+      top: rect.top,
+      bottom: rect.bottom,
+      right: window.innerWidth - rect.right
     });
     setActiveDropdown((prev) => (prev === id ? null : id));
   };
@@ -479,14 +483,21 @@ const DepartmentCreation = ({ userRole, onLogout }) => {
     return 0;
   });
 
-  let currentItems = sortedDepartments;
+  let filteredItems = sortedDepartments;
   if (tableSearchQuery) {
     const q = tableSearchQuery.toLowerCase();
-    currentItems = sortedDepartments.filter(dept => 
+    filteredItems = sortedDepartments.filter(dept => 
       (dept.code || "").toLowerCase().includes(q) ||
       (dept.name || "").toLowerCase().includes(q)
     );
   }
+
+  // Pagination logic
+  const recordsPerPage = 10;
+  const indexOfLastRecord = currentPage * recordsPerPage;
+  const indexOfFirstRecord = indexOfLastRecord - recordsPerPage;
+  const currentItems = filteredItems.slice(indexOfFirstRecord, indexOfLastRecord);
+  const totalPages = Math.ceil(filteredItems.length / recordsPerPage);
 
   return (
     <div className="dept-shell-container">
@@ -808,7 +819,10 @@ const DepartmentCreation = ({ userRole, onLogout }) => {
                         type="text"
                         placeholder="Search departments..."
                         value={tableSearchQuery}
-                        onChange={(e) => setTableSearchQuery(e.target.value)}
+                        onChange={(e) => {
+                          setTableSearchQuery(e.target.value);
+                          setCurrentPage(1);
+                        }}
                         style={{ padding: '8px 12px 8px 36px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '14px', outline: 'none', width: '250px' }}
                       />
                     </div>
@@ -858,7 +872,7 @@ const DepartmentCreation = ({ userRole, onLogout }) => {
                               {activeDropdown === dept.id && (
                                 <>
                                   <div className="dept-actions-dropdown-backdrop" onClick={() => setActiveDropdown(null)} style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 998 }} />
-                                  <div className="dept-actions-dropdown-menu" style={{ position: 'absolute', right: '30px', top: dropdownPos.isTop ? 'auto' : '100%', bottom: dropdownPos.isTop ? '100%' : 'auto', backgroundColor: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', zIndex: 999, display: 'flex', flexDirection: 'column', padding: '4px 0', minWidth: '140px' }}>
+                                  <div className="dept-actions-dropdown-menu" style={{ position: 'fixed', right: `${dropdownPos.right}px`, top: dropdownPos.isTop ? 'auto' : `${dropdownPos.bottom}px`, bottom: dropdownPos.isTop ? `${window.innerHeight - dropdownPos.top}px` : 'auto', backgroundColor: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', zIndex: 9999, display: 'flex', flexDirection: 'column', padding: '4px 0', minWidth: '140px' }}>
                                     <button type="button" style={{ padding: '10px 16px', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', color: '#334155', borderRadius: '4px', margin: '2px 4px' }} onClick={() => handleView(dept)} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f1f5f9'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}> <Eye size={15} /> View </button>
                                     {screenPerm.canEdit && (
                                       <button type="button" style={{ padding: '10px 16px', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', color: '#334155', borderRadius: '4px', margin: '2px 4px' }} onClick={() => handleEdit(dept)} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f1f5f9'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}> <Edit size={15} /> Edit </button>
@@ -878,6 +892,72 @@ const DepartmentCreation = ({ userRole, onLogout }) => {
                     </tbody>
                   </table>
                 </div>
+
+                {/* Pagination Controls */}
+                {totalPages > 0 && (
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    padding: '16px 24px',
+                    borderTop: '1px solid #e2e8f0',
+                    backgroundColor: '#fafbfc'
+                  }}>
+                    <span style={{ fontSize: '14px', color: '#64748b' }}>
+                      Showing {indexOfFirstRecord + 1} to {Math.min(indexOfLastRecord, filteredItems.length)} of {filteredItems.length} entries
+                    </span>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button
+                        onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                        disabled={currentPage === 1}
+                        style={{
+                          padding: '6px 12px',
+                          border: '1px solid #cbd5e1',
+                          borderRadius: '6px',
+                          background: currentPage === 1 ? '#f1f5f9' : 'white',
+                          color: currentPage === 1 ? '#94a3b8' : '#334155',
+                          cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+                          fontSize: '14px',
+                          fontWeight: '500'
+                        }}
+                      >
+                        Previous
+                      </button>
+                      
+                      <button
+                        style={{
+                          padding: '6px 12px',
+                          border: '1px solid #2563eb',
+                          borderRadius: '6px',
+                          background: '#2563eb',
+                          color: 'white',
+                          cursor: 'default',
+                          fontSize: '14px',
+                          fontWeight: '500'
+                        }}
+                      >
+                        {currentPage}
+                      </button>
+
+                      <button
+                        onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                        disabled={currentPage === totalPages}
+                        style={{
+                          padding: '6px 12px',
+                          border: '1px solid #cbd5e1',
+                          borderRadius: '6px',
+                          background: currentPage === totalPages ? '#f1f5f9' : 'white',
+                          color: currentPage === totalPages ? '#94a3b8' : '#334155',
+                          cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
+                          fontSize: '14px',
+                          fontWeight: '500'
+                        }}
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}

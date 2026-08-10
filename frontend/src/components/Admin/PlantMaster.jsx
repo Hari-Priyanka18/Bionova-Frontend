@@ -304,6 +304,7 @@ const PlantCreation = ({ userRole, onLogout }) => {
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
   const [tableSearchQuery, setTableSearchQuery] = useState("");
   const [formErrors, setFormErrors] = useState({});
+  const [currentPage, setCurrentPage] = useState(1);
 
   const validateField = (name, value) => {
     let error = "";
@@ -683,20 +684,17 @@ const PlantCreation = ({ userRole, onLogout }) => {
       if (eventObj) {
         const btn = eventObj.currentTarget;
         const rect = btn.getBoundingClientRect();
-        const container = btn.closest('.pc-table-container') || btn.closest('.table-responsive');
         
-        let spaceBelow = window.innerHeight - rect.bottom;
-        let spaceAbove = rect.top;
-        
-        if (container) {
-          const containerRect = container.getBoundingClientRect();
-          spaceBelow = containerRect.bottom - rect.bottom;
-          spaceAbove = rect.top - containerRect.top;
-        }
-
+        const spaceBelow = window.innerHeight - rect.bottom;
+        const spaceAbove = rect.top;
         const dropdownHeight = 220;
+        const isTop = spaceBelow < dropdownHeight && spaceAbove > spaceBelow;
+        
         setDropdownPos({
-          isTop: spaceBelow < dropdownHeight && spaceAbove > spaceBelow
+          isTop,
+          top: rect.top,
+          bottom: rect.bottom,
+          right: window.innerWidth - rect.right
         });
       }
       setActiveDropdown(targetId);
@@ -836,7 +834,12 @@ const PlantCreation = ({ userRole, onLogout }) => {
     return sortable;
   }, [plants, sortConfig, companies, tableSearchQuery]);
 
-  const currentItems = sortedPlants;
+  // Pagination logic
+  const recordsPerPage = 10;
+  const indexOfLastRecord = currentPage * recordsPerPage;
+  const indexOfFirstRecord = indexOfLastRecord - recordsPerPage;
+  const currentItems = sortedPlants.slice(indexOfFirstRecord, indexOfLastRecord);
+  const totalPages = Math.ceil(sortedPlants.length / recordsPerPage);
 
   const thStyle = {
     padding: '14px 20px',
@@ -1550,7 +1553,10 @@ const PlantCreation = ({ userRole, onLogout }) => {
                         type="text"
                         placeholder="Search plants..."
                         value={tableSearchQuery}
-                        onChange={(e) => setTableSearchQuery(e.target.value)}
+                        onChange={(e) => {
+                          setTableSearchQuery(e.target.value);
+                          setCurrentPage(1);
+                        }}
                         style={{ padding: '8px 12px 8px 36px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '14px', outline: 'none', width: '250px' }}
                       />
                     </div>
@@ -1571,7 +1577,7 @@ const PlantCreation = ({ userRole, onLogout }) => {
                 </div>
 
                 {/* Data Table Section Inside the Card */}
-                <div className="pc-table-container" style={{ overflowX: 'auto', paddingBottom: '140px' }}>
+                <div className="pc-table-container" style={{ overflowX: 'auto', paddingBottom: '20px' }}>
                   <table className="pc-list-table text-nowrap" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '2200px', whiteSpace: 'nowrap' }}>
                     <thead style={{ backgroundColor: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
                       <tr>
@@ -1680,9 +1686,9 @@ const PlantCreation = ({ userRole, onLogout }) => {
                                   <div
                                     className="pc-actions-dropdown-backdrop"
                                     onClick={() => setActiveDropdown(null)}
-                                    style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9 }}
+                                    style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 90 }}
                                   />
-                                  <div className="pc-actions-dropdown-menu" style={{ position: 'absolute', right: '30px', top: dropdownPos.isTop ? 'auto' : '8px', bottom: dropdownPos.isTop ? '100%' : 'auto', backgroundColor: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', zIndex: 10, display: 'flex', flexDirection: 'column', padding: '4px 0', minWidth: '140px' }}>
+                                  <div className="pc-actions-dropdown-menu" style={{ position: 'fixed', right: `${dropdownPos.right}px`, top: dropdownPos.isTop ? 'auto' : `${dropdownPos.bottom}px`, bottom: dropdownPos.isTop ? `${window.innerHeight - dropdownPos.top}px` : 'auto', backgroundColor: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', zIndex: 9999, display: 'flex', flexDirection: 'column', padding: '4px 0', minWidth: '140px' }}>
                                     <button
                                       type="button"
                                       style={{ padding: '10px 16px', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', color: '#334155', borderRadius: '4px', margin: '2px 4px' }}
@@ -1731,6 +1737,71 @@ const PlantCreation = ({ userRole, onLogout }) => {
                   </table>
                 </div>
 
+                {/* Pagination Controls */}
+                {totalPages > 0 && (
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    padding: '16px 24px',
+                    borderTop: '1px solid #e2e8f0',
+                    backgroundColor: '#fafbfc'
+                  }}>
+                    <span style={{ fontSize: '14px', color: '#64748b' }}>
+                      Showing {indexOfFirstRecord + 1} to {Math.min(indexOfLastRecord, sortedPlants.length)} of {sortedPlants.length} entries
+                    </span>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button
+                        onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                        disabled={currentPage === 1}
+                        style={{
+                          padding: '6px 12px',
+                          border: '1px solid #cbd5e1',
+                          borderRadius: '6px',
+                          background: currentPage === 1 ? '#f1f5f9' : 'white',
+                          color: currentPage === 1 ? '#94a3b8' : '#334155',
+                          cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+                          fontSize: '14px',
+                          fontWeight: '500'
+                        }}
+                      >
+                        Previous
+                      </button>
+                      
+                      <button
+                        style={{
+                          padding: '6px 12px',
+                          border: '1px solid #2563eb',
+                          borderRadius: '6px',
+                          background: '#2563eb',
+                          color: 'white',
+                          cursor: 'default',
+                          fontSize: '14px',
+                          fontWeight: '500'
+                        }}
+                      >
+                        {currentPage}
+                      </button>
+
+                      <button
+                        onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                        disabled={currentPage === totalPages}
+                        style={{
+                          padding: '6px 12px',
+                          border: '1px solid #cbd5e1',
+                          borderRadius: '6px',
+                          background: currentPage === totalPages ? '#f1f5f9' : 'white',
+                          color: currentPage === totalPages ? '#94a3b8' : '#334155',
+                          cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
+                          fontSize: '14px',
+                          fontWeight: '500'
+                        }}
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                )}
 
               </div>
             </div>

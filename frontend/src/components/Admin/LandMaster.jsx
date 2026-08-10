@@ -395,6 +395,7 @@ const AgriLandAllocation = ({ userRole, onLogout }) => {
   // Sorting state
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
   const [tableSearchQuery, setTableSearchQuery] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
 
   const validateField = (name, value) => {
     let error = "";
@@ -928,20 +929,17 @@ const AgriLandAllocation = ({ userRole, onLogout }) => {
       if (event) {
         const btn = event.currentTarget;
         const rect = btn.getBoundingClientRect();
-        const container = btn.closest('.al-table-container');
         
-        let spaceBelow = window.innerHeight - rect.bottom;
-        let spaceAbove = rect.top;
-        
-        if (container) {
-          const containerRect = container.getBoundingClientRect();
-          spaceBelow = containerRect.bottom - rect.bottom;
-          spaceAbove = rect.top - containerRect.top;
-        }
-
+        const spaceBelow = window.innerHeight - rect.bottom;
+        const spaceAbove = rect.top;
         const dropdownHeight = 250;
+        const isTop = spaceBelow < dropdownHeight && spaceAbove > spaceBelow;
+        
         setDropdownPos({
-          isTop: spaceBelow < dropdownHeight && spaceAbove > spaceBelow
+          isTop,
+          top: rect.top,
+          bottom: rect.bottom,
+          right: window.innerWidth - rect.right
         });
       }
       setActiveDropdown(id);
@@ -1090,7 +1088,12 @@ const AgriLandAllocation = ({ userRole, onLogout }) => {
     return sortable;
   }, [allocations, sortConfig, plants, states, tableSearchQuery]);
 
-  const currentItems = sortedAllocations;
+  // Pagination logic
+  const recordsPerPage = 10;
+  const indexOfLastRecord = currentPage * recordsPerPage;
+  const indexOfFirstRecord = indexOfLastRecord - recordsPerPage;
+  const currentItems = sortedAllocations.slice(indexOfFirstRecord, indexOfLastRecord);
+  const totalPages = Math.ceil(sortedAllocations.length / recordsPerPage);
 
   return (
     <div className="al-shell-container">
@@ -1604,68 +1607,42 @@ const AgriLandAllocation = ({ userRole, onLogout }) => {
                             <div className="al-form-layout-row columns-4" style={{ marginTop: '20px' }}>
                               <label className="al-field-item">
                               <span>Lease Start Date <b style={{ color: '#ef4444' }}>*</b></span>
-                              <DatePicker
-                                selected={form.leaseStartDate ? new Date(form.leaseStartDate) : null}
-                                onChange={(date) => {
-                                  if (date) {
-                                    const offset = date.getTimezoneOffset();
-                                    const adjustedDate = new Date(date.getTime() - (offset * 60 * 1000));
-                                    const dateString = adjustedDate.toISOString().split('T')[0];
-                                    handleChange({ target: { name: 'leaseStartDate', value: dateString } });
-                                  } else {
-                                    handleChange({ target: { name: 'leaseStartDate', value: '' } });
-                                  }
+                              <input 
+                                type="date"
+                                name="leaseStartDate"
+                                value={form.leaseStartDate || ''}
+                                onChange={handleChange}
+                                max={form.leaseEndDate || ''}
+                                style={{
+                                  width: '100%',
+                                  padding: '8px 12px',
+                                  border: '1px solid #cbd5e1',
+                                  borderRadius: '6px',
+                                  fontSize: '14px',
+                                  outline: 'none',
+                                  boxSizing: 'border-box',
+                                  height: '40px'
                                 }}
-                                dateFormat="dd/MM/yyyy"
-                                placeholderText="DD/MM/YYYY"
-                                maxDate={form.leaseEndDate ? new Date(form.leaseEndDate) : null}
-                                customInput={
-                                  <MaskedDateInput 
-                                    style={{
-                                      width: '100%',
-                                      padding: '8px 12px',
-                                      border: '1px solid #cbd5e1',
-                                      borderRadius: '6px',
-                                      fontSize: '14px',
-                                      outline: 'none',
-                                      boxSizing: 'border-box',
-                                      height: '40px'
-                                    }}
-                                  />
-                                }
                               />
                             </label>
                             <label className="al-field-item">
                               <span>Lease End Date <b style={{ color: '#ef4444' }}>*</b></span>
-                              <DatePicker
-                                selected={form.leaseEndDate ? new Date(form.leaseEndDate) : null}
-                                onChange={(date) => {
-                                  if (date) {
-                                    const offset = date.getTimezoneOffset();
-                                    const adjustedDate = new Date(date.getTime() - (offset * 60 * 1000));
-                                    const dateString = adjustedDate.toISOString().split('T')[0];
-                                    handleChange({ target: { name: 'leaseEndDate', value: dateString } });
-                                  } else {
-                                    handleChange({ target: { name: 'leaseEndDate', value: '' } });
-                                  }
+                              <input 
+                                type="date"
+                                name="leaseEndDate"
+                                value={form.leaseEndDate || ''}
+                                onChange={handleChange}
+                                min={form.leaseStartDate || ''}
+                                style={{
+                                  width: '100%',
+                                  padding: '8px 12px',
+                                  border: '1px solid #cbd5e1',
+                                  borderRadius: '6px',
+                                  fontSize: '14px',
+                                  outline: 'none',
+                                  boxSizing: 'border-box',
+                                  height: '40px'
                                 }}
-                                dateFormat="dd/MM/yyyy"
-                                placeholderText="DD/MM/YYYY"
-                                minDate={form.leaseStartDate ? new Date(form.leaseStartDate) : null}
-                                customInput={
-                                  <MaskedDateInput 
-                                    style={{
-                                      width: '100%',
-                                      padding: '8px 12px',
-                                      border: '1px solid #cbd5e1',
-                                      borderRadius: '6px',
-                                      fontSize: '14px',
-                                      outline: 'none',
-                                      boxSizing: 'border-box',
-                                      height: '40px'
-                                    }}
-                                  />
-                                }
                               />
                             </label>
                               <label className="al-field-item" style={{ gridColumn: 'span 2' }}>
@@ -1828,7 +1805,10 @@ const AgriLandAllocation = ({ userRole, onLogout }) => {
                         type="text"
                         placeholder="Search lands..."
                         value={tableSearchQuery}
-                        onChange={(e) => setTableSearchQuery(e.target.value)}
+                        onChange={(e) => {
+                          setTableSearchQuery(e.target.value);
+                          setCurrentPage(1);
+                        }}
                         style={{ padding: '8px 12px 8px 36px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '14px', outline: 'none', width: '250px' }}
                       />
                     </div>
@@ -1980,7 +1960,7 @@ const AgriLandAllocation = ({ userRole, onLogout }) => {
                                     onClick={() => setActiveDropdown(null)}
                                     style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 90 }}
                                   />
-                                  <div className="al-actions-dropdown-menu" style={{ position: 'absolute', right: '30px', top: dropdownPos.isTop ? 'auto' : '100%', bottom: dropdownPos.isTop ? '100%' : 'auto', backgroundColor: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', zIndex: 99, display: 'flex', flexDirection: 'column', padding: '4px 0', minWidth: '140px' }}>
+                                  <div className="al-actions-dropdown-menu" style={{ position: 'fixed', right: `${dropdownPos.right}px`, top: dropdownPos.isTop ? 'auto' : `${dropdownPos.bottom}px`, bottom: dropdownPos.isTop ? `${window.innerHeight - dropdownPos.top}px` : 'auto', backgroundColor: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', zIndex: 9999, display: 'flex', flexDirection: 'column', padding: '4px 0', minWidth: '140px' }}>
                                     <button
                                       type="button"
                                       style={{ padding: '10px 16px', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', color: '#334155', borderRadius: '4px', margin: '2px 4px' }}
@@ -2028,6 +2008,72 @@ const AgriLandAllocation = ({ userRole, onLogout }) => {
                     </tbody>
                   </table>
                 </div>
+
+                {/* Pagination Controls */}
+                {totalPages > 0 && (
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    padding: '16px 24px',
+                    borderTop: '1px solid #e2e8f0',
+                    backgroundColor: '#fafbfc'
+                  }}>
+                    <span style={{ fontSize: '14px', color: '#64748b' }}>
+                      Showing {indexOfFirstRecord + 1} to {Math.min(indexOfLastRecord, sortedAllocations.length)} of {sortedAllocations.length} entries
+                    </span>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button
+                        onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                        disabled={currentPage === 1}
+                        style={{
+                          padding: '6px 12px',
+                          border: '1px solid #cbd5e1',
+                          borderRadius: '6px',
+                          background: currentPage === 1 ? '#f1f5f9' : 'white',
+                          color: currentPage === 1 ? '#94a3b8' : '#334155',
+                          cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+                          fontSize: '14px',
+                          fontWeight: '500'
+                        }}
+                      >
+                        Previous
+                      </button>
+                      
+                      <button
+                        style={{
+                          padding: '6px 12px',
+                          border: '1px solid #2563eb',
+                          borderRadius: '6px',
+                          background: '#2563eb',
+                          color: 'white',
+                          cursor: 'default',
+                          fontSize: '14px',
+                          fontWeight: '500'
+                        }}
+                      >
+                        {currentPage}
+                      </button>
+
+                      <button
+                        onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                        disabled={currentPage === totalPages}
+                        style={{
+                          padding: '6px 12px',
+                          border: '1px solid #cbd5e1',
+                          borderRadius: '6px',
+                          background: currentPage === totalPages ? '#f1f5f9' : 'white',
+                          color: currentPage === totalPages ? '#94a3b8' : '#334155',
+                          cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
+                          fontSize: '14px',
+                          fontWeight: '500'
+                        }}
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                )}
 
               </div>
             </div>
