@@ -1339,7 +1339,7 @@ const UserDashboard = ({ userRole, onLogout }) => {
               </div>
               <div className="ud-projects-list">
                 {projects && projects.length > 0 ? (
-                  projects.slice(0, 5).map((project, index) => {
+                  projects.slice(0, 4).map((project, index) => {
                     let progressValue = project.progress || 0;
                     if (progressValue > 0 && progressValue <= 1) {
                       progressValue = progressValue * 100;

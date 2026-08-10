@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Calendar, Plus, Search, Filter, Edit2, Trash2, Info, X, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
+import { Calendar, Plus, Search, Filter, Edit2, Trash2, Info, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import Sidebar from "../Sidebar.jsx";
 import Header from "../Header.jsx";
 import AlertModal from "../AlertModal.jsx";
@@ -161,6 +161,10 @@ const PublicHoliday = ({ userRole, onLogout }) => {
     const matchYear = selectedYear === "All Years" || year === selectedYear;
 
     return matchQuery && matchYear;
+  }).sort((a, b) => {
+    if (!a.date) return 1;
+    if (!b.date) return -1;
+    return a.date.localeCompare(b.date);
   });
 
   const allAvailableYears = [...new Set(holidays.map(h => h.date ? h.date.split('-')[0] : null).filter(Boolean))];
@@ -378,33 +382,36 @@ const PublicHoliday = ({ userRole, onLogout }) => {
                 </table>
               </div>
 
-              {/* Pagination Section */}
-              <div className="ph-pagination">
-                <div className="ph-pag-left">
-                  Total Holidays: <span>{filteredHolidays.length}</span>
-                </div>
-                <div className="ph-pag-right">
-                  <span>Rows per page</span>
-                  <select 
-                    className="ph-select" 
-                    style={{ minWidth: '70px', paddingRight: '28px' }}
-                    value={rowsPerPage}
-                    onChange={(e) => { setRowsPerPage(parseInt(e.target.value, 10)); setCurrentPage(1); }}
-                  >
-                    <option value={10}>10</option>
-                    <option value={20}>20</option>
-                    <option value={50}>50</option>
-                  </select>
-                  <span>{Math.min((currentPage - 1) * rowsPerPage + 1, filteredHolidays.length)} to {Math.min(currentPage * rowsPerPage, filteredHolidays.length)} of {filteredHolidays.length}</span>
-                  <div className="ph-pag-controls">
-                    <button disabled={currentPage === 1} onClick={() => setCurrentPage(1)}><ChevronsLeft size={16} /></button>
-                    <button disabled={currentPage === 1} onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}><ChevronLeft size={16} /></button>
-                    <span className="active">{currentPage}</span>
-                    <button disabled={currentPage === totalPages} onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}><ChevronRight size={16} /></button>
-                    <button disabled={currentPage === totalPages} onClick={() => setCurrentPage(totalPages)}><ChevronsRight size={16} /></button>
+              {/* Pagination Section - Only shown when total holidays > 10 */}
+              {filteredHolidays.length > 10 && (
+                <div className="ph-pagination">
+                  <div className="ph-pag-left">
+                    Total Holidays: <span>{filteredHolidays.length}</span>
+                  </div>
+                  <div className="ph-pag-right">
+                    <span>{Math.min((currentPage - 1) * rowsPerPage + 1, filteredHolidays.length)} to {Math.min(currentPage * rowsPerPage, filteredHolidays.length)} of {filteredHolidays.length}</span>
+                    <div className="ph-pag-controls">
+                      <button 
+                        disabled={currentPage === 1} 
+                        onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                        className="ph-pag-btn"
+                        title="Previous Page"
+                      >
+                        <ChevronLeft size={16} />
+                      </button>
+                      <span className="ph-pag-num">{currentPage}</span>
+                      <button 
+                        disabled={currentPage === totalPages} 
+                        onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                        className="ph-pag-btn"
+                        title="Next Page"
+                      >
+                        <ChevronRight size={16} />
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
 
               <div className="ph-note">
                 <Info className="ph-note-icon" size={20} />

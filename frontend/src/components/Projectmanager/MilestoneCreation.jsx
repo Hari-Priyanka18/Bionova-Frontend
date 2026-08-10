@@ -206,6 +206,179 @@ const externalEmployeeApi = {
 };
 
 // ============================================================
+// SEARCHABLE SELECT COMPONENT
+// ============================================================
+const SearchableSelect = ({
+  options = [],
+  value = "",
+  onChange,
+  placeholder = "Select...",
+  hasError = false,
+  className = "",
+  disabled = false
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const dropdownRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+        setSearchTerm("");
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const selectedOption = options.find(opt => String(opt.value) === String(value));
+
+  const filteredOptions = options.filter(opt =>
+    (opt.label || "").toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  return (
+    <div
+      ref={dropdownRef}
+      className={`mc-searchable-select ${hasError ? "mc-error" : ""} ${disabled ? "mc-disabled" : ""} ${className}`}
+      style={{ position: 'relative', width: '100%' }}
+    >
+      <div
+        className="mc-select-trigger"
+        onClick={() => { if (!disabled) setIsOpen(!isOpen); }}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '8px 12px',
+          border: hasError ? '1px solid #ef4444' : '1px solid #cbd5e1',
+          borderRadius: '6px',
+          background: disabled ? '#f8fafc' : '#ffffff',
+          cursor: disabled ? 'not-allowed' : 'pointer',
+          fontSize: '0.875rem',
+          minHeight: '38px',
+          color: selectedOption ? '#1e293b' : '#94a3b8',
+          userSelect: 'none'
+        }}
+      >
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, paddingRight: '8px' }}>
+          {selectedOption ? selectedOption.label : placeholder}
+        </span>
+        <ChevronDown size={16} style={{ color: '#64748b', transition: 'transform 0.2s', transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)' }} />
+      </div>
+
+      {isOpen && (
+        <div
+          className="mc-select-dropdown-menu"
+          style={{
+            position: 'absolute',
+            top: 'calc(100% + 4px)',
+            left: 0,
+            right: 0,
+            zIndex: 999,
+            background: '#ffffff',
+            border: '1px solid #cbd5e1',
+            borderRadius: '6px',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+            padding: '8px',
+            maxHeight: '260px',
+            display: 'flex',
+            flexDirection: 'column'
+          }}
+        >
+          <div style={{ position: 'relative', marginBottom: '8px', flexShrink: 0 }}>
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search..."
+              autoFocus
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                width: '100%',
+                padding: '6px 10px 6px 30px',
+                border: '1px solid #cbd5e1',
+                borderRadius: '4px',
+                fontSize: '0.8125rem',
+                outline: 'none',
+                boxSizing: 'border-box'
+              }}
+            />
+            <Search size={14} style={{ position: 'absolute', left: '8px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+            {searchTerm && (
+              <X
+                size={12}
+                onClick={(e) => { e.stopPropagation(); setSearchTerm(""); }}
+                style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', cursor: 'pointer' }}
+              />
+            )}
+          </div>
+
+          <div style={{ overflowY: 'auto', flex: 1, maxHeight: '200px' }}>
+            <div
+              onClick={() => {
+                onChange("");
+                setIsOpen(false);
+                setSearchTerm("");
+              }}
+              style={{
+                padding: '8px 10px',
+                cursor: 'pointer',
+                borderRadius: '4px',
+                fontSize: '0.875rem',
+                color: '#64748b',
+                fontStyle: 'italic',
+                background: !value ? '#f1f5f9' : 'transparent'
+              }}
+            >
+              {placeholder}
+            </div>
+            {filteredOptions.length === 0 ? (
+              <div style={{ padding: '10px', fontSize: '0.8125rem', color: '#94a3b8', textAlign: 'center' }}>
+                No options found
+              </div>
+            ) : (
+              filteredOptions.map((opt) => {
+                const isSelected = String(opt.value) === String(value);
+                return (
+                  <div
+                    key={opt.value}
+                    onClick={() => {
+                      onChange(opt.value);
+                      setIsOpen(false);
+                      setSearchTerm("");
+                    }}
+                    style={{
+                      padding: '8px 10px',
+                      cursor: 'pointer',
+                      borderRadius: '4px',
+                      fontSize: '0.875rem',
+                      color: isSelected ? '#2563eb' : '#1e293b',
+                      fontWeight: isSelected ? 600 : 400,
+                      background: isSelected ? '#eff6ff' : 'transparent',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      marginBottom: '2px'
+                    }}
+                    onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.background = '#f8fafc'; }}
+                    onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.background = 'transparent'; }}
+                  >
+                    <span>{opt.label}</span>
+                    {isSelected && <Check size={14} style={{ color: '#2563eb' }} />}
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ============================================================
 // MAIN COMPONENT
 // ============================================================
 const MilestoneCreation = ({ onLogout, userRole }) => {
@@ -232,6 +405,7 @@ const MilestoneCreation = ({ onLogout, userRole }) => {
   const [milestoneToDelete, setMilestoneToDelete] = useState(null);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [taskSearchTerm, setTaskSearchTerm] = useState("");
   const [filterType, setFilterType] = useState("ALL"); // ALL, DRAFT, LIVE
 
   const [currentStep, setCurrentStep] = useState(1);
@@ -573,6 +747,7 @@ const MilestoneCreation = ({ onLogout, userRole }) => {
 
 
   const location = useLocation();
+  const alertShownRef = useRef(false);
 
   useEffect(() => {
     if (location.state?.createMode || location.state?.projectId || location.state?.taskMode) {
@@ -589,7 +764,8 @@ const MilestoneCreation = ({ onLogout, userRole }) => {
         setCurrentStep(2);
         setCompletedSteps(new Set([1]));
       }
-      if (location.state?.showSuccessAlert) {
+      if (location.state?.showSuccessAlert && !alertShownRef.current) {
+        alertShownRef.current = true;
         triggerAlert(
           "success",
           "Success",
@@ -940,9 +1116,8 @@ const MilestoneCreation = ({ onLogout, userRole }) => {
       process: { enabled: false, reviewer_id: "", approver_id: "", steps: [] }
     };
     const calculated = autoCalculateTaskDates(newTask);
-    setTasks([...tasks, calculated]);
     setSelectedTask(calculated);
-    setEditingTaskIndex(tasks.length);
+    setEditingTaskIndex(null);
     setActiveTaskTab("details");
     setStepValidation(prev => ({ ...prev, 2: { ...prev[2], tasks: "" } }));
     setTimeout(scrollToTaskForm, 50);
@@ -977,8 +1152,9 @@ const MilestoneCreation = ({ onLogout, userRole }) => {
       }
       return updated;
     });
-    if (formErrors[`task_${editingTaskIndex}_${field}`]) {
-      setFormErrors(prev => ({ ...prev, [`task_${editingTaskIndex}_${field}`]: "" }));
+    const currentErrIndex = editingTaskIndex !== null ? editingTaskIndex : "new";
+    if (formErrors[`task_${currentErrIndex}_${field}`]) {
+      setFormErrors(prev => ({ ...prev, [`task_${currentErrIndex}_${field}`]: "" }));
     }
   };
 
@@ -989,8 +1165,9 @@ const MilestoneCreation = ({ onLogout, userRole }) => {
     else { updated.task_dep_typ = "INDEPENDENT"; updated.dep_task_id = ""; }
     const calculated = autoCalculateTaskDates(updated);
     setSelectedTask(calculated);
-    if (formErrors[`task_${editingTaskIndex}_dep_missing`]) {
-      setFormErrors(prev => ({ ...prev, [`task_${editingTaskIndex}_dep_missing`]: "" }));
+    const currentErrIndex = editingTaskIndex !== null ? editingTaskIndex : "new";
+    if (formErrors[`task_${currentErrIndex}_dep_missing`]) {
+      setFormErrors(prev => ({ ...prev, [`task_${currentErrIndex}_dep_missing`]: "" }));
     }
   };
 
@@ -1014,20 +1191,21 @@ const MilestoneCreation = ({ onLogout, userRole }) => {
   };
 
   const saveTaskChanges = async () => {
+    const currentErrIndex = editingTaskIndex !== null ? editingTaskIndex : "new";
     const errors = validateTask(selectedTask);
     if (Object.keys(errors).length > 0) {
       const errorObj = {};
-      Object.keys(errors).forEach(k => errorObj[`task_${editingTaskIndex}_${k}`] = errors[k]);
+      Object.keys(errors).forEach(k => errorObj[`task_${currentErrIndex}_${k}`] = errors[k]);
       setFormErrors(prev => ({ ...prev, ...errorObj }));
       return;
     }
     if (selectedTask.process?.enabled) {
       if (!selectedTask.process.reviewer_id) {
-        setFormErrors(prev => ({ ...prev, [`task_${editingTaskIndex}_reviewer`]: "Reviewer is required" }));
+        setFormErrors(prev => ({ ...prev, [`task_${currentErrIndex}_reviewer`]: "Reviewer is required" }));
         return;
       }
       if (!selectedTask.process.approver_id) {
-        setFormErrors(prev => ({ ...prev, [`task_${editingTaskIndex}_approver`]: "Approver is required" }));
+        setFormErrors(prev => ({ ...prev, [`task_${currentErrIndex}_approver`]: "Approver is required" }));
         return;
       }
     } else {
@@ -1063,7 +1241,6 @@ const MilestoneCreation = ({ onLogout, userRole }) => {
       // Sync backend immediately when editing an existing task
       let depTaskIdVal = null;
       if (selectedTask.task_dep_flg && selectedTask.dep_task_id) {
-        // Find dependency task draft ID
         const depTaskObj = tasks.find(t => t.task_cd === selectedTask.dep_task_id);
         if (depTaskObj) {
           depTaskIdVal = depTaskObj.drft_task_id || null;
@@ -1109,9 +1286,13 @@ const MilestoneCreation = ({ onLogout, userRole }) => {
       }
     }
 
-    const updatedTasks = [...tasks];
-    updatedTasks[editingTaskIndex] = selectedTask;
-    setTasks(updatedTasks);
+    if (editingTaskIndex === null) {
+      setTasks(prev => [...prev, selectedTask]);
+    } else {
+      const updatedTasks = [...tasks];
+      updatedTasks[editingTaskIndex] = selectedTask;
+      setTasks(updatedTasks);
+    }
     setSelectedTask(null);
     setEditingTaskIndex(null);
     setActiveTaskTab("details");
@@ -1159,29 +1340,21 @@ const MilestoneCreation = ({ onLogout, userRole }) => {
       seq_no: (selectedTask.checklist?.length || 0) + 1,
       completed_t: null, sts: true
     };
-    const updatedTask = { ...selectedTask, checklist: [...(selectedTask.checklist || []), newItem] };
-    setSelectedTask(updatedTask);
-    const updatedTasks = [...tasks];
-    updatedTasks[editingTaskIndex] = updatedTask;
-    setTasks(updatedTasks);
+    setSelectedTask(prev => ({ ...prev, checklist: [...(prev.checklist || []), newItem] }));
   };
   const updateChecklistItem = (index, field, value) => {
-    const updatedChecklist = [...(selectedTask.checklist || [])];
-    updatedChecklist[index] = { ...updatedChecklist[index], [field]: value };
-    if (field === "chk_sts" && value === true) updatedChecklist[index].completed_t = new Date().toISOString();
-    const updatedTask = { ...selectedTask, checklist: updatedChecklist };
-    setSelectedTask(updatedTask);
-    const updatedTasks = [...tasks];
-    updatedTasks[editingTaskIndex] = updatedTask;
-    setTasks(updatedTasks);
+    setSelectedTask(prev => {
+      const updatedChecklist = [...(prev.checklist || [])];
+      updatedChecklist[index] = { ...updatedChecklist[index], [field]: value };
+      if (field === "chk_sts" && value === true) updatedChecklist[index].completed_t = new Date().toISOString();
+      return { ...prev, checklist: updatedChecklist };
+    });
   };
   const removeChecklistItem = (index) => {
-    const updatedChecklist = (selectedTask.checklist || []).filter((_, i) => i !== index);
-    const updatedTask = { ...selectedTask, checklist: updatedChecklist };
-    setSelectedTask(updatedTask);
-    const updatedTasks = [...tasks];
-    updatedTasks[editingTaskIndex] = updatedTask;
-    setTasks(updatedTasks);
+    setSelectedTask(prev => ({
+      ...prev,
+      checklist: (prev.checklist || []).filter((_, i) => i !== index)
+    }));
   };
 
   const handleTaskFileUpload = (e) => {
@@ -1213,11 +1386,7 @@ const MilestoneCreation = ({ onLogout, userRole }) => {
               file_nm: file.name, at_type: "UPLOAD",
               date_timestamp: new Date().toISOString()
             };
-            const updatedTask = { ...selectedTask, attachments: [...(selectedTask.attachments || []), newAttachment] };
-            setSelectedTask(updatedTask);
-            const updatedTasks = [...tasks];
-            updatedTasks[editingTaskIndex] = updatedTask;
-            setTasks(updatedTasks);
+            setSelectedTask(prev => ({ ...prev, attachments: [...(prev.attachments || []), newAttachment] }));
           } catch (err) {
             console.error("Task attachment upload JSON parse error:", err);
             triggerAlert("error", "Error", "Failed to parse upload response.");
@@ -1242,31 +1411,26 @@ const MilestoneCreation = ({ onLogout, userRole }) => {
     e.target.value = "";
   };
   const removeTaskAttachment = (index) => {
-    const updatedAttachments = (selectedTask.attachments || []).filter((_, i) => i !== index);
-    const updatedTask = { ...selectedTask, attachments: updatedAttachments };
-    setSelectedTask(updatedTask);
-    const updatedTasks = [...tasks];
-    updatedTasks[editingTaskIndex] = updatedTask;
-    setTasks(updatedTasks);
+    setSelectedTask(prev => ({
+      ...prev,
+      attachments: (prev.attachments || []).filter((_, i) => i !== index)
+    }));
   };
 
   const toggleTaskProcess = () => {
-    const current = selectedTask.process?.enabled || false;
-    const nextEnabled = !current;
-    const updatedTask = {
-      ...selectedTask,
-      process: {
-        ...selectedTask.process,
-        enabled: nextEnabled,
-        reviewer_id: nextEnabled ? (selectedTask.process?.reviewer_id || "") : "",
-        approver_id: nextEnabled ? (selectedTask.process?.approver_id || "") : "",
-        steps: []
-      }
-    };
-    setSelectedTask(updatedTask);
-    const updatedTasks = [...tasks];
-    updatedTasks[editingTaskIndex] = updatedTask;
-    setTasks(updatedTasks);
+    setSelectedTask(prev => {
+      const nextEnabled = !(prev.process?.enabled || false);
+      return {
+        ...prev,
+        process: {
+          ...prev.process,
+          enabled: nextEnabled,
+          reviewer_id: nextEnabled ? (prev.process?.reviewer_id || "") : "",
+          approver_id: nextEnabled ? (prev.process?.approver_id || "") : "",
+          steps: []
+        }
+      };
+    });
   };
 
   // ── Submit Milestone (Draft) ─────────────────────────────────
@@ -2176,7 +2340,8 @@ const MilestoneCreation = ({ onLogout, userRole }) => {
   // ── Render Task Form ─────────────────────────────────────────
   const renderTaskForm = () => {
     if (!selectedTask) return null;
-    const getTaskError = (index, field) => formErrors[`task_${index}_${field}`];
+    const currentErrIndex = editingTaskIndex !== null ? editingTaskIndex : "new";
+    const getTaskError = (index, field) => formErrors[`task_${currentErrIndex}_${field}`];
     const getAssigneeName = () => {
       if (!selectedTask) return "Not assigned";
       if (selectedTask.task_typ === "INTERNAL") {
@@ -2199,10 +2364,6 @@ const MilestoneCreation = ({ onLogout, userRole }) => {
               onChange={(e) => {
                 const v = e.target.value;
                 updateTask("task_cd", v);
-                const updated = { ...selectedTask, task_cd: v };
-                const ut = [...tasks];
-                ut[editingTaskIndex] = updated;
-                setTasks(ut);
               }}
               placeholder="Enter task code"
               className={`mc-code-input ${getTaskError(editingTaskIndex, "task_cd") ? "mc-error" : ""}`}
@@ -2210,58 +2371,62 @@ const MilestoneCreation = ({ onLogout, userRole }) => {
             {getTaskError(editingTaskIndex, "task_cd") && <small className="mc-error-text">{getTaskError(editingTaskIndex, "task_cd")}</small>}
           </label>
           <label className="mc-field"><span>Task Name <b>*</b></span>
-            <input value={selectedTask.task_nm || ""} onChange={(e) => { const v = e.target.value; updateTask("task_nm", v); const updated = { ...selectedTask, task_nm: v }; const ut = [...tasks]; ut[editingTaskIndex] = updated; setTasks(ut); }} placeholder="Enter task name" className={getTaskError(editingTaskIndex, "task_nm") ? "mc-error" : ""} />
+            <input value={selectedTask.task_nm || ""} onChange={(e) => { const v = e.target.value; updateTask("task_nm", v); }} placeholder="Enter task name" className={getTaskError(editingTaskIndex, "task_nm") ? "mc-error" : ""} />
             {getTaskError(editingTaskIndex, "task_nm") && <small className="mc-error-text">{getTaskError(editingTaskIndex, "task_nm")}</small>}
           </label>
         </div>
         <label className="mc-field"><span>Task Description</span>
-          <textarea value={selectedTask.task_desc || ""} onChange={(e) => { const v = e.target.value; updateTask("task_desc", v); const updated = { ...selectedTask, task_desc: v }; const ut = [...tasks]; ut[editingTaskIndex] = updated; setTasks(ut); }} placeholder="Enter task description" rows={1} />
+          <textarea value={selectedTask.task_desc || ""} onChange={(e) => { const v = e.target.value; updateTask("task_desc", v); }} placeholder="Enter task description" rows={1} />
         </label>
         <div className="mc-radio-row">
           <strong>Task Type <b>*</b></strong>
           {taskTypes.map(type => (
-            <label key={type.value}><input type="radio" name={`taskType_${type.value}`} tabIndex={0} checked={selectedTask.task_typ === type.value} onChange={() => { updateTask("task_typ", type.value); if (type.value === "INTERNAL") updateTask("ext_emp_id", ""); else updateTask("emp_id", ""); const updated = { ...selectedTask, task_typ: type.value }; const ut = [...tasks]; ut[editingTaskIndex] = updated; setTasks(ut); }} /> {type.label}</label>
+            <label key={type.value}><input type="radio" name={`taskType_${type.value}`} tabIndex={0} checked={selectedTask.task_typ === type.value} onChange={() => { updateTask("task_typ", type.value); if (type.value === "INTERNAL") updateTask("ext_emp_id", ""); else updateTask("emp_id", ""); }} /> {type.label}</label>
           ))}
         </div>
         <label className="mc-field">
           <span>{selectedTask.task_typ === "INTERNAL" ? "Assign Employee" : "Assign External Employee"} <b>*</b></span>
-          <div className="mc-employee-select">
-            <select value={selectedTask.task_typ === "INTERNAL" ? selectedTask.emp_id : selectedTask.ext_emp_id} onChange={(e) => {
-              const v = e.target.value;
-              if (selectedTask.task_typ === "INTERNAL") {
-                updateTask("emp_id", v);
-              } else {
-                updateTask("ext_emp_id", v);
-              }
-              let process = selectedTask.process ? { ...selectedTask.process } : { enabled: false, reviewer_id: "", approver_id: "", steps: [] };
-              if (selectedTask.task_typ === "INTERNAL") {
-                if (String(v) === String(process.reviewer_id)) process.reviewer_id = "";
-                if (String(v) === String(process.approver_id)) process.approver_id = "";
-              }
-              const updated = {
-                ...selectedTask,
-                [selectedTask.task_typ === "INTERNAL" ? "emp_id" : "ext_emp_id"]: v,
-                process
-              };
-              setSelectedTask(updated);
-              const ut = [...tasks];
-              ut[editingTaskIndex] = updated;
-              setTasks(ut);
-            }} className={getTaskError(editingTaskIndex, selectedTask.task_typ === "INTERNAL" ? "assignee" : "ext_assignee") ? "mc-error" : ""}>
-              <option value="">Select {selectedTask.task_typ === "INTERNAL" ? "Employee" : "External Employee"}...</option>
-              {(selectedTask.task_typ === "INTERNAL" ? employees : externalEmployees).map(emp => {
+          <div className="mc-employee-select" style={{ display: 'flex', gap: '8px', alignItems: 'center', width: '100%' }}>
+            <SearchableSelect
+              value={selectedTask.task_typ === "INTERNAL" ? selectedTask.emp_id : selectedTask.ext_emp_id}
+              onChange={(val) => {
+                let process = selectedTask.process ? { ...selectedTask.process } : { enabled: false, reviewer_id: "", approver_id: "", steps: [] };
+                if (selectedTask.task_typ === "INTERNAL") {
+                  if (String(val) === String(process.reviewer_id)) process.reviewer_id = "";
+                  if (String(val) === String(process.approver_id)) process.approver_id = "";
+                  updateTask("emp_id", val);
+                } else {
+                  updateTask("ext_emp_id", val);
+                }
+                setSelectedTask(prev => ({
+                  ...prev,
+                  [selectedTask.task_typ === "INTERNAL" ? "emp_id" : "ext_emp_id"]: val,
+                  process
+                }));
+              }}
+              placeholder={`Select ${selectedTask.task_typ === "INTERNAL" ? "Employee" : "External Employee"}...`}
+              hasError={!!getTaskError(editingTaskIndex, selectedTask.task_typ === "INTERNAL" ? "assignee" : "ext_assignee")}
+              options={(selectedTask.task_typ === "INTERNAL" ? employees : externalEmployees).map(emp => {
                 const id = selectedTask.task_typ === "INTERNAL" ? emp.emp_id : emp.ext_emp_id;
-                const name = selectedTask.task_typ === "INTERNAL" ? `${emp.emp_nm} (${emp.role})` : `${emp.ext_emp_nm || emp.name} (${emp.company_nm || emp.company})`;
-                return <option key={id} value={id}>{name}</option>;
+                const roleStr = (emp.role && emp.role !== "null" && emp.role !== "undefined") ? ` (${emp.role})` : "";
+                const compStr = (emp.company_nm || emp.company) ? ` (${emp.company_nm || emp.company})` : "";
+                const name = selectedTask.task_typ === "INTERNAL" 
+                  ? `${emp.emp_nm}${roleStr}` 
+                  : `${emp.ext_emp_nm || emp.name}${compStr}`;
+                return { value: id, label: name };
               })}
-            </select>
-            {selectedTask.task_typ === "EXTERNAL" && <button type="button" className="mc-add-employee-btn" onClick={() => setShowExternalEmployeeModal(true)}><UserPlus size={14} /></button>}
+            />
+            {selectedTask.task_typ === "EXTERNAL" && (
+              <button type="button" className="mc-add-employee-btn" onClick={() => setShowExternalEmployeeModal(true)} style={{ flexShrink: 0 }}>
+                <UserPlus size={14} />
+              </button>
+            )}
           </div>
           {getTaskError(editingTaskIndex, selectedTask.task_typ === "INTERNAL" ? "assignee" : "ext_assignee") && <small className="mc-error-text">{getTaskError(editingTaskIndex, selectedTask.task_typ === "INTERNAL" ? "assignee" : "ext_assignee")}</small>}
         </label>
         <div className="mc-form-grid three">
           <label className="mc-field"><span>Duration (Days) <b>*</b></span>
-            <input type="number" value={selectedTask.no_of_days || ""} onChange={(e) => { const v = e.target.value; updateTask("no_of_days", v); const updated = { ...selectedTask, no_of_days: v }; const calculated = autoCalculateTaskDates(updated); const ut = [...tasks]; ut[editingTaskIndex] = calculated; setTasks(ut); }} placeholder="Enter duration" min="1" className={getTaskError(editingTaskIndex, "duration") ? "mc-error" : ""} />
+            <input type="number" value={selectedTask.no_of_days || ""} onChange={(e) => { const v = e.target.value; updateTask("no_of_days", v); }} placeholder="Enter duration" min="1" className={getTaskError(editingTaskIndex, "duration") ? "mc-error" : ""} />
             {getTaskError(editingTaskIndex, "duration") && <small className="mc-error-text">{getTaskError(editingTaskIndex, "duration")}</small>}
           </label>
           <label className="mc-field"><span>Start Date</span>
@@ -2272,7 +2437,7 @@ const MilestoneCreation = ({ onLogout, userRole }) => {
                 placeholder="dd/mm/yyyy"
                 readOnly
                 onClick={() => {
-                  const el = document.getElementById(`taskStartDatePicker_${editingTaskIndex}`);
+                  const el = document.getElementById(`taskStartDatePicker_${currentErrIndex}`);
                   if (el) {
                     if (typeof el.showPicker === "function") el.showPicker();
                     else el.click();
@@ -2283,7 +2448,7 @@ const MilestoneCreation = ({ onLogout, userRole }) => {
               <Calendar
                 size={16}
                 onClick={() => {
-                  const el = document.getElementById(`taskStartDatePicker_${editingTaskIndex}`);
+                  const el = document.getElementById(`taskStartDatePicker_${currentErrIndex}`);
                   if (el) {
                     if (typeof el.showPicker === "function") el.showPicker();
                     else el.click();
@@ -2292,12 +2457,12 @@ const MilestoneCreation = ({ onLogout, userRole }) => {
                 style={{ position: 'absolute', right: '12px', cursor: 'pointer', color: '#64748b' }}
               />
               <input
-                id={`taskStartDatePicker_${editingTaskIndex}`}
+                id={`taskStartDatePicker_${currentErrIndex}`}
                 type="date"
                 value={selectedTask.tent_st_dt || ""}
                 min={isEditing ? undefined : (milestone.tent_st_dt || (projects.find(p => String(p.prj_id || p.id || p.drftPrjId || p.prjId) === String(milestone.drft_prj_id))?.startDate || projects.find(p => String(p.prj_id || p.id || p.drftPrjId || p.prjId) === String(milestone.drft_prj_id))?.stDt || projects.find(p => String(p.prj_id || p.id || p.drftPrjId || p.prjId) === String(milestone.drft_prj_id))?.tentStDt || undefined))}
                 max={milestone.tent_end_dt || (projects.find(p => String(p.prj_id || p.id || p.drftPrjId || p.prjId) === String(milestone.drft_prj_id))?.endDate || projects.find(p => String(p.prj_id || p.id || p.drftPrjId || p.prjId) === String(milestone.drft_prj_id))?.endDt || projects.find(p => String(p.prj_id || p.id || p.drftPrjId || p.prjId) === String(milestone.drft_prj_id))?.tentEndDt || undefined)}
-                onChange={(e) => { const v = e.target.value; updateTask("tent_st_dt", v); const updated = { ...selectedTask, tent_st_dt: v }; const ut = [...tasks]; ut[editingTaskIndex] = updated; setTasks(ut); }}
+                onChange={(e) => { const v = e.target.value; updateTask("tent_st_dt", v); }}
                 style={{ position: 'absolute', opacity: 0, width: 0, height: 0, pointerEvents: 'none' }}
               />
             </div>
@@ -2319,14 +2484,14 @@ const MilestoneCreation = ({ onLogout, userRole }) => {
             <div className="mc-dependency-fields">
               <div className="mc-form-grid two">
                 <label className="mc-field"><span>Dependent Task <b>*</b></span>
-                  <select value={selectedTask.dep_task_id || ""} onChange={(e) => { const v = e.target.value; updateTask("dep_task_id", v); const updated = { ...selectedTask, dep_task_id: v }; const calculated = autoCalculateTaskDates(updated); const ut = [...tasks]; ut[editingTaskIndex] = calculated; setTasks(ut); }} className={getTaskError(editingTaskIndex, "dep_missing") ? "mc-error" : ""}>
+                  <select value={selectedTask.dep_task_id || ""} onChange={(e) => { const v = e.target.value; updateTask("dep_task_id", v); }} className={getTaskError(editingTaskIndex, "dep_missing") ? "mc-error" : ""}>
                     <option value="">Select Dependent Task</option>
                     {tasks.filter(t => t.task_cd !== selectedTask.task_cd && t.task_nm).map(t => <option key={t.task_cd} value={t.task_cd}>{t.task_cd} - {t.task_nm}</option>)}
                   </select>
                   {getTaskError(editingTaskIndex, "dep_missing") && <small className="mc-error-text">{getTaskError(editingTaskIndex, "dep_missing")}</small>}
                 </label>
                 <label className="mc-field"><span>Dependency Type <b>*</b></span>
-                  <select value={selectedTask.task_dep_typ || "SEQUENTIAL"} onChange={(e) => { const v = e.target.value; updateTask("task_dep_typ", v); const updated = { ...selectedTask, task_dep_typ: v }; const calculated = autoCalculateTaskDates(updated); const ut = [...tasks]; ut[editingTaskIndex] = calculated; setTasks(ut); }}>
+                  <select value={selectedTask.task_dep_typ || "SEQUENTIAL"} onChange={(e) => { const v = e.target.value; updateTask("task_dep_typ", v); }}>
                     {dependencyTypes.map(type => <option key={type.value} value={type.value}>{type.label}</option>)}
                   </select>
                 </label>
@@ -2414,40 +2579,40 @@ const MilestoneCreation = ({ onLogout, userRole }) => {
                   <div className="mc-process-review-approver">
                     <div className="mc-form-grid two">
                       <label className="mc-field"><span>Reviewer <b>*</b></span>
-                        <select value={selectedTask.process?.reviewer_id || ""} onChange={(e) => {
-                          const v = e.target.value;
-                          let process = { ...selectedTask.process, reviewer_id: v };
-                          if (String(v) === String(process.approver_id)) {
-                            process.approver_id = "";
-                          }
-                          const updated = { ...selectedTask, process };
-                          setSelectedTask(updated);
-                          const ut = [...tasks];
-                          ut[editingTaskIndex] = updated;
-                          setTasks(ut);
-                        }} className={getTaskError(editingTaskIndex, "reviewer") ? "mc-error" : ""}>
-                          <option value="">Select Reviewer</option>
-                          {reviewersList
+                        <SearchableSelect
+                          value={selectedTask.process?.reviewer_id || ""}
+                          onChange={(val) => {
+                            setSelectedTask(prev => {
+                              let process = { ...prev.process, reviewer_id: val };
+                              if (String(val) === String(process.approver_id)) {
+                                process.approver_id = "";
+                              }
+                              return { ...prev, process };
+                            });
+                          }}
+                          placeholder="Select Reviewer"
+                          hasError={!!getTaskError(editingTaskIndex, "reviewer")}
+                          options={reviewersList
                             .filter(r => String(r.r_id) !== String(selectedTask.emp_id))
-                            .map(r => <option key={r.r_id} value={r.r_id}>{r.r_nm}</option>)}
-                        </select>
+                            .map(r => ({ value: r.r_id, label: r.r_nm }))}
+                        />
                         {getTaskError(editingTaskIndex, "reviewer") && <small className="mc-error-text">{getTaskError(editingTaskIndex, "reviewer")}</small>}
                       </label>
                       <label className="mc-field"><span>Approver <b>*</b></span>
-                        <select value={selectedTask.process?.approver_id || ""} onChange={(e) => {
-                          const v = e.target.value;
-                          let process = { ...selectedTask.process, approver_id: v };
-                          const updated = { ...selectedTask, process };
-                          setSelectedTask(updated);
-                          const ut = [...tasks];
-                          ut[editingTaskIndex] = updated;
-                          setTasks(ut);
-                        }} className={getTaskError(editingTaskIndex, "approver") ? "mc-error" : ""}>
-                          <option value="">Select Approver</option>
-                          {approversList
+                        <SearchableSelect
+                          value={selectedTask.process?.approver_id || ""}
+                          onChange={(val) => {
+                            setSelectedTask(prev => ({
+                              ...prev,
+                              process: { ...prev.process, approver_id: val }
+                            }));
+                          }}
+                          placeholder="Select Approver"
+                          hasError={!!getTaskError(editingTaskIndex, "approver")}
+                          options={approversList
                             .filter(r => String(r.r_id) !== String(selectedTask.emp_id) && String(r.r_id) !== String(selectedTask.process?.reviewer_id || ""))
-                            .map(r => <option key={r.r_id} value={r.r_id}>{r.r_nm}</option>)}
-                        </select>
+                            .map(r => ({ value: r.r_id, label: r.r_nm }))}
+                        />
                         {getTaskError(editingTaskIndex, "approver") && <small className="mc-error-text">{getTaskError(editingTaskIndex, "approver")}</small>}
                       </label>
                     </div>
@@ -2477,50 +2642,62 @@ const MilestoneCreation = ({ onLogout, userRole }) => {
 
   // ── Render Tasks Table ───────────────────────────────────────
   const renderTasksTable = () => {
-    if (tasks.length === 0) return <div className="mc-empty-state"><p>No tasks added yet. Click "Add Task" to create one.</p><small>Tasks must be within milestone date range</small></div>;
+    const filteredTasks = tasks.filter(task => {
+      if (!taskSearchTerm.trim()) return true;
+      const term = taskSearchTerm.toLowerCase();
+      const codeMatch = (task.task_cd || "").toLowerCase().includes(term);
+      const nameMatch = (task.task_nm || "").toLowerCase().includes(term);
+      return codeMatch || nameMatch;
+    });
+
     return (
       <div className="mc-table-wrap">
-        <table className="mc-task-table">
-          <thead><tr><th style={{ width: '40px' }}>S.No</th><th>Code</th><th>Task Name</th><th>Type</th><th>Executor</th><th>Duration</th><th>Start</th><th>End</th><th>Dependency</th><th>Checklist</th><th>Attachments</th><th>Process</th><th>Status</th><th style={{ width: '80px' }}>Actions</th></tr></thead>
-          <tbody>
-            {tasks.map((task, index) => {
-              const isIncomplete = !task.task_nm || (task.task_typ === "INTERNAL" && !task.emp_id) || (task.task_typ === "EXTERNAL" && !task.ext_emp_id) || !task.no_of_days;
-              let assigneeName = "Not Assigned";
-              if (task.task_typ === "INTERNAL") { const emp = employees.find(e => e.emp_id === parseInt(task.emp_id)); assigneeName = emp ? emp.emp_nm : "Not Assigned"; }
-              else { const emp = externalEmployees.find(e => e.ext_emp_id === parseInt(task.ext_emp_id)); assigneeName = emp ? (emp.ext_emp_nm || emp.name) : "Not Assigned"; }
-              const assignedTo = [{ role: "Executor", name: assigneeName }];
-              if (task.process?.enabled && task.process?.reviewer_id) {
-                const rev = employees.find(e => String(e.emp_id) === String(task.process.reviewer_id));
-                assignedTo.push({ role: "Reviewer", name: rev ? rev.emp_nm : "Not Selected" });
-              }
-              if (task.process?.enabled && task.process?.approver_id) {
-                const app = employees.find(e => String(e.emp_id) === String(task.process.approver_id));
-                assignedTo.push({ role: "Approver", name: app ? app.emp_nm : "Not Selected" });
-              }
-              const hasChecklist = task.checklist && task.checklist.length > 0;
-              const hasAttachments = task.attachments && task.attachments.length > 0;
-              const hasProcess = task.process?.enabled && task.process?.reviewer_id && task.process?.approver_id;
-              return (
-                <tr key={index} className={editingTaskIndex === index ? "mc-editing-row" : ""}>
-                  <td>{index + 1}</td>
-                  <td><span className="mc-code-badge">{task.task_cd}</span></td>
-                  <td>{task.task_nm || "-"}</td>
-                  <td>{task.task_typ || "-"}</td>
-                  <td><div className="mc-assigned-to">{assignedTo.map((p, idx) => <span key={idx} className={`mc-assignee-tag ${p.role.toLowerCase()}`}>{p.name}<span className="mc-assignee-role">{p.role}</span></span>)}</div></td>
-                  <td>{task.no_of_days || "-"}d</td>
-                  <td>{formatDisplayDate(task.tent_st_dt) || "-"}</td>
-                  <td>{formatDisplayDate(task.tent_end_dt) || "-"}</td>
-                  <td>{task.task_dep_flg && task.dep_task_id ? <span className={`mc-dep-label ${task.task_dep_typ?.toLowerCase() || 'independent'}`}>{task.task_dep_typ} ({task.dep_task_id})</span> : "Independent"}</td>
-                  <td>{hasChecklist ? <span className="mc-badge success">{task.checklist.length} items</span> : <span className="mc-badge">None</span>}</td>
-                  <td>{hasAttachments ? <span className="mc-badge success">{task.attachments.length} files</span> : <span className="mc-badge">None</span>}</td>
-                  <td>{hasProcess ? <span className="mc-badge success">Enabled</span> : <span className="mc-badge">Disabled</span>}</td>
-                  <td><span className={`mc-status ${isIncomplete ? "incomplete" : "draft"}`}>{isIncomplete ? "Incomplete" : "DRAFT"}</span></td>
-                  <td><div className="mc-actions"><button type="button" className="mc-icon-btn edit" onClick={() => editTask(index)} title="Edit Task"><Edit size={14} /></button><button type="button" className="mc-icon-btn danger" onClick={() => { setDeleteIndex(index); setShowModal(true); }} title="Delete Task"><Trash2 size={14} /></button></div></td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+        {filteredTasks.length === 0 ? (
+          <div className="mc-empty-state"><p>{tasks.length === 0 ? "No tasks added yet. Click \"Add New Task\" to create one." : "No tasks match your search."}</p></div>
+        ) : (
+          <table className="mc-task-table">
+            <thead><tr><th style={{ width: '40px' }}>S.No</th><th>Code</th><th>Task Name</th><th>Type</th><th>Executor</th><th>Duration</th><th>Start</th><th>End</th><th>Dependency</th><th>Checklist</th><th>Attachments</th><th>Process</th><th>Status</th><th style={{ width: '80px' }}>Actions</th></tr></thead>
+            <tbody>
+              {filteredTasks.map((task, index) => {
+                const originalIndex = tasks.indexOf(task);
+                const isIncomplete = !task.task_nm || (task.task_typ === "INTERNAL" && !task.emp_id) || (task.task_typ === "EXTERNAL" && !task.ext_emp_id) || !task.no_of_days;
+                let assigneeName = "Not Assigned";
+                if (task.task_typ === "INTERNAL") { const emp = employees.find(e => e.emp_id === parseInt(task.emp_id)); assigneeName = emp ? emp.emp_nm : "Not Assigned"; }
+                else { const emp = externalEmployees.find(e => e.ext_emp_id === parseInt(task.ext_emp_id)); assigneeName = emp ? (emp.ext_emp_nm || emp.name) : "Not Assigned"; }
+                const assignedTo = [{ role: "Executor", name: assigneeName }];
+                if (task.process?.enabled && task.process?.reviewer_id) {
+                  const rev = employees.find(e => String(e.emp_id) === String(task.process.reviewer_id));
+                  assignedTo.push({ role: "Reviewer", name: rev ? rev.emp_nm : "Not Selected" });
+                }
+                if (task.process?.enabled && task.process?.approver_id) {
+                  const app = employees.find(e => String(e.emp_id) === String(task.process.approver_id));
+                  assignedTo.push({ role: "Approver", name: app ? app.emp_nm : "Not Selected" });
+                }
+                const hasChecklist = task.checklist && task.checklist.length > 0;
+                const hasAttachments = task.attachments && task.attachments.length > 0;
+                const hasProcess = task.process?.enabled && task.process?.reviewer_id && task.process?.approver_id;
+                return (
+                  <tr key={index} className={editingTaskIndex === originalIndex ? "mc-editing-row" : ""}>
+                    <td>{index + 1}</td>
+                    <td><span className="mc-code-badge">{task.task_cd}</span></td>
+                    <td>{task.task_nm || "-"}</td>
+                    <td>{task.task_typ || "-"}</td>
+                    <td><div className="mc-assigned-to">{assignedTo.map((p, idx) => <span key={idx} className={`mc-assignee-tag ${p.role.toLowerCase()}`}>{p.name}<span className="mc-assignee-role">{p.role}</span></span>)}</div></td>
+                    <td>{task.no_of_days || "-"}d</td>
+                    <td>{formatDisplayDate(task.tent_st_dt) || "-"}</td>
+                    <td>{formatDisplayDate(task.tent_end_dt) || "-"}</td>
+                    <td>{task.task_dep_flg && task.dep_task_id ? <span className={`mc-dep-label ${task.task_dep_typ?.toLowerCase() || 'independent'}`}>{task.task_dep_typ} ({task.dep_task_id})</span> : "Independent"}</td>
+                    <td>{hasChecklist ? <span className="mc-badge success">{task.checklist.length} items</span> : <span className="mc-badge">None</span>}</td>
+                    <td>{hasAttachments ? <span className="mc-badge success">{task.attachments.length} files</span> : <span className="mc-badge">None</span>}</td>
+                    <td>{hasProcess ? <span className="mc-badge success">Enabled</span> : <span className="mc-badge">Disabled</span>}</td>
+                    <td><span className={`mc-status ${isIncomplete ? "incomplete" : "draft"}`}>{isIncomplete ? "Incomplete" : "DRAFT"}</span></td>
+                    <td><div className="mc-actions"><button type="button" className="mc-icon-btn edit" onClick={() => editTask(originalIndex)} title="Edit Task"><Edit size={14} /></button><button type="button" className="mc-icon-btn danger" onClick={() => { setDeleteIndex(originalIndex); setShowModal(true); }} title="Delete Task"><Trash2 size={14} /></button></div></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
       </div>
     );
   };
@@ -2556,7 +2733,33 @@ const MilestoneCreation = ({ onLogout, userRole }) => {
           {!selectedTask ? <div className="mc-empty-state"><p>Click "Add New Task" to create a task or select an existing task from the table below to edit.</p></div> : renderTaskForm()}
         </div>
         <div className="mc-preview-table-section">
-          <div className="mc-section-header"><h3><ListChecks size={18} /> Tasks Preview Table</h3></div>
+          <div className="mc-section-header">
+            <h3><ListChecks size={18} /> Tasks Preview Table</h3>
+            <div style={{ position: 'relative', width: '220px' }}>
+              <input
+                type="text"
+                value={taskSearchTerm}
+                onChange={(e) => setTaskSearchTerm(e.target.value)}
+                placeholder=""
+                style={{
+                  width: '100%',
+                  padding: '6px 12px 6px 32px',
+                  borderRadius: '6px',
+                  border: '1px solid #cbd5e1',
+                  fontSize: '0.875rem',
+                  outline: 'none'
+                }}
+              />
+              <Search size={15} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#64748b' }} />
+              {taskSearchTerm && (
+                <X
+                  size={14}
+                  onClick={() => setTaskSearchTerm("")}
+                  style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', color: '#64748b', cursor: 'pointer' }}
+                />
+              )}
+            </div>
+          </div>
           {renderTasksTable()}
         </div>
         <div className="mc-gantt-section"><div className="mc-section-header"><h3><GanttChartSquare size={18} /> Gantt Chart View</h3></div>{renderGanttChart()}</div>

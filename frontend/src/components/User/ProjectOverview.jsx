@@ -11,11 +11,12 @@ const getAuthHeaders = () => ({
 const ProjectOverview = ({ project }) => {
   const [milestones, setMilestones] = useState([]);
   const [tasks, setTasks] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
       if (!project?.id) return;
+      setLoading(true);
       try {
         const isDraft = project._type === "draft" || project.status === "DRAFT" || project.status === "Draft";
         const milestonesUrl = isDraft
@@ -182,7 +183,8 @@ const ProjectOverview = ({ project }) => {
   if (loading) {
     return (
       <div style={{ padding: '60px 20px', textAlign: 'center', color: '#64748b' }}>
-        Loading project overview data...
+        <div style={{ display: 'inline-block', width: '36px', height: '36px', border: '3px solid #e2e8f0', borderTop: '3px solid #2563eb', borderRadius: '50%', animation: 'spin 1s linear infinite', marginBottom: '12px' }} />
+        <p style={{ margin: 0, fontSize: '15px', fontWeight: '500', color: '#475569' }}>Loading milestones & tasks...</p>
       </div>
     );
   }

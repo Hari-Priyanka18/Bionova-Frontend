@@ -16,7 +16,7 @@ const ProjectMilestonesTab = ({ project, userRole }) => {
   const [collapseAll, setCollapseAll] = useState(false);
   const [tasks, setTasks] = useState([]);
   const [employees, setEmployees] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [selectedMilestone, setSelectedMilestone] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [viewTaskModal, setViewTaskModal] = useState(null);
@@ -41,6 +41,7 @@ const ProjectMilestonesTab = ({ project, userRole }) => {
 
   useEffect(() => {
     const fetchData = async () => {
+      setLoading(true);
       try {
         const isDraft = project?.status === "DRAFT" || project?.status === "Draft";
         const mlUrl = isDraft
@@ -258,8 +259,9 @@ const ProjectMilestonesTab = ({ project, userRole }) => {
 
   if (loading) {
     return (
-      <div style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>
-        Loading milestones & tasks...
+      <div style={{ padding: '60px 20px', textAlign: 'center', color: '#64748b' }}>
+        <div style={{ display: 'inline-block', width: '36px', height: '36px', border: '3px solid #e2e8f0', borderTop: '3px solid #2563eb', borderRadius: '50%', animation: 'spin 1s linear infinite', marginBottom: '12px' }} />
+        <p style={{ margin: 0, fontSize: '15px', fontWeight: '500', color: '#475569' }}>Loading milestones & tasks...</p>
       </div>
     );
   }

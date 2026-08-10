@@ -770,13 +770,13 @@ const ProjectCreation = ({ userRole, onLogout }) => {
       if (response.ok) {
         let newId = editingId;
         let pType = isEditing ? (projects.find(p => p.id === editingId)?._type || "live") : (isLive ? "live" : "draft");
-        if (!isEditing) {
-          try {
-            const data = await response.clone().json();
-            newId = isLive ? data.prjId : data.drftPrjId;
-          } catch (e) {
-            console.error("Error parsing response:", e);
+        try {
+          const data = await response.clone().json();
+          if (data) {
+            newId = data.drftPrjId || data.drft_prj_id || data.prjId || data.prj_id || data.id || newId;
           }
+        } catch (e) {
+          // If response body is empty or non-JSON, fallback to editingId / newId
         }
         handleResetForm();
         setIsEditing(false);
