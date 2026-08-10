@@ -111,6 +111,8 @@ const DesignationCreation = ({ userRole, onLogout }) => {
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
   const [tableSearchQuery, setTableSearchQuery] = useState("");
   const [formErrors, setFormErrors] = useState({});
+  const [currentPage, setCurrentPage] = useState(1);
+  const recordsPerPage = 10;
 
   const validateField = (name, value) => {
     let error = "";
@@ -345,22 +347,13 @@ const DesignationCreation = ({ userRole, onLogout }) => {
 
   const toggleDropdown = (e, id) => {
     e.stopPropagation();
-    const btn = e.currentTarget;
-    const rect = btn.getBoundingClientRect();
-    const container = btn.closest('.desig-table-container') || btn.closest('table')?.parentElement;
-    
-    let spaceBelow = window.innerHeight - rect.bottom;
-    let spaceAbove = rect.top;
-    
-    if (container) {
-      const containerRect = container.getBoundingClientRect();
-      spaceBelow = containerRect.bottom - rect.bottom;
-      spaceAbove = rect.top - containerRect.top;
-    }
-
+    const rect = e.currentTarget.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - rect.bottom;
     const dropdownHeight = 150;
+    const isTop = spaceBelow < dropdownHeight;
     setDropdownPos({
-      isTop: spaceBelow < dropdownHeight && spaceAbove > spaceBelow
+      top: isTop ? rect.top - dropdownHeight : rect.bottom,
+      right: window.innerWidth - rect.right
     });
     setActiveDropdown((prev) => (prev === id ? null : id));
   };
@@ -380,14 +373,19 @@ const DesignationCreation = ({ userRole, onLogout }) => {
     return 0;
   });
 
-  let currentItems = sortedDesignations;
+  let filteredItems = sortedDesignations;
   if (tableSearchQuery) {
     const q = tableSearchQuery.toLowerCase();
-    currentItems = sortedDesignations.filter(desig => 
+    filteredItems = sortedDesignations.filter(desig => 
       (desig.code || "").toLowerCase().includes(q) ||
       (desig.name || "").toLowerCase().includes(q)
     );
   }
+
+  const indexOfLastRecord = currentPage * recordsPerPage;
+  const indexOfFirstRecord = indexOfLastRecord - recordsPerPage;
+  const currentItems = filteredItems.slice(indexOfFirstRecord, indexOfLastRecord);
+  const totalPages = Math.ceil(filteredItems.length / recordsPerPage);
 
   return (
     <div className="desig-shell-container">
@@ -517,7 +515,10 @@ const DesignationCreation = ({ userRole, onLogout }) => {
                         type="text"
                         placeholder="Search designations..."
                         value={tableSearchQuery}
-                        onChange={(e) => setTableSearchQuery(e.target.value)}
+                        onChange={(e) => {
+                          setTableSearchQuery(e.target.value);
+                          setCurrentPage(1);
+                        }}
                         style={{ padding: '8px 12px 8px 36px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '14px', outline: 'none', width: '250px' }}
                       />
                     </div>
@@ -554,7 +555,7 @@ const DesignationCreation = ({ userRole, onLogout }) => {
                       ) : currentItems.length > 0 ? (
                         currentItems.map((desig, index) => (
                           <tr key={desig.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                            <td data-label="S.NO" style={{ padding: '14px 16px', fontSize: '14px', color: '#334155' }}>{index + 1}</td>
+                            <td data-label="S.NO" style={{ padding: '14px 16px', fontSize: '14px', color: '#334155' }}>{indexOfFirstRecord + index + 1}</td>
                             <td data-label="DESIGNATION CODE" style={{ padding: '14px 16px', fontSize: '14px', color: '#334155' }}><span style={{ backgroundColor: '#f1f5f9', padding: '4px 10px', borderRadius: '4px', fontWeight: '600', color: '#0f172a', border: '1px solid #e2e8f0', fontSize: '13px' }}>{desig.code}</span></td>
                             <td data-label="DESIGNATION NAME" style={{ padding: '14px 16px', fontSize: '14px', color: '#334155' }}><strong>{desig.name}</strong></td>
                             <td data-label="DESCRIPTION" style={{ padding: '14px 16px', fontSize: '14px', color: '#334155' }}>{desig.description || "N/A"}</td>
@@ -565,7 +566,7 @@ const DesignationCreation = ({ userRole, onLogout }) => {
                               {activeDropdown === desig.id && (
                                 <>
                                   <div className="desig-actions-dropdown-backdrop" onClick={() => setActiveDropdown(null)} style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 998 }} />
-                                  <div className="desig-actions-dropdown-menu" style={{ position: 'absolute', right: '30px', top: dropdownPos.isTop ? 'auto' : '100%', bottom: dropdownPos.isTop ? '100%' : 'auto', backgroundColor: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', zIndex: 999, display: 'flex', flexDirection: 'column', padding: '4px 0', minWidth: '140px' }}>
+                                  <div className="desig-actions-dropdown-menu" style={{ position: 'fixed', right: `${dropdownPos.right}px`, top: `${dropdownPos.top}px`, backgroundColor: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', zIndex: 9999, display: 'flex', flexDirection: 'column', padding: '4px 0', minWidth: '140px' }}>
                                     <button type="button" style={{ padding: '10px 16px', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', color: '#334155', borderRadius: '4px', margin: '2px 4px' }} onClick={() => handleView(desig)} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f1f5f9'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}> <Eye size={15} /> View </button>
                                     {screenPerm.canEdit && (
                                       <button type="button" style={{ padding: '10px 16px', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', color: '#334155', borderRadius: '4px', margin: '2px 4px' }} onClick={() => handleEdit(desig)} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f1f5f9'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}> <Edit size={15} /> Edit </button>
@@ -585,6 +586,34 @@ const DesignationCreation = ({ userRole, onLogout }) => {
                     </tbody>
                   </table>
                 </div>
+                {totalPages > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 24px', borderTop: '1px solid #e2e8f0', backgroundColor: '#fafbfc' }}>
+                    <span style={{ fontSize: '14px', color: '#64748b' }}>
+                      Showing {indexOfFirstRecord + 1} to {Math.min(indexOfLastRecord, filteredItems.length)} of {filteredItems.length} entries
+                    </span>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button
+                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                        disabled={currentPage === 1}
+                        style={{ padding: '6px 12px', border: '1px solid #cbd5e1', borderRadius: '6px', background: currentPage === 1 ? '#f8fafc' : 'white', color: currentPage === 1 ? '#94a3b8' : '#334155', cursor: currentPage === 1 ? 'not-allowed' : 'pointer' }}
+                      >
+                        Previous
+                      </button>
+                      <button
+                        style={{ padding: '6px 12px', border: '1px solid #2563eb', borderRadius: '6px', background: '#2563eb', color: 'white', fontWeight: '600' }}
+                      >
+                        {currentPage}
+                      </button>
+                      <button
+                        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                        disabled={currentPage === totalPages}
+                        style={{ padding: '6px 12px', border: '1px solid #cbd5e1', borderRadius: '6px', background: currentPage === totalPages ? '#f8fafc' : 'white', color: currentPage === totalPages ? '#94a3b8' : '#334155', cursor: currentPage === totalPages ? 'not-allowed' : 'pointer' }}
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
