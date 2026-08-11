@@ -388,6 +388,33 @@ const AgriLandAllocation = ({ userRole, onLogout }) => {
   const [dropdownPos, setDropdownPos] = useState({ top: 0, right: 0 });
   const [logoFile, setLogoFile] = useState(null);
 
+  // Scroll handler to reposition dropdown dynamically
+  useEffect(() => {
+    const handleScroll = () => {
+      if (activeDropdown !== null) {
+        const btn = document.getElementById(`action-btn-${activeDropdown}`);
+        if (btn) {
+          const rect = btn.getBoundingClientRect();
+          const spaceBelow = window.innerHeight - rect.bottom;
+          const spaceAbove = rect.top;
+          const dropdownHeight = 250;
+          const isTop = spaceBelow < dropdownHeight && spaceAbove > spaceBelow;
+          setDropdownPos({
+            isTop,
+            top: rect.top,
+            bottom: rect.bottom,
+            right: window.innerWidth - rect.right
+          });
+        }
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll, true);
+    return () => {
+      window.removeEventListener('scroll', handleScroll, true);
+    };
+  }, [activeDropdown]);
+
   // Deactivation confirmation modal state
   const [showDeactivateModal, setShowDeactivateModal] = useState(false);
   const [deactivateTargetId, setDeactivateTargetId] = useState(null);
@@ -500,7 +527,7 @@ const AgriLandAllocation = ({ userRole, onLogout }) => {
     } else if (name === 'surveyInput') {
       newValue = value.slice(0, 50);
     } else if (name === 'ownerInput') {
-      newValue = value.replace(/[^a-zA-Z\s]/g, '').slice(0, 100);
+      newValue = value.replace(/[^a-zA-Z\s.]/g, '').slice(0, 100);
     } else if (name === 'village') {
       newValue = value.slice(0, 50);
     } else if (name === 'mandal' || name === 'district') {
@@ -1597,7 +1624,7 @@ const AgriLandAllocation = ({ userRole, onLogout }) => {
                                 onChange={handleChange} 
                                 style={{ width: '100%', padding: '8px 12px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '14px', outline: 'none', height: '40px', backgroundColor: 'white' }}
                               >
-                                <option value="" disabled>Select Ownership Type</option>
+                                <option value="" disabled hidden>Select Ownership Type</option>
                                 <option value="Lease">Lease</option>
                                 <option value="Owner">Owner</option>
                               </select>
@@ -1737,7 +1764,7 @@ const AgriLandAllocation = ({ userRole, onLogout }) => {
                                 value={form.allotedFor} 
                                 onChange={handleChange}
                               >
-                                <option value="">Select Alloted for</option>
+                                <option value="" disabled hidden>Select Alloted for</option>
                                 <option value="Agriculture Land">Agriculture Land</option>
                                 <option value="Plant">Plant</option>
                               </select>
@@ -1943,6 +1970,7 @@ const AgriLandAllocation = ({ userRole, onLogout }) => {
                             </td>
                             <td data-label="ACTIONS" style={{ position: "relative", padding: '14px 20px', textAlign: 'center' }}>
                               <button
+                                id={`action-btn-${land.id}`}
                                 type="button"
                                 style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', padding: '4px 8px', borderRadius: '4px' }}
                                 onClick={(e) => toggleDropdown(land.id, e)}
@@ -1960,7 +1988,7 @@ const AgriLandAllocation = ({ userRole, onLogout }) => {
                                     onClick={() => setActiveDropdown(null)}
                                     style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 90 }}
                                   />
-                                  <div className="al-actions-dropdown-menu" style={{ position: 'fixed', right: `${dropdownPos.right}px`, top: dropdownPos.isTop ? 'auto' : `${dropdownPos.bottom}px`, bottom: dropdownPos.isTop ? `${window.innerHeight - dropdownPos.top}px` : 'auto', backgroundColor: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', zIndex: 9999, display: 'flex', flexDirection: 'column', padding: '4px 0', minWidth: '140px' }}>
+                                  <div className="al-actions-dropdown-menu" style={{ position: 'fixed', right: `${dropdownPos.right}px`, top: dropdownPos.isTop ? 'auto' : `${dropdownPos.bottom}px`, bottom: dropdownPos.isTop ? `${window.innerHeight - dropdownPos.top}px` : 'auto', backgroundColor: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', zIndex: 99, display: 'flex', flexDirection: 'column', padding: '4px 0', minWidth: '140px' }}>
                                     <button
                                       type="button"
                                       style={{ padding: '10px 16px', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', color: '#334155', borderRadius: '4px', margin: '2px 4px' }}

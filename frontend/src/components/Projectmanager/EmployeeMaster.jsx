@@ -230,7 +230,34 @@ const EmployeeCreation = ({ userRole, onLogout }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [activeActionsMenu, setActiveActionsMenu] = useState(null);
-  const [dropdownPos, setDropdownPos] = useState({ isTop: false });
+  const [dropdownPos, setDropdownPos] = useState({ isTop: false, top: 0, bottom: 0, right: 0 });
+
+  // Scroll handler to reposition dropdown dynamically
+  useEffect(() => {
+    const handleScroll = () => {
+      if (activeActionsMenu !== null) {
+        const btn = document.getElementById(`action-btn-${activeActionsMenu}`);
+        if (btn) {
+          const rect = btn.getBoundingClientRect();
+          const spaceBelow = window.innerHeight - rect.bottom;
+          const spaceAbove = rect.top;
+          const dropdownHeight = 220;
+          const isTop = spaceBelow < dropdownHeight && spaceAbove > spaceBelow;
+          setDropdownPos({
+            isTop,
+            top: rect.top,
+            bottom: rect.bottom,
+            right: window.innerWidth - rect.right
+          });
+        }
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll, true);
+    return () => {
+      window.removeEventListener('scroll', handleScroll, true);
+    };
+  }, [activeActionsMenu]);
   const [formErrors, setFormErrors] = useState({});
   const [extFormErrors, setExtFormErrors] = useState({});
   const [showExtModal, setShowExtModal] = useState(false);
@@ -1469,11 +1496,14 @@ const EmployeeCreation = ({ userRole, onLogout }) => {
     e.stopPropagation();
     const rect = e.currentTarget.getBoundingClientRect();
     const spaceBelow = window.innerHeight - rect.bottom;
-    const dropdownHeight = 150;
-    const isTop = spaceBelow < dropdownHeight;
+    const spaceAbove = rect.top;
+    const dropdownHeight = 220;
+    const isTop = spaceBelow < dropdownHeight && spaceAbove > spaceBelow;
     
     setDropdownPos({
-      top: isTop ? rect.top - dropdownHeight : rect.bottom,
+      isTop,
+      top: rect.top,
+      bottom: rect.bottom,
       right: window.innerWidth - rect.right
     });
     setActiveActionsMenu((prev) => (prev === id ? null : id));
@@ -1523,7 +1553,8 @@ const EmployeeCreation = ({ userRole, onLogout }) => {
         handleExtReset();
         fetchAllData();
       } else {
-        triggerAlert("error", "Error", `Failed to ${isExtEditing ? "update" : "create"} external employee`);
+        const errText = await res.text();
+        triggerAlert("error", "Error", errText || `Failed to ${isExtEditing ? "update" : "create"} external employee`);
       }
     } catch(err) {
       console.error(err);
@@ -1534,18 +1565,14 @@ const EmployeeCreation = ({ userRole, onLogout }) => {
   const filteredEmployees = (tableSearchQuery
     ? employees.filter(emp =>
       (emp.employeeCode && emp.employeeCode.toLowerCase().includes(tableSearchQuery.toLowerCase())) ||
-      (emp.employeeName && emp.employeeName.toLowerCase().includes(tableSearchQuery.toLowerCase())) ||
-      (emp.email && emp.email.toLowerCase().includes(tableSearchQuery.toLowerCase())) ||
-      (emp.designation && emp.designation.toLowerCase().includes(tableSearchQuery.toLowerCase()))
+      (emp.employeeName && emp.employeeName.toLowerCase().includes(tableSearchQuery.toLowerCase()))
     )
     : employees).slice().sort((a, b) => (a.employeeCode || '').localeCompare(b.employeeCode || '', undefined, {numeric: true, sensitivity: 'base'}));
 
   const filteredExternalEmployees = (tableSearchQuery
     ? externalEmployees.filter(emp =>
       (emp.extEmpCode && emp.extEmpCode.toLowerCase().includes(tableSearchQuery.toLowerCase())) ||
-      (emp.extEmpNm && emp.extEmpNm.toLowerCase().includes(tableSearchQuery.toLowerCase())) ||
-      (emp.email && emp.email.toLowerCase().includes(tableSearchQuery.toLowerCase())) ||
-      (emp.companyNm && emp.companyNm.toLowerCase().includes(tableSearchQuery.toLowerCase()))
+      (emp.extEmpNm && emp.extEmpNm.toLowerCase().includes(tableSearchQuery.toLowerCase()))
     ) : externalEmployees) || [];
 
   const indexOfLastRecord = currentPage * recordsPerPage;
@@ -1943,7 +1970,7 @@ const EmployeeCreation = ({ userRole, onLogout }) => {
                             value={form.employmentType}
                             onChange={handleChange}
                           >
-                            <option value="">Select employment type</option>
+                            <option value="" disabled hidden>Select employment type</option>
                             <option value="Retainer">Retainer</option>
                             <option value="Full Time Employee (FTE)">Full Time Employee (FTE)</option>
                             <option value="Contract Employee">Contract Employee</option>
@@ -2149,7 +2176,7 @@ const EmployeeCreation = ({ userRole, onLogout }) => {
                         <div className="emp-input-icon-wrap">
                           <span className="emp-input-prefix-icon"><CheckCircle2 size={16} /></span>
                           <select name="status" value={form.status} onChange={handleChange} required>
-                            <option value="">Select status</option>
+                            <option value="" disabled hidden>Select status</option>
                             <option value="Active">Active</option>
                             <option value="Inactive">Inactive</option>
                           </select>
@@ -2390,13 +2417,13 @@ const EmployeeCreation = ({ userRole, onLogout }) => {
                               <span style={{ padding: '4px 12px', borderRadius: '12px', fontSize: '12px', fontWeight: '600', display: 'inline-block', backgroundColor: emp.status === 'Active' ? '#dcfce7' : '#fee2e2', color: emp.status === 'Active' ? '#166534' : '#991b1b' }}>{emp.status}</span>
                             </td>
                             <td style={{ position: "relative", padding: '14px 16px', textAlign: 'center' }}>
-                              <button type="button" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', padding: '4px 8px', borderRadius: '4px' }} onClick={(e) => toggleDropdown(e, emp.id)} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f1f5f9'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
+                              <button id={`action-btn-${emp.id}`} type="button" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', padding: '4px 8px', borderRadius: '4px' }} onClick={(e) => toggleDropdown(e, emp.id)} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f1f5f9'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
                                 <MoreVertical size={18} />
                               </button>
                               {activeActionsMenu === emp.id && (
                                 <>
                                   <div className="emp-actions-dropdown-backdrop" onClick={() => setActiveActionsMenu(null)} style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9 }} />
-                                  <div className="emp-actions-dropdown-menu" style={{ position: 'fixed', right: `${dropdownPos.right}px`, top: `${dropdownPos.top}px`, backgroundColor: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', zIndex: 9999, display: 'flex', flexDirection: 'column', padding: '4px 0', minWidth: '140px' }}>
+                                  <div className="emp-actions-dropdown-menu" style={{ position: 'fixed', right: `${dropdownPos.right}px`, top: dropdownPos.isTop ? 'auto' : `${dropdownPos.bottom}px`, bottom: dropdownPos.isTop ? `${window.innerHeight - dropdownPos.top}px` : 'auto', backgroundColor: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', zIndex: 99, display: 'flex', flexDirection: 'column', padding: '4px 0', minWidth: '140px' }}>
                                     <button type="button" style={{ padding: '10px 16px', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', color: '#334155', borderRadius: '4px', margin: '2px 4px' }} onClick={() => handleView(emp)} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f1f5f9'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}> <Eye size={15} /> View </button>
                                     {screenPerm.canEdit && (
                                       <button type="button" style={{ padding: '10px 16px', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', color: '#334155', borderRadius: '4px', margin: '2px 4px' }} onClick={() => handleEdit(emp)} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f1f5f9'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}> <Edit size={15} /> Edit </button>
@@ -2477,13 +2504,13 @@ const EmployeeCreation = ({ userRole, onLogout }) => {
                               <span style={{ padding: '4px 12px', borderRadius: '12px', fontSize: '12px', fontWeight: '600', display: 'inline-block', backgroundColor: emp.sts ? '#dcfce7' : '#fee2e2', color: emp.sts ? '#166534' : '#991b1b' }}>{emp.sts ? "Active" : "Inactive"}</span>
                             </td>
                             <td style={{ padding: '14px 16px', textAlign: 'center', position: 'relative' }}>
-                              <button type="button" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', padding: '4px 8px', borderRadius: '4px' }} onClick={(e) => toggleDropdown(e, `ext-${emp.extEmpId || index}`)} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f1f5f9'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
+                              <button id={`action-btn-ext-${emp.extEmpId || index}`} type="button" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', padding: '4px 8px', borderRadius: '4px' }} onClick={(e) => toggleDropdown(e, `ext-${emp.extEmpId || index}`)} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f1f5f9'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
                                 <MoreVertical size={18} />
                               </button>
                               {activeActionsMenu === `ext-${emp.extEmpId || index}` && (
                                 <>
                                   <div className="emp-actions-dropdown-backdrop" onClick={() => setActiveActionsMenu(null)} style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9 }} />
-                                  <div className="emp-actions-dropdown-menu" style={{ position: 'fixed', right: `${dropdownPos.right}px`, top: `${dropdownPos.top}px`, backgroundColor: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', zIndex: 9999, display: 'flex', flexDirection: 'column', padding: '4px 0', minWidth: '140px' }}>
+                                  <div className="emp-actions-dropdown-menu" style={{ position: 'fixed', right: `${dropdownPos.right}px`, top: dropdownPos.isTop ? 'auto' : `${dropdownPos.bottom}px`, bottom: dropdownPos.isTop ? `${window.innerHeight - dropdownPos.top}px` : 'auto', backgroundColor: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', zIndex: 99, display: 'flex', flexDirection: 'column', padding: '4px 0', minWidth: '140px' }}>
                                     <button onClick={() => viewExternalEmployee(emp)} style={{ background: 'none', border: 'none', padding: '8px 16px', textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', color: '#475569', fontSize: '13px' }} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f1f5f9'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
                                       <Eye size={14} /> View
                                     </button>
