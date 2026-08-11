@@ -13,6 +13,7 @@ import Header from '../Header';
 import AlertModal from '../AlertModal';
 import '../../styles/ProjectAccess.css';
 import { apiGet, apiPost, apiPut, apiDelete } from '../../utils/api';
+import { calculateDynamicPriority } from '../../utils/priority';
 
 const GROUP_ICONS = {
   'Company Master': Building2,
@@ -166,19 +167,42 @@ const getPermissionStateColor = (state) => {
 };
 
 const getPriorityColor = (priority) => {
-  const colors = { 'high': '#ef4444', 'medium': '#f59e0b', 'low': '#10b981' };
-  return colors[priority] || '#64748b';
+  const p = String(priority || '').toLowerCase().trim();
+  switch(p) {
+    case 'atmost critical':
+    case 'atmost_critical': return '#7f1d1d';
+    case 'critical': return '#dc2626';
+    case 'high': return '#ea580c';
+    case 'medium': return '#f59e0b';
+    case 'normal': return '#3b82f6';
+    case 'low': return '#10b981';
+    default: return '#64748b';
+  }
 };
 
 const getPriorityLabel = (priority) => {
-  const labels = { 'high': 'High', 'medium': 'Medium', 'low': 'Low' };
-  return labels[priority] || 'Normal';
+  const p = String(priority || '').toLowerCase().trim();
+  switch(p) {
+    case 'atmost critical':
+    case 'atmost_critical': return 'Atmost Critical';
+    case 'critical': return 'Critical';
+    case 'high': return 'High';
+    case 'medium': return 'Medium';
+    case 'normal': return 'Normal';
+    case 'low': return 'Low';
+    default: return priority || 'Normal';
+  }
 };
 
 const getPriorityIcon = (priority) => {
-  switch(priority) {
+  const p = String(priority || '').toLowerCase().trim();
+  switch(p) {
+    case 'atmost critical':
+    case 'atmost_critical':
+    case 'critical':
     case 'high': return <TrendingUp size={14} />;
-    case 'medium': return <Minus size={14} />;
+    case 'medium':
+    case 'normal': return <Minus size={14} />;
     case 'low': return <TrendingDown size={14} />;
     default: return <Minus size={14} />;
   }
@@ -190,6 +214,7 @@ const ProjectAccess = ({ userRole, onLogout }) => {
   const [currentView, setCurrentView] = useState('projects');
   const [selectedProject, setSelectedProject] = useState(null);
   const [viewMode, setViewMode] = useState('permission');
+  const [projectSearchTerm, setProjectSearchTerm] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [showEditPermissions, setShowEditPermissions] = useState(false);
   const [expandedMilestones, setExpandedMilestones] = useState(new Set(['M-001']));
@@ -232,20 +257,30 @@ const ProjectAccess = ({ userRole, onLogout }) => {
     setLoadingProjects(true);
     try {
       const data = await apiGet('/api/projects/access');
-      const mappedProjects = (data || []).map(proj => ({
-        ...proj,
-        id: proj.id || String(proj.prjId),
-        name: proj.name || proj.prjNm,
-        code: proj.code || proj.prjCd,
-        description: proj.description || proj.prjDesc,
-        status: proj.status || (proj.prjSts ? proj.prjSts.toLowerCase() : 'active'),
-        progress: proj.progress || 0,
-        startDate: proj.startDate || proj.stDt,
-        endDate: proj.endDate || proj.endDt,
-        manager: proj.manager || 'Suresh Babu (EMP1009)',
-        department: proj.department || 'Operations',
-        assignedEmployees: proj.assignedEmployees || []
-      }));
+      const mappedProjects = (data || []).map(proj => {
+        const dynamicPrio = calculateDynamicPriority(
+          proj.priority || proj.prjPrty || 'LOW',
+          proj.startDate || proj.stDt,
+          proj.endDate || proj.endDt,
+          proj.totalProjectDays || proj.noOfDays
+        );
+        return {
+          ...proj,
+          id: proj.id || String(proj.prjId),
+          name: proj.name || proj.prjNm,
+          code: proj.code || proj.prjCd,
+          description: proj.description || proj.prjDesc,
+          status: proj.status || (proj.prjSts ? proj.prjSts.toLowerCase() : 'active'),
+          priority: dynamicPrio.priority,
+          priorityMeta: dynamicPrio,
+          progress: proj.progress || 0,
+          startDate: proj.startDate || proj.stDt,
+          endDate: proj.endDate || proj.endDt,
+          manager: proj.manager || 'Suresh Babu (EMP1009)',
+          department: proj.department || 'Operations',
+          assignedEmployees: proj.assignedEmployees || []
+        };
+      });
       setProjects(mappedProjects);
     } catch (err) {
       console.error("Error fetching projects:", err);
@@ -538,6 +573,7 @@ const ProjectAccess = ({ userRole, onLogout }) => {
 
       setCurrentView('project-detail');
       setShowEditPermissions(false);
+      setSearchTerm('');
     } catch (err) {
       console.error("Error opening project details:", err);
       showAlert('error', 'Error', 'Failed to load project details.');
@@ -551,6 +587,7 @@ const ProjectAccess = ({ userRole, onLogout }) => {
     setProjectAccesses([]);
     setCurrentView('projects');
     setShowEditPermissions(false);
+    setSearchTerm('');
   };
 
   // ── Toggle Functions ──
@@ -715,28 +752,41 @@ const ProjectAccess = ({ userRole, onLogout }) => {
 
   // ── Filters ──
   const filteredProjects = (() => {
-    if (!searchTerm) return projects;
-    const search = searchTerm.toLowerCase();
+    if (!projectSearchTerm) return projects;
+    const search = projectSearchTerm.toLowerCase().trim();
     return projects.filter(p => 
       p.name?.toLowerCase().includes(search) ||
       p.code?.toLowerCase().includes(search) ||
       p.manager?.toLowerCase().includes(search) ||
-      p.department?.toLowerCase().includes(search)
+      p.department?.toLowerCase().includes(search) ||
+      p.description?.toLowerCase().includes(search) ||
+      p.status?.toLowerCase().includes(search)
     );
   })();
 
   const filteredMilestones = (() => {
     if (!searchTerm) return milestones;
-    const search = searchTerm.toLowerCase();
-    return milestones.filter(m => 
-      m.name?.toLowerCase().includes(search) ||
-      m.tasks?.some(t => 
+    const search = searchTerm.toLowerCase().trim();
+    return milestones.map(m => {
+      const milestoneMatches = m.name?.toLowerCase().includes(search) || String(m.id)?.toLowerCase().includes(search);
+      const matchingTasks = (m.tasks || []).filter(t => 
+        milestoneMatches ||
         t.name?.toLowerCase().includes(search) || 
-        t.assignee?.toLowerCase().includes(search) ||
+        t.taskCode?.toLowerCase().includes(search) || 
+        String(t.id)?.toLowerCase().includes(search) ||
+        (t.assignee && t.assignee.toLowerCase().includes(search)) ||
         (t.reviewer && t.reviewer.toLowerCase().includes(search)) ||
-        (t.approver && t.approver.toLowerCase().includes(search))
-      )
-    );
+        (t.approver && t.approver.toLowerCase().includes(search)) ||
+        (t.status && t.status.toLowerCase().includes(search))
+      );
+      if (milestoneMatches || matchingTasks.length > 0) {
+        return {
+          ...m,
+          tasks: matchingTasks
+        };
+      }
+      return null;
+    }).filter(Boolean);
   })();
 
   // ── Employee Management Functions ──
@@ -998,10 +1048,11 @@ const ProjectAccess = ({ userRole, onLogout }) => {
   const filteredAvailableEmployees = (() => {
     const available = getAvailableEmployees();
     if (!employeeSearchTerm) return available;
-    const search = employeeSearchTerm.toLowerCase();
+    const search = employeeSearchTerm.toLowerCase().trim();
     return available.filter(emp =>
-      emp.name.toLowerCase().includes(search) ||
-      String(emp.id).toLowerCase().includes(search) ||
+      emp.name?.toLowerCase().includes(search) ||
+      String(emp.id)?.toLowerCase().includes(search) ||
+      (emp.empCode && emp.empCode.toLowerCase().includes(search)) ||
       (emp.designation && emp.designation.toLowerCase().includes(search)) ||
       (emp.department && emp.department.toLowerCase().includes(search))
     );
@@ -1047,29 +1098,20 @@ const ProjectAccess = ({ userRole, onLogout }) => {
 
   // ── RENDER: Projects View ──
   const renderProjectsView = () => {
-    if (loadingProjects) {
-      return (
-        <div className="pac-empty-state">
-          <Loader2 size={48} className="spinning" />
-          <h4>Loading Projects...</h4>
-        </div>
-      );
-    }
-
-    if (filteredProjects.length === 0) {
-      return (
-        <div className="pac-empty-state">
-          <Folder size={48} />
-          <h4>No Projects Found</h4>
-        </div>
-      );
-    }
+    const normalizeStatus = (status) => {
+      const s = (status || '').toLowerCase().replace(/[_\s]/g, '-');
+      if (['active', 'in-progress', 'inprogress', 'live', 'ongoing'].includes(s)) return 'active';
+      if (['upcoming', 'planned', 'planning', 'pending', 'new', 'initiated'].includes(s)) return 'upcoming';
+      if (['completed', 'done', 'closed', 'finished'].includes(s)) return 'completed';
+      if (['on-hold', 'onhold', 'paused', 'hold', 'cancelled', 'delayed'].includes(s)) return 'onHold';
+      return 'active';
+    };
 
     const groupedProjects = {
-      active: filteredProjects.filter(p => p.status === 'active' || p.status === 'in-progress' || p.status === 'live'),
-      upcoming: filteredProjects.filter(p => p.status === 'upcoming' || p.status === 'planned'),
-      completed: filteredProjects.filter(p => p.status === 'completed' || p.status === 'done' || p.status === 'closed'),
-      onHold: filteredProjects.filter(p => p.status === 'on-hold' || p.status === 'paused' || p.status === 'hold')
+      active: filteredProjects.filter(p => normalizeStatus(p.status) === 'active'),
+      upcoming: filteredProjects.filter(p => normalizeStatus(p.status) === 'upcoming'),
+      completed: filteredProjects.filter(p => normalizeStatus(p.status) === 'completed'),
+      onHold: filteredProjects.filter(p => normalizeStatus(p.status) === 'onHold')
     };
 
     const statusGroups = [
@@ -1081,16 +1123,24 @@ const ProjectAccess = ({ userRole, onLogout }) => {
 
     return (
       <div className="pac-projects-view">
-
         <div className="pac-search-toggle-bar">
           <div className="pac-search-bar">
             <Search size={16} />
             <input
               type="text"
-              placeholder="Search projects..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search projects by name, code, manager, department..."
+              value={projectSearchTerm}
+              onChange={(e) => setProjectSearchTerm(e.target.value)}
             />
+            {projectSearchTerm && (
+              <button 
+                className="pac-search-clear"
+                onClick={() => setProjectSearchTerm('')}
+                title="Clear search"
+              >
+                <X size={16} />
+              </button>
+            )}
           </div>
           <div className="pac-view-toggle-buttons">
             <button 
@@ -1110,40 +1160,67 @@ const ProjectAccess = ({ userRole, onLogout }) => {
           </div>
         </div>
 
-        <div className={`pac-projects-container pac-projects-${projectViewType}`}>
-          {statusGroups.map((group) => {
-            const projectsInGroup = groupedProjects[group.key] || [];
-            if (projectsInGroup.length === 0) return null;
-
-            return (
-              <div key={group.key} className="pac-project-group">
-                <div 
-                  className="pac-project-group-header"
-                  onClick={() => toggleProjectGroup(group.key)}
+        {loadingProjects ? (
+          <div className="pac-empty-state" style={{ padding: '60px 20px' }}>
+            <Loader2 size={48} className="spinning" />
+            <h4>Loading Projects...</h4>
+          </div>
+        ) : filteredProjects.length === 0 ? (
+          <div className="pac-empty-state" style={{ padding: '60px 20px' }}>
+            <Folder size={48} />
+            <h4>No Projects Found</h4>
+            {projectSearchTerm ? (
+              <>
+                <p style={{ color: '#64748b', marginTop: '6px' }}>No projects match "{projectSearchTerm}"</p>
+                <button 
+                  className="pac-btn-outline" 
+                  onClick={() => setProjectSearchTerm('')} 
+                  style={{ marginTop: '14px' }}
                 >
-                  <div className="pac-project-group-title">
-                    <group.icon size={20} className="pac-project-group-icon" />
-                    <h3>{group.label}</h3>
-                    <span className="pac-project-group-count">({projectsInGroup.length})</span>
+                  Clear Search
+                </button>
+              </>
+            ) : (
+              <p style={{ color: '#64748b', marginTop: '6px' }}>No projects available in the system.</p>
+            )}
+          </div>
+        ) : (
+          <div className={`pac-projects-container pac-projects-${projectViewType}`}>
+            {statusGroups.map((group) => {
+              const projectsInGroup = groupedProjects[group.key] || [];
+              if (projectsInGroup.length === 0) return null;
+              const isExpanded = Boolean(projectSearchTerm) || expandedProjectGroups[group.key] !== false;
+
+              return (
+                <div key={group.key} className="pac-project-group">
+                  <div 
+                    className="pac-project-group-header"
+                    onClick={() => toggleProjectGroup(group.key)}
+                  >
+                    <div className="pac-project-group-title">
+                      <group.icon size={20} className="pac-project-group-icon" />
+                      <h3>{group.label}</h3>
+                      <span className="pac-project-group-count">({projectsInGroup.length})</span>
+                    </div>
+                    {isExpanded ? 
+                      <ChevronDown size={20} /> : 
+                      <ChevronRight size={20} />
+                    }
                   </div>
-                  {expandedProjectGroups[group.key] ? 
-                    <ChevronDown size={20} /> : 
-                    <ChevronRight size={20} />
-                  }
+                  {isExpanded && (
+                    <div className={`pac-project-group-content pac-project-group-${projectViewType}`}>
+                      {projectsInGroup.map(project => 
+                        projectViewType === 'grid' 
+                          ? renderProjectCardGrid(project) 
+                          : renderProjectCardList(project)
+                      )}
+                    </div>
+                  )}
                 </div>
-                {expandedProjectGroups[group.key] !== false && (
-                  <div className={`pac-project-group-content pac-project-group-${projectViewType}`}>
-                    {projectsInGroup.map(project => 
-                      projectViewType === 'grid' 
-                        ? renderProjectCardGrid(project) 
-                        : renderProjectCardList(project)
-                    )}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     );
   };
@@ -1360,6 +1437,19 @@ const ProjectAccess = ({ userRole, onLogout }) => {
       return <div className="pac-empty-state"><FileText size={48} /><h4>No Tasks</h4></div>;
     }
 
+    if (filteredMilestones.length === 0) {
+      return (
+        <div className="pac-empty-state" style={{ padding: '60px 20px' }}>
+          <FileText size={48} />
+          <h4>No Tasks or Milestones Found</h4>
+          <p style={{ color: '#64748b', marginTop: '6px' }}>No results matching "{searchTerm}"</p>
+          <button className="pac-btn-outline" onClick={() => setSearchTerm('')} style={{ marginTop: '14px' }}>
+            Clear Search
+          </button>
+        </div>
+      );
+    }
+
     const getAvatarColor = (name) => {
       if (!name || name === 'Unassigned' || name === '—') return '#94a3b8';
       const colors = ['#2563eb', '#7c3aed', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#14b8a6', '#f472b6', '#6366f1'];
@@ -1455,7 +1545,7 @@ const ProjectAccess = ({ userRole, onLogout }) => {
             </thead>
             <tbody>
               {filteredMilestones.map((milestone) => {
-                const isExpanded = expandedMilestones.has(milestone.id);
+                const isExpanded = Boolean(searchTerm) || expandedMilestones.has(milestone.id);
                 return (
                   <React.Fragment key={milestone.id}>
                     <tr className="pac-milestone-row" onClick={() => toggleMilestone(milestone.id)}>
@@ -1500,6 +1590,18 @@ const ProjectAccess = ({ userRole, onLogout }) => {
     const projectEmployees = employees.filter(e => selectedEmployees?.map(id => String(id)).includes(String(e.id)));
     const displayEmployees = showEditPermissions ? employees : projectEmployees;
 
+    const filteredDisplayEmployees = displayEmployees.filter(emp => {
+      if (!searchTerm) return true;
+      const s = searchTerm.toLowerCase().trim();
+      return (
+        emp.name?.toLowerCase().includes(s) ||
+        String(emp.id)?.toLowerCase().includes(s) ||
+        (emp.empCode && emp.empCode.toLowerCase().includes(s)) ||
+        (emp.designation && emp.designation.toLowerCase().includes(s)) ||
+        (emp.department && emp.department.toLowerCase().includes(s))
+      );
+    });
+
     if (!displayEmployees || displayEmployees.length === 0) {
       return <div className="pac-empty-state"><Users size={48} /><h4>No Employees</h4></div>;
     }
@@ -1509,6 +1611,11 @@ const ProjectAccess = ({ userRole, onLogout }) => {
         <div className="pac-employee-view-header">
           <div className="pac-employee-header-left">
             <h3>👥 Team Members ({projectEmployees.length})</h3>
+            {searchTerm && (
+              <span style={{ fontSize: '13px', color: '#64748b', marginLeft: '10px' }}>
+                ({filteredDisplayEmployees.length} matching)
+              </span>
+            )}
           </div>
           <div className="pac-employee-header-right">
             {showEditPermissions && (
@@ -1521,91 +1628,103 @@ const ProjectAccess = ({ userRole, onLogout }) => {
             )}
           </div>
         </div>
-        <div className="pac-employee-grid">
-          {displayEmployees.map(emp => {
-            const taskCount = getEmployeeTaskCount(emp.id);
-            const isOnTeam = selectedEmployees?.map(id => String(id)).includes(String(emp.id));
-            
-            return (
-              <div key={emp.id} className={`pac-employee-card-enhanced ${!isOnTeam ? 'not-on-team' : ''}`} style={{ opacity: isOnTeam ? 1 : 0.6 }}>
-                <div className="pac-emp-card-header">
-                  <div className="pac-emp-avatar-wrapper">
-                    <div className="pac-emp-avatar-enhanced" style={{ background: isOnTeam ? '#2563eb' : '#94a3b8' }}>
-                      {emp.name.split(' ').map(n => n[0]).join('')}
+
+        {filteredDisplayEmployees.length === 0 ? (
+          <div className="pac-empty-state" style={{ padding: '60px 20px' }}>
+            <Users size={48} />
+            <h4>No Team Members Found</h4>
+            <p style={{ color: '#64748b', marginTop: '6px' }}>No employees matching "{searchTerm}"</p>
+            <button className="pac-btn-outline" onClick={() => setSearchTerm('')} style={{ marginTop: '14px' }}>
+              Clear Search
+            </button>
+          </div>
+        ) : (
+          <div className="pac-employee-grid">
+            {filteredDisplayEmployees.map(emp => {
+              const taskCount = getEmployeeTaskCount(emp.id);
+              const isOnTeam = selectedEmployees?.map(id => String(id)).includes(String(emp.id));
+              
+              return (
+                <div key={emp.id} className={`pac-employee-card-enhanced ${!isOnTeam ? 'not-on-team' : ''}`} style={{ opacity: isOnTeam ? 1 : 0.6 }}>
+                  <div className="pac-emp-card-header">
+                    <div className="pac-emp-avatar-wrapper">
+                      <div className="pac-emp-avatar-enhanced" style={{ background: isOnTeam ? '#2563eb' : '#94a3b8' }}>
+                        {emp.name.split(' ').map(n => n[0]).join('')}
+                      </div>
+                      {isOnTeam && taskCount > 0 && (
+                        <div className="pac-emp-task-indicator" title={`${taskCount} tasks assigned`}>
+                          {taskCount}
+                        </div>
+                      )}
                     </div>
-                    {isOnTeam && taskCount > 0 && (
-                      <div className="pac-emp-task-indicator" title={`${taskCount} tasks assigned`}>
-                        {taskCount}
+                    <div className="pac-emp-card-title">
+                      <h4>{emp.name}</h4>
+                      <span className="pac-emp-id">{emp.id}</span>
+                    </div>
+                    <div className="pac-emp-role-badge">
+                      <span>{emp.designation}</span>
+                    </div>
+                  </div>
+                  <div className="pac-emp-card-body">
+                    <div className="pac-emp-dept">
+                      <Building2 size={14} /> <span>{emp.department}</span>
+                    </div>
+                    {isOnTeam ? (
+                      <div className="pac-emp-task-count">
+                        <FileText size={14} />
+                        <span>{taskCount} task(s) assigned</span>
+                        {taskCount > 0 && (
+                          <span className="pac-emp-task-warning">⚠️</span>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="pac-emp-task-count">
+                        <Minus size={14} />
+                        <span>Not on project team</span>
                       </div>
                     )}
                   </div>
-                  <div className="pac-emp-card-title">
-                    <h4>{emp.name}</h4>
-                    <span className="pac-emp-id">{emp.id}</span>
-                  </div>
-                  <div className="pac-emp-role-badge">
-                    <span>{emp.designation}</span>
-                  </div>
-                </div>
-                <div className="pac-emp-card-body">
-                  <div className="pac-emp-dept">
-                    <Building2 size={14} /> <span>{emp.department}</span>
-                  </div>
-                  {isOnTeam ? (
-                    <div className="pac-emp-task-count">
-                      <FileText size={14} />
-                      <span>{taskCount} task(s) assigned</span>
-                      {taskCount > 0 && (
-                        <span className="pac-emp-task-warning">⚠️</span>
+                  {showEditPermissions && (
+                    <div className="pac-emp-card-footer">
+                      {isOnTeam ? (
+                        <button 
+                          className={`pac-emp-remove-btn ${taskCount > 0 ? 'has-tasks' : ''}`}
+                          onClick={() => handleRemoveEmployee(emp.id)}
+                        >
+                          <UserMinus size={14} /> 
+                          Remove{taskCount > 0 ? ` (${taskCount} tasks)` : ''}
+                        </button>
+                      ) : (
+                        <button 
+                          className="pac-emp-add-btn"
+                          onClick={() => handleAddEmployee(emp.id)}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            padding: '6px 12px',
+                            background: '#10b981',
+                            border: 'none',
+                            borderRadius: '6px',
+                            color: 'white',
+                            fontSize: '12px',
+                            fontWeight: '500',
+                            cursor: 'pointer',
+                            width: '100%',
+                            justifyContent: 'center'
+                          }}
+                        >
+                          <UserPlus size={14} /> 
+                          Add Employee
+                        </button>
                       )}
-                    </div>
-                  ) : (
-                    <div className="pac-emp-task-count">
-                      <Minus size={14} />
-                      <span>Not on project team</span>
                     </div>
                   )}
                 </div>
-                {showEditPermissions && (
-                  <div className="pac-emp-card-footer">
-                    {isOnTeam ? (
-                      <button 
-                        className={`pac-emp-remove-btn ${taskCount > 0 ? 'has-tasks' : ''}`}
-                        onClick={() => handleRemoveEmployee(emp.id)}
-                      >
-                        <UserMinus size={14} /> 
-                        Remove{taskCount > 0 ? ` (${taskCount} tasks)` : ''}
-                      </button>
-                    ) : (
-                      <button 
-                        className="pac-emp-add-btn"
-                        onClick={() => handleAddEmployee(emp.id)}
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '6px',
-                          padding: '6px 12px',
-                          background: '#10b981',
-                          border: 'none',
-                          borderRadius: '6px',
-                          color: 'white',
-                          fontSize: '12px',
-                          fontWeight: '500',
-                          cursor: 'pointer',
-                          width: '100%',
-                          justifyContent: 'center'
-                        }}
-                      >
-                        <UserPlus size={14} /> 
-                        Add Employee
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     );
   };
@@ -1831,14 +1950,24 @@ const ProjectAccess = ({ userRole, onLogout }) => {
 
     const filteredScreens = (() => {
       if (!searchTerm) return accessGroups;
-      const search = searchTerm.toLowerCase();
-      return accessGroups.map(group => ({
-        ...group,
-        screens: group.screens.filter(screen =>
-          screen.name.toLowerCase().includes(search) ||
-          group.name.toLowerCase().includes(search)
-        )
-      })).filter(group => group.screens.length > 0);
+      const search = searchTerm.toLowerCase().trim();
+      return accessGroups.map(group => {
+        const groupMatches = group.name?.toLowerCase().includes(search) || group.id?.toLowerCase().includes(search);
+        const matchingScreens = (group.screens || []).filter(screen =>
+          groupMatches ||
+          screen.name?.toLowerCase().includes(search) ||
+          screen.id?.toLowerCase().includes(search) ||
+          (screen.code && screen.code.toLowerCase().includes(search)) ||
+          (screen.screenCode && screen.screenCode.toLowerCase().includes(search))
+        );
+        if (groupMatches || matchingScreens.length > 0) {
+          return {
+            ...group,
+            screens: matchingScreens
+          };
+        }
+        return null;
+      }).filter(Boolean);
     })();
 
     return (
@@ -1868,23 +1997,33 @@ const ProjectAccess = ({ userRole, onLogout }) => {
           )}
         </div>
 
-        <div className="pac-table-container">
-          <table className="pac-table">
-            <thead>
-              <tr>
-                <th width="32%">Group / Screen</th>
-                <th width="10%" style={{ textAlign: 'center' }}>Screens</th>
-                <th width="10%" style={{ textAlign: 'center' }}>View</th>
-                <th width="10%" style={{ textAlign: 'center' }}>Create</th>
-                <th width="10%" style={{ textAlign: 'center' }}>Edit</th>
-                <th width="10%" style={{ textAlign: 'center' }}>Delete</th>
-                <th width="18%" style={{ textAlign: 'center' }}>Access Type</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredScreens.map((group) => {
-                const isExpanded = expandedGroups[group.id];
-                const permissionCount = getPermissionCount(group);
+        {filteredScreens.length === 0 ? (
+          <div className="pac-empty-state" style={{ padding: '60px 20px' }}>
+            <Settings size={48} />
+            <h4>No Screen Permissions Found</h4>
+            <p style={{ color: '#64748b', marginTop: '6px' }}>No screen permissions matching "{searchTerm}"</p>
+            <button className="pac-btn-outline" onClick={() => setSearchTerm('')} style={{ marginTop: '14px' }}>
+              Clear Search
+            </button>
+          </div>
+        ) : (
+          <div className="pac-table-container">
+            <table className="pac-table">
+              <thead>
+                <tr>
+                  <th width="32%">Group / Screen</th>
+                  <th width="10%" style={{ textAlign: 'center' }}>Screens</th>
+                  <th width="10%" style={{ textAlign: 'center' }}>View</th>
+                  <th width="10%" style={{ textAlign: 'center' }}>Create</th>
+                  <th width="10%" style={{ textAlign: 'center' }}>Edit</th>
+                  <th width="10%" style={{ textAlign: 'center' }}>Delete</th>
+                  <th width="18%" style={{ textAlign: 'center' }}>Access Type</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredScreens.map((group) => {
+                  const isExpanded = Boolean(searchTerm) || Boolean(expandedGroups[group.id]);
+                  const permissionCount = getPermissionCount(group);
                 
                 return (
                   <React.Fragment key={group.id}>
@@ -2039,6 +2178,7 @@ const ProjectAccess = ({ userRole, onLogout }) => {
             </tbody>
           </table>
         </div>
+        )}
       </div>
     );
   };
@@ -2106,9 +2246,14 @@ const ProjectAccess = ({ userRole, onLogout }) => {
               <div className="pac-popup-list-wrapper">
                 {filteredAvailableEmployees.length === 0 ? (
                   <div className="pac-popup-empty">
-                    <div className="pac-popup-empty-icon">👥</div>
-                    <h4>All Employees Assigned</h4>
-                    <p>All available employees are already assigned to this project.</p>
+                    <div className="pac-popup-empty-icon">{employeeSearchTerm ? '🔍' : '👥'}</div>
+                    <h4>{employeeSearchTerm ? 'No Employees Found' : 'All Employees Assigned'}</h4>
+                    <p>{employeeSearchTerm ? `No available employees match "${employeeSearchTerm}"` : 'All available employees are already assigned to this project.'}</p>
+                    {employeeSearchTerm && (
+                      <button className="pac-btn-outline" onClick={() => setEmployeeSearchTerm('')} style={{ marginTop: '12px' }}>
+                        Clear Search
+                      </button>
+                    )}
                   </div>
                 ) : (
                   <div className="pac-popup-list">
@@ -2242,7 +2387,25 @@ const ProjectAccess = ({ userRole, onLogout }) => {
           </div>
           <div className="pac-search-bar" style={{ width: '280px' }}>
             <Search size={16} />
-            <input type="text" placeholder="Search..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+            <input 
+              type="text" 
+              placeholder={
+                viewMode === 'permission' ? "Search tasks, assignees..." :
+                viewMode === 'employee' ? "Search team members..." :
+                "Search screens, groups..."
+              } 
+              value={searchTerm} 
+              onChange={(e) => setSearchTerm(e.target.value)} 
+            />
+            {searchTerm && (
+              <button 
+                className="pac-search-clear"
+                onClick={() => setSearchTerm('')}
+                title="Clear search"
+              >
+                <X size={16} />
+              </button>
+            )}
           </div>
         </div>
 

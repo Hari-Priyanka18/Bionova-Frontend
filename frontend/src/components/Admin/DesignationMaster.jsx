@@ -94,7 +94,34 @@ const DesignationCreation = ({ userRole, onLogout }) => {
   const [showModal, setShowModal] = useState(false);
   const [deleteId, setDeleteId] = useState(null);
   const [activeDropdown, setActiveDropdown] = useState(null);
-  const [dropdownPos, setDropdownPos] = useState({ isTop: false });
+  const [dropdownPos, setDropdownPos] = useState({ isTop: false, top: 0, bottom: 0, right: 0 });
+
+  // Scroll handler to reposition dropdown dynamically
+  useEffect(() => {
+    const handleScroll = () => {
+      if (activeDropdown !== null) {
+        const btn = document.getElementById(`action-btn-${activeDropdown}`);
+        if (btn) {
+          const rect = btn.getBoundingClientRect();
+          const spaceBelow = window.innerHeight - rect.bottom;
+          const spaceAbove = rect.top;
+          const dropdownHeight = 220;
+          const isTop = spaceBelow < dropdownHeight && spaceAbove > spaceBelow;
+          setDropdownPos({
+            isTop,
+            top: rect.top,
+            bottom: rect.bottom,
+            right: window.innerWidth - rect.right
+          });
+        }
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll, true);
+    return () => {
+      window.removeEventListener('scroll', handleScroll, true);
+    };
+  }, [activeDropdown]);
 
   const [alertConfig, setAlertConfig] = useState({
     isOpen: false,
@@ -349,10 +376,13 @@ const DesignationCreation = ({ userRole, onLogout }) => {
     e.stopPropagation();
     const rect = e.currentTarget.getBoundingClientRect();
     const spaceBelow = window.innerHeight - rect.bottom;
-    const dropdownHeight = 150;
-    const isTop = spaceBelow < dropdownHeight;
+    const spaceAbove = rect.top;
+    const dropdownHeight = 220;
+    const isTop = spaceBelow < dropdownHeight && spaceAbove > spaceBelow;
     setDropdownPos({
-      top: isTop ? rect.top - dropdownHeight : rect.bottom,
+      isTop,
+      top: rect.top,
+      bottom: rect.bottom,
       right: window.innerWidth - rect.right
     });
     setActiveDropdown((prev) => (prev === id ? null : id));
@@ -560,13 +590,13 @@ const DesignationCreation = ({ userRole, onLogout }) => {
                             <td data-label="DESIGNATION NAME" style={{ padding: '14px 16px', fontSize: '14px', color: '#334155' }}><strong>{desig.name}</strong></td>
                             <td data-label="DESCRIPTION" style={{ padding: '14px 16px', fontSize: '14px', color: '#334155' }}>{desig.description || "N/A"}</td>
                             <td data-label="ACTIONS" style={{ position: "relative", padding: '14px 16px', textAlign: 'center' }}>
-                              <button type="button" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', padding: '4px 8px', borderRadius: '4px' }} onClick={(e) => toggleDropdown(e, desig.id)} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f1f5f9'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
+                              <button id={`action-btn-${desig.id}`} type="button" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', padding: '4px 8px', borderRadius: '4px' }} onClick={(e) => toggleDropdown(e, desig.id)} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f1f5f9'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
                                 <MoreVertical size={18} />
                               </button>
                               {activeDropdown === desig.id && (
                                 <>
-                                  <div className="desig-actions-dropdown-backdrop" onClick={() => setActiveDropdown(null)} style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 998 }} />
-                                  <div className="desig-actions-dropdown-menu" style={{ position: 'fixed', right: `${dropdownPos.right}px`, top: `${dropdownPos.top}px`, backgroundColor: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', zIndex: 9999, display: 'flex', flexDirection: 'column', padding: '4px 0', minWidth: '140px' }}>
+                                  <div className="desig-actions-dropdown-backdrop" onClick={() => setActiveDropdown(null)} style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 90 }} />
+                                  <div className="desig-actions-dropdown-menu" style={{ position: 'fixed', right: `${dropdownPos.right}px`, top: dropdownPos.isTop ? 'auto' : `${dropdownPos.bottom}px`, bottom: dropdownPos.isTop ? `${window.innerHeight - dropdownPos.top}px` : 'auto', backgroundColor: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', zIndex: 99, display: 'flex', flexDirection: 'column', padding: '4px 0', minWidth: '140px' }}>
                                     <button type="button" style={{ padding: '10px 16px', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', color: '#334155', borderRadius: '4px', margin: '2px 4px' }} onClick={() => handleView(desig)} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f1f5f9'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}> <Eye size={15} /> View </button>
                                     {screenPerm.canEdit && (
                                       <button type="button" style={{ padding: '10px 16px', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', color: '#334155', borderRadius: '4px', margin: '2px 4px' }} onClick={() => handleEdit(desig)} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f1f5f9'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}> <Edit size={15} /> Edit </button>

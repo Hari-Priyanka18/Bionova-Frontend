@@ -292,9 +292,36 @@ const PlantCreation = ({ userRole, onLogout }) => {
   const [activeDropdown, setActiveDropdown] = useState(null);
   const [dropdownPos, setDropdownPos] = useState({ isTop: false });
 
-  // Deactivation confirmation modal state
+  // Deactivate confirmation modal state
   const [showDeactivateModal, setShowDeactivateModal] = useState(false);
   const [deactivateTargetId, setDeactivateTargetId] = useState(null);
+
+  // Scroll handler to reposition dropdown dynamically
+  useEffect(() => {
+    const handleScroll = () => {
+      if (activeDropdown !== null) {
+        const btn = document.getElementById(`action-btn-${activeDropdown}`);
+        if (btn) {
+          const rect = btn.getBoundingClientRect();
+          const spaceBelow = window.innerHeight - rect.bottom;
+          const spaceAbove = rect.top;
+          const dropdownHeight = 220;
+          const isTop = spaceBelow < dropdownHeight && spaceAbove > spaceBelow;
+          setDropdownPos({
+            isTop,
+            top: rect.top,
+            bottom: rect.bottom,
+            right: window.innerWidth - rect.right
+          });
+        }
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll, true);
+    return () => {
+      window.removeEventListener('scroll', handleScroll, true);
+    };
+  }, [activeDropdown]);
 
   // Delete confirmation modal state
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -348,9 +375,9 @@ const PlantCreation = ({ userRole, onLogout }) => {
       if (!value) {
         error = "Email is required.";
       } else {
-        const emailRegex = /^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+        const emailRegex = /^[^\s@]+@gmail\.com$/i;
         if (!emailRegex.test(value.trim())) {
-          error = "Please enter a valid email (e.g., name@domain.com). Only letters, numbers, dots, underscores, and hyphens allowed before '@'.";
+          error = "Plant Email must be a valid @gmail.com address.";
         }
       }
     } else if (name === "addressLine1") {
@@ -489,6 +516,13 @@ const PlantCreation = ({ userRole, onLogout }) => {
       !form.status
     ) {
       triggerAlert("error", "Validation Error", "Please fill in all required fields marked with *");
+      return;
+    }
+
+    // Strict email check
+    const emailRegex = /^[^\s@]+@gmail\.com$/i;
+    if (!emailRegex.test(form.email.trim())) {
+      triggerAlert("error", "Validation Error", "Plant Email must be a valid @gmail.com address.");
       return;
     }
 
@@ -1671,6 +1705,7 @@ const PlantCreation = ({ userRole, onLogout }) => {
                             </td>
                             <td data-label="ACTIONS" style={{ ...tdStyle, position: "relative", textAlign: 'center' }}>
                               <button
+                                id={`action-btn-${plant.pltId}`}
                                 type="button"
                                 style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', padding: '4px 8px', borderRadius: '4px' }}
                                 onClick={(e) => toggleDropdown(e, plant.pltId)}
@@ -1688,7 +1723,7 @@ const PlantCreation = ({ userRole, onLogout }) => {
                                     onClick={() => setActiveDropdown(null)}
                                     style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 90 }}
                                   />
-                                  <div className="pc-actions-dropdown-menu" style={{ position: 'fixed', right: `${dropdownPos.right}px`, top: dropdownPos.isTop ? 'auto' : `${dropdownPos.bottom}px`, bottom: dropdownPos.isTop ? `${window.innerHeight - dropdownPos.top}px` : 'auto', backgroundColor: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', zIndex: 9999, display: 'flex', flexDirection: 'column', padding: '4px 0', minWidth: '140px' }}>
+                                  <div className="pc-actions-dropdown-menu" style={{ position: 'fixed', right: `${dropdownPos.right}px`, top: dropdownPos.isTop ? 'auto' : `${dropdownPos.bottom}px`, bottom: dropdownPos.isTop ? `${window.innerHeight - dropdownPos.top}px` : 'auto', backgroundColor: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', zIndex: 99, display: 'flex', flexDirection: 'column', padding: '4px 0', minWidth: '140px' }}>
                                     <button
                                       type="button"
                                       style={{ padding: '10px 16px', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', color: '#334155', borderRadius: '4px', margin: '2px 4px' }}

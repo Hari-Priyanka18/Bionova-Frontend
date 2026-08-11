@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { ArrowLeft, Edit3, X, Star } from 'lucide-react';
+import { safeFetch } from "../../utils/api";
+import { calculateDynamicPriority } from "../../utils/priority";
 import Sidebar from '../Sidebar.jsx';
 import Header from '../Header.jsx';
 import ProjectOverview from './ProjectOverview.jsx';
@@ -40,6 +42,7 @@ const formatDateToDDMMYYYY = (dateStr) => {
   }
   return dateStr;
 };
+const formatDate = formatDateToDDMMYYYY;
 
 const extractProgress = (obj) => {
   if (!obj) return 0;
@@ -78,6 +81,7 @@ const ProjectDetails = ({ userRole, onLogout }) => {
   const [loading, setLoading] = useState(true);
   const [milestones, setMilestones] = useState([]);
   const [tasks, setTasks] = useState([]);
+  const [leadLagDetail, setLeadLagDetail] = useState(null);
 
   let tabs = ['Overview', 'Milestones & Tasks', 'Gantt Chart', 'Forecasting', 'Documents', 'Change Logs'];
   if (viewMode === 'milestones_only') {
@@ -135,6 +139,8 @@ const ProjectDetails = ({ userRole, onLogout }) => {
             status: isDraft ? "DRAFT" : (targetRaw.prjSts || "LIVE"),
             startDate: isDraft ? targetRaw.tentStDt : targetRaw.stDt,
             endDate: isDraft ? targetRaw.tentEndDt : targetRaw.endDt,
+            actCmpDt: targetRaw.actCmpDt || targetRaw.act_cmp_dt || null,
+            leadLagSts: targetRaw.leadLagSts || targetRaw.lead_lag_sts || null,
             totalProjectDays: targetRaw.noOfDays || "",
             companyName: coyData.find(c => c.coyId === targetRaw.coyId)?.coyNm || "",
             plantName: pltData.find(pl => pl.pltId === targetRaw.pltId)?.pltNm || "",
@@ -149,21 +155,30 @@ const ProjectDetails = ({ userRole, onLogout }) => {
             _type: isDraft ? "draft" : "live"
           };
 
-          // Fetch milestones and tasks for this specific project
+          // Fetch milestones, tasks, and lead-lag status for this specific project
           const mlUrl = isDraft
             ? `${apiBaseUrl}/api/milestone-drafts/by-project/${p.id}`
             : `${apiBaseUrl}/api/milestone-live/by-project/${p.id}`;
           const taskUrl = isDraft
             ? `${apiBaseUrl}/api/task-drafts`
             : `${apiBaseUrl}/api/task-live`;
+          const llUrl = !isDraft && p.id
+            ? `${apiBaseUrl}/api/project-live/${p.id}/lead-lag-status`
+            : null;
 
-          const [mlRes, taskRes] = await Promise.all([
+          const fetchPromises = [
             fetch(mlUrl, { headers: getAuthHeaders() }),
             fetch(taskUrl, { headers: getAuthHeaders() })
-          ]);
+          ];
+          if (llUrl) {
+            fetchPromises.push(fetch(llUrl, { headers: getAuthHeaders() }).catch(() => null));
+          }
 
-          const mlData = mlRes.ok ? await mlRes.json() : [];
-          const taskDataRaw = taskRes.ok ? await taskRes.json() : [];
+          const [mlRes, taskRes, llRes] = await Promise.all(fetchPromises);
+
+          const mlData = mlRes?.ok ? await mlRes.json() : [];
+          const taskDataRaw = taskRes?.ok ? await taskRes.json() : [];
+          const llData = llRes?.ok ? await llRes.json() : null;
 
           const getMilestoneId = (m) => isDraft ? (m.drftMId || m.drft_m_id || m.id) : (m.mId || m.mid || m.id);
           const getTaskMilestoneId = (t) => isDraft ? (t.drftMId || t.drft_m_id || t.mId || t.mid) : (t.mId || t.mid || t.mlstm_id);
@@ -176,6 +191,7 @@ const ProjectDetails = ({ userRole, onLogout }) => {
 
           setMilestones(mlData);
           setTasks(projectTasks);
+          setLeadLagDetail(llData);
           setProject(p);
         }
       } catch (err) {
@@ -211,32 +227,43 @@ const ProjectDetails = ({ userRole, onLogout }) => {
     return String(sts).trim().toUpperCase();
   };
 
+  const getStatusBadgeClass = (status) => {
+    const s = (status || '').toUpperCase().trim();
+    if (s === 'LIVE' || s === 'ACTIVE') return 'live';
+    if (s === 'DRAFT') return 'draft';
+    if (s === 'HOLD' || s === 'ON HOLD' || s === 'ON_HOLD') return 'hold';
+    if (s === 'CLOSED' || s === 'COMPLETED') return 'closed';
+    return '';
+  };
+
   // Progress = completed tasks / total tasks × 100 (only COMPLETED/CLOSED count)
   const calculateProgress = (p, taskList) => {
     if (!p) return { overall: 0, completed: 0, inProgress: 0, notStarted: 0, overdue: 0, total: 0 };
 
     const total = taskList.length;
-
-    const completed = taskList.filter(t => {
-      const s = getTaskStatusStr(t);
-      return s === 'COMPLETED' || s === 'CLOSED' || s === 'DONE' || s === 'COMPLETE';
-    }).length;
-
-    const inProgress = taskList.filter(t => {
-      const s = getTaskStatusStr(t);
-      return s === 'WIP' || s === 'IN PROGRESS' || s === 'IN_PROGRESS';
-    }).length;
-
     const todayObj = new Date();
     todayObj.setHours(0, 0, 0, 0);
 
-    const overdue = taskList.filter(t => {
+    const isDone = (t) => {
       const s = getTaskStatusStr(t);
-      if (s === 'COMPLETED' || s === 'CLOSED' || s === 'DONE' || s === 'COMPLETE') return false;
+      return s === 'COMPLETED' || s === 'CLOSED' || s === 'DONE' || s === 'COMPLETE';
+    };
+
+    const isOverdue = (t) => {
+      if (isDone(t)) return false;
       const endDtStr = t.tentEndDt || t.tent_end_dt || t.endDt || t.end_dt;
       if (!endDtStr) return false;
       const endDt = new Date(endDtStr);
-      return endDt < todayObj;
+      return !isNaN(endDt.getTime()) && endDt < todayObj;
+    };
+
+    const completed = taskList.filter(isDone).length;
+    const overdue = taskList.filter(isOverdue).length;
+
+    const inProgress = taskList.filter(t => {
+      if (isDone(t) || isOverdue(t)) return false;
+      const s = getTaskStatusStr(t);
+      return s === 'WIP' || s === 'IN PROGRESS' || s === 'IN_PROGRESS' || s === 'LIVE';
     }).length;
 
     const notStarted = Math.max(0, total - completed - inProgress - overdue);
@@ -249,18 +276,125 @@ const ProjectDetails = ({ userRole, onLogout }) => {
 
   const progressData = calculateProgress(project, tasks);
 
+  const getProjectLeadLag = (proj, llDetail, taskList) => {
+    if (!proj) return { label: 'ON TIME', color: '#3b82f6', bgColor: '#dbeafe', borderColor: '#bfdbfe' };
+
+    const status = (llDetail?.leadLagStatus || proj?.leadLagSts || '').toUpperCase();
+    const daysVariance = llDetail?.daysVariance;
+
+    // Check dates: actual completion date vs planned end date
+    let actDateStr = llDetail?.actualCompletionDate || proj?.actCmpDt;
+    let endDateStr = proj?.endDate;
+
+    if (!actDateStr && taskList && taskList.length > 0) {
+      let maxAct = null;
+      let maxEnd = null;
+      taskList.forEach(t => {
+        const act = t.actCmpDt || t.actcmpdt || t.act_cmp_dt;
+        const end = t.endDt || t.enddt || t.endDate || t.end_dt;
+        if (act) {
+          const d = new Date(act);
+          if (!isNaN(d.getTime()) && (!maxAct || d > maxAct)) maxAct = d;
+        }
+        if (end) {
+          const d = new Date(end);
+          if (!isNaN(d.getTime()) && (!maxEnd || d > maxEnd)) maxEnd = d;
+        }
+      });
+      if (maxAct) actDateStr = maxAct.toISOString().split('T')[0];
+      if (!endDateStr && maxEnd) endDateStr = maxEnd.toISOString().split('T')[0];
+    }
+
+    if (actDateStr && endDateStr) {
+      const actD = new Date(actDateStr);
+      const endD = new Date(endDateStr);
+      if (!isNaN(actD.getTime()) && !isNaN(endD.getTime())) {
+        actD.setHours(0, 0, 0, 0);
+        endD.setHours(0, 0, 0, 0);
+        const diffMs = endD.getTime() - actD.getTime();
+        const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+
+        if (diffDays > 0) {
+          return {
+            status: 'LEAD',
+            label: `LEAD (${diffDays} DAYS)`,
+            color: '#10b981',
+            bgColor: '#dcfce7',
+            borderColor: '#bbf7d0'
+          };
+        } else if (diffDays < 0) {
+          return {
+            status: 'LAG',
+            label: `LAG (${Math.abs(diffDays)} DAYS)`,
+            color: '#ef4444',
+            bgColor: '#fee2e2',
+            borderColor: '#fecaca'
+          };
+        } else {
+          return {
+            status: 'ON_TIME',
+            label: 'ON TIME',
+            color: '#3b82f6',
+            bgColor: '#dbeafe',
+            borderColor: '#bfdbfe'
+          };
+        }
+      }
+    }
+
+    if (status === 'LEAD') {
+      return {
+        status: 'LEAD',
+        label: daysVariance && daysVariance > 0 ? `LEAD (${daysVariance} DAYS)` : 'LEAD',
+        color: '#10b981',
+        bgColor: '#dcfce7',
+        borderColor: '#bbf7d0'
+      };
+    } else if (status === 'LAG') {
+      return {
+        status: 'LAG',
+        label: daysVariance && daysVariance > 0 ? `LAG (${daysVariance} DAYS)` : 'LAG',
+        color: '#ef4444',
+        bgColor: '#fee2e2',
+        borderColor: '#fecaca'
+      };
+    } else {
+      return {
+        status: 'ON_TIME',
+        label: 'ON TIME',
+        color: '#3b82f6',
+        bgColor: '#dbeafe',
+        borderColor: '#bfdbfe'
+      };
+    }
+  };
+
+  const isClosed = Boolean(
+    project?.status && ['CLOSED', 'COMPLETED'].includes(project.status.toUpperCase().trim())
+  );
+  const leadLag = getProjectLeadLag(project, leadLagDetail, tasks);
+
+  const dynamicPriorityInfo = calculateDynamicPriority(
+    project?.priority,
+    project?.startDate || project?.stDt || project?.stdt,
+    project?.targetDate || project?.endDate || project?.endDt || project?.enddt,
+    project?.totalProjectDays
+  );
+
   const getPercentage = (val, total) => total > 0 ? ((val / total) * 100).toFixed(2) : 0;
 
-  const ang1 = (progressData.completed / progressData.total) * 360 || 0;
-  const ang2 = ang1 + ((progressData.inProgress / progressData.total) * 360 || 0);
-  const ang3 = ang2 + ((progressData.notStarted / progressData.total) * 360 || 0);
+  const ang1 = progressData.total > 0 ? (progressData.completed / progressData.total) * 360 : 0;
+  const ang2 = ang1 + (progressData.total > 0 ? (progressData.inProgress / progressData.total) * 360 : 0);
+  const ang3 = ang2 + (progressData.total > 0 ? (progressData.notStarted / progressData.total) * 360 : 0);
 
-  const dynamicGradient = `conic-gradient(
-    #10b981 0deg ${ang1}deg,
-    #3b82f6 ${ang1}deg ${ang2}deg,
-    #f59e0b ${ang2}deg ${ang3}deg,
-    #ef4444 ${ang3}deg 360deg
-  )`;
+  const dynamicGradient = progressData.total === 0 
+    ? '#e2e8f0' 
+    : `conic-gradient(
+        #10b981 0deg ${ang1}deg,
+        #3b82f6 ${ang1}deg ${ang2}deg,
+        #f59e0b ${ang2}deg ${ang3}deg,
+        #ef4444 ${ang3}deg 360deg
+      )`;
 
   const formatBulletedText = (text, fallback) => {
     if (!text) return fallback;
@@ -320,12 +454,38 @@ const ProjectDetails = ({ userRole, onLogout }) => {
               <div className="pd-info-wrapper">
                 <div className="pd-title-row">
                   <h2>{project.projectName}</h2>
-                  <span className={`pd-badge ${project.status === 'LIVE' ? 'live' : project.status === 'DRAFT' ? 'draft' : ''}`}>{project.status}</span>
+                  <span className={`pd-badge ${getStatusBadgeClass(project.status)}`}>{project.status}</span>
                 </div>
 
                 <div className="pd-meta-tags">
                   <span className="pd-tag blue">{project.projectCode}</span>
-                  <span className="pd-tag red">{project.priority} PRIORITY</span>
+                  {isClosed ? (
+                    <span 
+                      className="pd-tag" 
+                      style={{
+                        backgroundColor: leadLag.bgColor,
+                        color: leadLag.color,
+                        border: `1px solid ${leadLag.borderColor}`,
+                        fontWeight: '600',
+                        letterSpacing: '0.5px'
+                      }}
+                    >
+                      {leadLag.label}
+                    </span>
+                  ) : (
+                    <span 
+                      className="pd-tag"
+                      style={{
+                        backgroundColor: dynamicPriorityInfo.bgColor,
+                        color: dynamicPriorityInfo.color,
+                        border: `1px solid ${dynamicPriorityInfo.borderColor}`,
+                        fontWeight: '700',
+                        letterSpacing: '0.5px'
+                      }}
+                    >
+                      {dynamicPriorityInfo.priority} PRIORITY
+                    </span>
+                  )}
                 </div>
 
                 <p className="pd-description">{project.projectDescription || "No description provided."}</p>
@@ -343,7 +503,6 @@ const ProjectDetails = ({ userRole, onLogout }) => {
                     <span className="pd-label">Department</span>
                     <span className="pd-value">{project.department || "Not Specified"}</span>
                   </div>
-                  
                 </div>
 
                 <div className="pd-details-grid mt-4" style={{ gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
@@ -415,10 +574,14 @@ const ProjectDetails = ({ userRole, onLogout }) => {
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                 <h2 style={{ margin: 0, fontSize: '18px', fontWeight: '600', color: '#1e293b' }}>{project.projectName}</h2>
                 <span className="pd-tag blue" style={{ margin: 0 }}>{project.projectCode}</span>
-                <span className={`pd-badge ${project.status === 'LIVE' ? 'live' : project.status === 'DRAFT' ? 'draft' : ''}`} style={{ margin: 0, padding: '2px 8px', fontSize: '11px' }}>{project.status}</span>
+                <span className={`pd-badge ${getStatusBadgeClass(project.status)}`} style={{ margin: 0, padding: '2px 8px', fontSize: '11px' }}>{project.status}</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '16px', fontSize: '13px', color: '#64748b' }}>
-                <span>Priority: <strong style={{ color: project.priority === 'HIGH' ? '#ef4444' : '#f59e0b' }}>{project.priority}</strong></span>
+                {isClosed ? (
+                  <span>Schedule: <strong style={{ color: leadLag.color }}>{leadLag.label}</strong></span>
+                ) : (
+                  <span>Priority: <strong style={{ color: dynamicPriorityInfo.color }}>{dynamicPriorityInfo.priority}</strong></span>
+                )}
               </div>
             </div>
           )}

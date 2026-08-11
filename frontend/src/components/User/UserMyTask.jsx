@@ -57,10 +57,20 @@ const UserMyTask = ({ selectedProject, userTasks = [] }) => {
     const statusVal = (t.taskSts || t.tasksts || "").toUpperCase();
     const subSts = (t.subStatus || t.substatus || "").toUpperCase();
     const isRework = subSts === 'REWORK' || statusVal === 'REWORK';
-    const progressVal = (statusVal === 'COMPLETED' || statusVal === 'CLOSED') ? 100 : (statusVal === 'WIP' || isRework) ? 50 : (statusVal === 'SUBMIT_REVIEW' || statusVal === 'UNDER_REVIEW') ? 80 : 0;
-    
+    const rawEnd = t.endDt || t.enddt;
+    let isTaskOverdue = false;
+    if (statusVal !== 'COMPLETED' && statusVal !== 'CLOSED' && rawEnd && rawEnd !== 'N/A') {
+      const d = new Date(rawEnd);
+      if (!isNaN(d.getTime())) {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        if (d < today) isTaskOverdue = true;
+      }
+    }
+
     let displayStatus = "Not Started";
     if (statusVal === 'COMPLETED' || statusVal === 'CLOSED') displayStatus = "Closed";
+    else if (isTaskOverdue) displayStatus = "Overdue";
     else if (statusVal === 'WIP' || isRework) displayStatus = "In Progress";
     else if (statusVal === 'SUBMIT_REVIEW' || statusVal === 'UNDER_REVIEW') displayStatus = "In Progress";
     else if (statusVal === 'OPEN') displayStatus = "Pending";
@@ -73,7 +83,8 @@ const UserMyTask = ({ selectedProject, userTasks = [] }) => {
       priority: t.priority || "Medium",
       due: formatDateDDMMYYYY(t.endDt || t.enddt || "N/A"),
       status: displayStatus,
-      progress: progressVal
+      progress: progressVal,
+      isOverdue: isTaskOverdue
     };
   });
 
@@ -97,6 +108,7 @@ const UserMyTask = ({ selectedProject, userTasks = [] }) => {
     switch (status) {
       case 'Closed':
       case 'Completed': return 'ut-status-completed';
+      case 'Overdue': return 'ut-status-overdue';
       case 'In Progress': return 'ut-status-inprogress';
       case 'Not Started': return 'ut-status-notstarted';
       case 'Pending': return 'ut-status-pending';

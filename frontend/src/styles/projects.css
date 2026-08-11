@@ -347,6 +347,19 @@ body {
   font-weight: 500;
 }
 
+.proj-priority-badge.critical {
+  background: #fee2e2;
+  color: #dc2626;
+  border: 1px solid #fca5a5;
+}
+
+.proj-priority-badge.atmost-critical {
+  background: #ffe4e6;
+  color: #7f1d1d;
+  border: 1px solid #fda4af;
+  font-weight: 700;
+}
+
 .proj-priority-badge.high {
   background: #fee2e2;
   color: #991b1b;

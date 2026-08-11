@@ -359,6 +359,33 @@ const CompanyCreation = ({ onLogout, userRole }) => {
   const [activeDropdown, setActiveDropdown] = useState(null);
   const [dropdownPos, setDropdownPos] = useState({ top: 0, right: 0 });
 
+  // Scroll handler to reposition dropdown dynamically
+  useEffect(() => {
+    const handleScroll = () => {
+      if (activeDropdown !== null) {
+        const btn = document.getElementById(`action-btn-${activeDropdown}`);
+        if (btn) {
+          const rect = btn.getBoundingClientRect();
+          const spaceBelow = window.innerHeight - rect.bottom;
+          const spaceAbove = rect.top;
+          const dropdownHeight = 220;
+          const isTop = spaceBelow < dropdownHeight && spaceAbove > spaceBelow;
+          setDropdownPos({
+            isTop,
+            top: rect.top,
+            bottom: rect.bottom,
+            right: window.innerWidth - rect.right
+          });
+        }
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll, true);
+    return () => {
+      window.removeEventListener('scroll', handleScroll, true);
+    };
+  }, [activeDropdown]);
+
   // Deactivation confirmation modal state
   const [showDeactivateModal, setShowDeactivateModal] = useState(false);
   const [deactivateTargetId, setDeactivateTargetId] = useState(null);
@@ -425,6 +452,7 @@ const CompanyCreation = ({ onLogout, userRole }) => {
       if (!value.trim()) error = "Incorporation Date is required.";
       else {
         const selectedDate = new Date(value);
+        selectedDate.setHours(0, 0, 0, 0);
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         if (selectedDate > today) {
@@ -457,16 +485,16 @@ const CompanyCreation = ({ onLogout, userRole }) => {
       if (!value.trim()) error = "Company Email is required.";
       else if (value.length > 100) error = "Company Email cannot exceed 100 characters.";
       else {
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        const emailRegex = /^[^\s@]+@gmail\.com$/i;
         if (!emailRegex.test(value.trim())) {
-          error = "Please enter a valid Company Email address.";
+          error = "Company Email must be a valid @gmail.com address.";
         }
       }
     } else if (name === "website") {
       if (value.trim()) {
         if (value.length > 100) error = "Cannot exceed 100 characters.";
         else {
-          const urlPattern = /^(https?:\/\/)?([\da-z.-]+)\.([a-z.]{2,6})([/\w .-]*)*\/?$/;
+          const urlPattern = /^(https?:\/\/)?(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)$/i;
           if (!urlPattern.test(value.trim())) {
             error = "Please enter a valid Company Website URL.";
           }
@@ -487,6 +515,7 @@ const CompanyCreation = ({ onLogout, userRole }) => {
 
     if (name === "incorporationDate" && value) {
       const selectedDate = new Date(value);
+      selectedDate.setHours(0, 0, 0, 0);
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       if (selectedDate > today) {
@@ -958,10 +987,11 @@ const CompanyCreation = ({ onLogout, userRole }) => {
 
     if (tableSearchQuery) {
       const q = tableSearchQuery.toLowerCase();
-      sortable = sortable.filter(company => 
-        (company.coyNm && company.coyNm.toLowerCase().includes(q)) ||
-        (company.coyCd && company.coyCd.toLowerCase().includes(q))
-      );
+      sortable = sortable.filter(company => {
+        const code = (company.coyCd || company.companyCode || "").toLowerCase();
+        const name = (company.coyNm || company.companyName || "").toLowerCase();
+        return code.includes(q) || name.includes(q);
+      });
     }
 
     if (sortConfig.key !== null) {
@@ -2084,6 +2114,7 @@ const CompanyCreation = ({ onLogout, userRole }) => {
                             </td>
                             <td style={{ position: "relative", padding: '14px 20px', textAlign: 'center' }}>
                               <button
+                                id={`action-btn-${company.coyId}`}
                                 type="button"
                                 style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', padding: '4px 8px', borderRadius: '4px' }}
                                 onClick={(e) => toggleDropdown(company.coyId, e)}
@@ -2096,7 +2127,7 @@ const CompanyCreation = ({ onLogout, userRole }) => {
                                 {activeDropdown === company.coyId && (
                                   <>
                                     <div className="cc-actions-dropdown-backdrop" onClick={() => setActiveDropdown(null)} style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 90 }} />
-                                    <div className="cc-actions-dropdown-menu" style={{ position: 'fixed', right: `${dropdownPos.right}px`, top: dropdownPos.isTop ? 'auto' : `${dropdownPos.bottom}px`, bottom: dropdownPos.isTop ? `${window.innerHeight - dropdownPos.top}px` : 'auto', backgroundColor: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', zIndex: 9999, display: 'flex', flexDirection: 'column', padding: '4px 0', minWidth: '140px' }}>
+                                    <div className="cc-actions-dropdown-menu" style={{ position: 'fixed', right: `${dropdownPos.right}px`, top: dropdownPos.isTop ? 'auto' : `${dropdownPos.bottom}px`, bottom: dropdownPos.isTop ? `${window.innerHeight - dropdownPos.top}px` : 'auto', backgroundColor: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', zIndex: 99, display: 'flex', flexDirection: 'column', padding: '4px 0', minWidth: '140px' }}>
                                       <button
                                       type="button"
                                       style={{ padding: '10px 16px', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', color: '#334155', borderRadius: '4px', margin: '2px 4px' }}
@@ -2273,4 +2304,3 @@ const CompanyCreation = ({ onLogout, userRole }) => {
 };
 
 export default CompanyCreation;
-

@@ -133,6 +133,33 @@ const DepartmentMapping = ({ onLogout, userRole }) => {
   const [editingId, setEditingId] = useState(null);
   const [activeDropdown, setActiveDropdown] = useState(null);
   const [dropdownPos, setDropdownPos] = useState({ top: 0, right: 0 });
+
+  // Scroll handler to reposition dropdown dynamically
+  useEffect(() => {
+    const handleScroll = () => {
+      if (activeDropdown !== null) {
+        const btn = document.getElementById(`action-btn-${activeDropdown}`);
+        if (btn) {
+          const rect = btn.getBoundingClientRect();
+          const spaceBelow = window.innerHeight - rect.bottom;
+          const spaceAbove = rect.top;
+          const dropdownHeight = 250;
+          const isTop = spaceBelow < dropdownHeight && spaceAbove > spaceBelow;
+          setDropdownPos({
+            isTop,
+            top: rect.top,
+            bottom: rect.bottom,
+            right: window.innerWidth - rect.right
+          });
+        }
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll, true);
+    return () => {
+      window.removeEventListener('scroll', handleScroll, true);
+    };
+  }, [activeDropdown]);
   const [tableSearchQuery, setTableSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [loading, setLoading] = useState(true);
@@ -728,10 +755,10 @@ const DepartmentMapping = ({ onLogout, userRole }) => {
                   <thead style={{ backgroundColor: "#f8fafc", borderBottom: "2px solid #e2e8f0" }}>
                     <tr>
                       <th style={{ width: "50px", padding: "14px 20px", fontSize: "11px", color: "#64748b", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.5px" }}>S.NO</th>
+                      <th style={{ padding: "14px 20px", fontSize: "11px", color: "#64748b", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.5px" }}>Department Code</th>
                       <th style={{ padding: "14px 20px", fontSize: "11px", color: "#64748b", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.5px" }}>Company</th>
                       <th style={{ padding: "14px 20px", fontSize: "11px", color: "#64748b", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.5px" }}>Plant</th>
                       <th style={{ padding: "14px 20px", fontSize: "11px", color: "#64748b", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.5px" }}>Department</th>
-                      <th style={{ padding: "14px 20px", fontSize: "11px", color: "#64748b", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.5px" }}>Department Code</th>
                       <th style={{ padding: "14px 20px", fontSize: "11px", color: "#64748b", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.5px" }}>Status</th>
                       <th style={{ textAlign: "center", width: "100px", padding: "14px 20px", fontSize: "11px", color: "#64748b", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.5px" }}>Actions</th>
                     </tr>
@@ -741,14 +768,14 @@ const DepartmentMapping = ({ onLogout, userRole }) => {
                       currentItems.map((item, idx) => (
                         <tr key={item.mapId || idx} style={{ borderBottom: "1px solid #f1f5f9" }}>
                           <td style={{ padding: "14px 20px", fontSize: "14px", color: "#334155" }}>{indexOfFirstRecord + idx + 1}</td>
-                          <td style={{ padding: "14px 20px", fontSize: "14px", color: "#334155" }}><strong>{getCompanyName(item.coyId)}</strong></td>
-                          <td style={{ padding: "14px 20px", fontSize: "14px", color: "#334155" }}>{getPlantName(item.pltId)}</td>
-                          <td style={{ padding: "14px 20px", fontSize: "14px", color: "#334155" }}>{getDeptName(item.deptId)}</td>
                           <td style={{ padding: "14px 20px", fontSize: "14px", color: "#334155" }}>
                             <span style={{ backgroundColor: "#f1f5f9", padding: "4px 10px", borderRadius: "4px", fontWeight: "600", color: "#0f172a", border: "1px solid #e2e8f0", fontSize: "13px" }}>
                               {getDeptCode(item.deptId)}
                             </span>
                           </td>
+                          <td style={{ padding: "14px 20px", fontSize: "14px", color: "#334155" }}><strong>{getCompanyName(item.coyId)}</strong></td>
+                          <td style={{ padding: "14px 20px", fontSize: "14px", color: "#334155" }}>{getPlantName(item.pltId)}</td>
+                          <td style={{ padding: "14px 20px", fontSize: "14px", color: "#334155" }}>{getDeptName(item.deptId)}</td>
                           <td style={{ padding: "14px 20px", fontSize: "14px", color: "#334155" }}>
                             <span style={{ padding: "4px 12px", borderRadius: "12px", fontSize: "12px", fontWeight: "600", display: "inline-block", backgroundColor: item.sts === true ? "#dcfce7" : "#fee2e2", color: item.sts === true ? "#166534" : "#991b1b" }}>
                               {item.sts === true ? "Active" : "Inactive"}
@@ -756,6 +783,7 @@ const DepartmentMapping = ({ onLogout, userRole }) => {
                           </td>
                           <td style={{ position: "relative", padding: "14px 20px", textAlign: "center" }}>
                             <button
+                              id={`action-btn-${item.mapId}`}
                               type="button"
                               style={{ background: "none", border: "none", cursor: "pointer", color: "#64748b", padding: "4px 8px", borderRadius: "4px" }}
                               onClick={(e) => toggleDropdown(e, item.mapId)}
@@ -766,7 +794,7 @@ const DepartmentMapping = ({ onLogout, userRole }) => {
                             {activeDropdown === item.mapId && (
                               <>
                                 <div className="cc-actions-dropdown-backdrop" onClick={() => setActiveDropdown(null)} style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 90 }} />
-                                <div className="cc-actions-dropdown-menu" style={{ position: 'fixed', right: `${dropdownPos.right}px`, top: dropdownPos.isTop ? 'auto' : `${dropdownPos.bottom}px`, bottom: dropdownPos.isTop ? `${window.innerHeight - dropdownPos.top}px` : 'auto', backgroundColor: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', zIndex: 9999, display: 'flex', flexDirection: 'column', padding: '4px 0', minWidth: '140px' }}>
+                                <div className="cc-actions-dropdown-menu" style={{ position: 'fixed', right: `${dropdownPos.right}px`, top: dropdownPos.isTop ? 'auto' : `${dropdownPos.bottom}px`, bottom: dropdownPos.isTop ? `${window.innerHeight - dropdownPos.top}px` : 'auto', backgroundColor: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', zIndex: 99, display: 'flex', flexDirection: 'column', padding: '4px 0', minWidth: '140px' }}>
                                   <button
                                     type="button"
                                     style={{ padding: "10px 16px", textAlign: "left", background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: "10px", fontSize: "14px", color: "#334155", borderRadius: "4px", margin: "2px 4px" }}

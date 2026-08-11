@@ -349,9 +349,12 @@ body.sidebar-collapsed .pl-shell {
   text-align: center;
 }
 
-.pl-badge.high { background: #fee2e2; color: #ef4444; }
-.pl-badge.medium { background: #ffedd5; color: #f97316; }
-.pl-badge.low { background: #dcfce7; color: #22c55e; }
+.pl-badge.atmost-critical { background: #ffe4e6; color: #7f1d1d; border: 1px solid #fda4af; font-weight: 700; }
+.pl-badge.critical { background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; font-weight: 700; }
+.pl-badge.high { background: #ffedd5; color: #ea580c; }
+.pl-badge.medium { background: #fef3c7; color: #d97706; }
+.pl-badge.normal { background: #dbeafe; color: #2563eb; }
+.pl-badge.low { background: #dcfce7; color: #16a34a; }
 
 .pl-badge.live { background: #dcfce7; color: #16a34a; }
 .pl-badge.draft { background: #f1f5f9; color: #475569; }

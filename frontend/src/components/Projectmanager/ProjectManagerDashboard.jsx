@@ -1342,13 +1342,7 @@ const ProjectManagerDashboard = ({ userRole, onLogout }) => {
                         <td className="pm-text-muted">{row.project}</td>
                         <td className="pm-text-muted">{row.date}</td>
                         <td>
-                          <span className={`pm-badge ${
-                            String(row.status || "").trim().toUpperCase() === "LIVE" || String(row.status || "").trim().toUpperCase() === "COMPLETED"
-                              ? "pm-badge-green"
-                              : String(row.status || "").trim().toUpperCase() === "IN PROGRESS" || String(row.status || "").trim().toUpperCase() === "WIP"
-                              ? "pm-badge-blue"
-                              : "pm-badge-orange"
-                          }`}>
+                          <span className={`pm-badge ${row.status === "In Progress" ? "pm-badge-blue" : "pm-badge-orange"}`}>
                             {row.status}
                           </span>
                         </td>
