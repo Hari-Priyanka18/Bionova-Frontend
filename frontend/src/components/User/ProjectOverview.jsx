@@ -8,9 +8,44 @@ const getAuthHeaders = () => ({
   "Authorization": `Bearer ${sessionStorage.getItem("authToken") || ""}`
 });
 
+const formatDateDDMMYYYY = (val) => {
+  if (!val || val === 'N/A' || val === '—') return 'N/A';
+  
+  if (Array.isArray(val) && val.length >= 3) {
+    const yyyy = String(val[0]);
+    const mm = String(val[1]).padStart(2, '0');
+    const dd = String(val[2]).padStart(2, '0');
+    return `${dd}/${mm}/${yyyy}`;
+  }
+
+  const str = String(val).trim();
+  if (!str) return 'N/A';
+
+  if (/^\d{2}[\/\-]\d{2}[\/\-]\d{4}$/.test(str)) {
+    return str.replace(/-/g, '/');
+  }
+
+  if (/^\d{4}[\/\-]\d{2}[\/\-]\d{2}/.test(str)) {
+    const datePart = str.split('T')[0].split(' ')[0];
+    const parts = datePart.split(/[\/\-]/);
+    if (parts.length === 3) {
+      return `${parts[2].padStart(2, '0')}/${parts[1].padStart(2, '0')}/${parts[0]}`;
+    }
+  }
+
+  const d = new Date(val);
+  if (isNaN(d.getTime())) return str;
+
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const year = d.getFullYear();
+  return `${day}/${month}/${year}`;
+};
+
 const ProjectOverview = ({ project }) => {
   const [milestones, setMilestones] = useState([]);
   const [tasks, setTasks] = useState([]);
+  const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -101,13 +136,18 @@ const ProjectOverview = ({ project }) => {
             else if (statusUpper === 'IN_PROGRESS' || statusUpper === 'WIP' || statusUpper === 'LIVE') progressPct = 50;
           }
 
+          const rawStart = m.stDt || m.st_dt || m.tentStDt || m.tent_st_dt;
+          const rawEnd = m.endDt || m.end_dt || m.tentEndDt || m.tent_end_dt;
+
           return {
             id: mId,
             code: m.mlstnCd || m.mlstn_cd || m.mlstmCd || m.mlstm_cd || `ML-${String(idx + 1).padStart(3, '0')}`,
             title: m.mlstnTtl || m.mlstn_ttl || m.mlstmTtl || m.mlstm_ttl || 'N/A',
             duration: m.mlstnDays || m.mlstn_days || m.mlstmDays || m.mlstm_days || 0,
-            start: m.stDt || m.st_dt || m.tentStDt || m.tent_st_dt || 'N/A',
-            end: m.endDt || m.end_dt || m.tentEndDt || m.tent_end_dt || 'N/A',
+            start: formatDateDDMMYYYY(rawStart),
+            end: formatDateDDMMYYYY(rawEnd),
+            rawStart,
+            rawEnd,
             status: (m.mlstnSts || m.mlstn_sts || m.mlstmSts || m.mlstm_sts || 'DRAFT').toUpperCase().replace(/_/g, ' '),
             progress: progressPct
           };
@@ -132,14 +172,19 @@ const ProjectOverview = ({ project }) => {
 
           const displayStatus = isTaskDone(t) ? 'CLOSED' : (rawSts.replace(/_/g, ' ') || 'DRAFT');
 
+          const rawStart = t.stDt || t.st_dt || t.tentStDt || t.tent_st_dt;
+          const rawEnd = t.endDt || t.end_dt || t.tentEndDt || t.tent_end_dt;
+
           return {
             rawTask: t,
+            rawStart,
+            rawEnd,
             code: t.taskCd || t.task_cd || `TSK-${String(idx + 1).padStart(3, '0')}`,
             name: t.taskNm || t.task_nm || 'N/A',
             milestone: milestoneCode,
             assignee: assigneeName,
-            start: t.stDt || t.st_dt || t.tentStDt || t.tent_st_dt || 'N/A',
-            end: t.endDt || t.end_dt || t.tentEndDt || t.tent_end_dt || 'N/A',
+            start: formatDateDDMMYYYY(rawStart),
+            end: formatDateDDMMYYYY(rawEnd),
             status: displayStatus,
             progress: progressPct
           };
@@ -198,9 +243,10 @@ const ProjectOverview = ({ project }) => {
 
   const overdueTasks = tasks.filter(t => {
     if (t.status === 'COMPLETED' || t.status === 'CLOSED') return false;
-    if (!t.end || t.end === 'N/A') return false;
-    const endD = new Date(t.end);
-    return endD < today;
+    const endDateVal = t.rawEnd || t.end;
+    if (!endDateVal || endDateVal === 'N/A') return false;
+    const endD = new Date(endDateVal);
+    return !isNaN(endD.getTime()) && endD < today;
   }).length;
 
   const stats = [
@@ -211,8 +257,6 @@ const ProjectOverview = ({ project }) => {
     { label: "Overdue Tasks", value: String(overdueTasks), subtitle: totalTasks > 0 ? `${((overdueTasks / totalTasks) * 100).toFixed(1)}%` : "0.0%", icon: <AlertTriangle size={20} color="#14b8a6" />, bg: "rgba(20, 184, 166, 0.1)" },
     { label: "Closed Tasks", value: String(completedTasks), subtitle: totalTasks > 0 ? `${((completedTasks / totalTasks) * 100).toFixed(1)}%` : "0.0%", icon: <CheckCircle size={20} color="#10b981" />, bg: "rgba(16, 185, 129, 0.1)" },
   ];
-
-  const [employees, setEmployees] = useState([]);
 
   const teamMemberPerformance = () => {
     if (!tasks || tasks.length === 0) return [];
@@ -249,7 +293,8 @@ const ProjectOverview = ({ project }) => {
       if (s === "COMPLETED" || s === "CLOSED" || s === "DONE") {
         empMap[empName].done += 1;
       } else {
-        if (t.end && new Date(t.end).setHours(23, 59, 59, 999) < nowMs) {
+        const endDateVal = t.rawEnd || t.end;
+        if (endDateVal && endDateVal !== 'N/A' && !isNaN(new Date(endDateVal).getTime()) && new Date(endDateVal).setHours(23, 59, 59, 999) < nowMs) {
           empMap[empName].overdue += 1;
         } else {
           empMap[empName].onTime += 1;

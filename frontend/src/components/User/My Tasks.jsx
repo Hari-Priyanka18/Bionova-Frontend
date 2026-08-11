@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useParams } from "react-router-dom";
 import Sidebar from "../Sidebar";
 import Header from "../Header";
 import AlertModal from "../AlertModal";
@@ -35,7 +35,6 @@ import {
   Clock as ClockIcon,
   AlertTriangle,
   ArrowLeft,
-  UserCheck,
   UserX,
   UserPlus,
   Briefcase,
@@ -54,14 +53,14 @@ const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "";
 // CONSTANTS - COLORS & STATUS
 // ============================================
 
-const ReassignIcon = ({ size = 16, color = "#4F46E5", className = "", style = {} }) => (
+const ReassignIcon = ({ size = 16, color = "#4F46E5", className = "", style = {}, strokeWidth = 2.5 }) => (
   <svg
     width={size}
     height={size}
     viewBox="0 0 24 24"
     fill="none"
     stroke={color}
-    strokeWidth="2.5"
+    strokeWidth={strokeWidth}
     strokeLinecap="round"
     strokeLinejoin="round"
     className={className}
@@ -248,10 +247,11 @@ const formatDate = (dateStr) => {
 // ACTION BUTTON - DYNAMIC BASED ON PROGRESS, PROCESS, PRIORITY, TIME
 // ============================================
 
-const getActionButton = (task, currentUserEmpId) => {
+const getActionButton = (task, currentUserEmpId, isExternal = false) => {
   if (!task) return { label: "View", action: "view", variant: "secondary" };
 
   const rawTask = task.rawTask || task;
+  const isExternalTask = isExternal || task.isExternal || rawTask.isExternal;
 
   // Get user roles
   const executorId = rawTask.empId || rawTask.assignedTo || rawTask.executorId || rawTask.doerId;
@@ -259,9 +259,9 @@ const getActionButton = (task, currentUserEmpId) => {
   const approverId = rawTask.approverId || rawTask.approver || rawTask.approverEmpId;
 
   const isTeamMember = (Array.isArray(rawTask?.teamMembers) && rawTask.teamMembers.some(tm => String(tm.empId) === String(currentUserEmpId))) || (Array.isArray(task?.teamMembers) && task.teamMembers.some(tm => String(tm.empId) === String(currentUserEmpId)));
-  const isDoer = String(executorId) === String(currentUserEmpId) || isTeamMember;
-  const isReviewer = String(reviewerId) === String(currentUserEmpId);
-  const isApprover = String(approverId) === String(currentUserEmpId);
+  const isDoer = isExternalTask || String(executorId) === String(currentUserEmpId) || isTeamMember;
+  const isReviewer = !isExternalTask && String(reviewerId) === String(currentUserEmpId);
+  const isApprover = !isExternalTask && String(approverId) === String(currentUserEmpId);
 
   // Get progress (status)
   const progress = (rawTask.taskSts || rawTask.status || rawTask.taskStatus || task.status || "OPEN").toUpperCase();
@@ -434,6 +434,17 @@ const getPriorityBadge = (priority) => {
 // ============================================
 const MyTasks = ({ userRole, onLogout }) => {
   const screenPerm = getScreenPermission('MY_TASK');
+  const { token: routeToken } = useParams();
+  const location = useLocation();
+  const queryToken = new URLSearchParams(location.search).get("token");
+  const externalToken = routeToken || queryToken;
+  const isExternalMode = !!externalToken;
+
+  const [isExpired, setIsExpired] = useState(false);
+  const [expiredReason, setExpiredReason] = useState(null);
+  const [expiredMessage, setExpiredMessage] = useState(null);
+  const [isExternalProfileHovered, setIsExternalProfileHovered] = useState(false);
+
   const [tasks, setTasks] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [currentUserEmpId, setCurrentUserEmpId] = useState(null);
@@ -453,7 +464,12 @@ const MyTasks = ({ userRole, onLogout }) => {
   const [processHistory, setProcessHistory] = useState([]);
   const [showDenyForm, setShowDenyForm] = useState(false);
   const [isRaiseRequest, setIsRaiseRequest] = useState(false);
-  const [denyData, setDenyData] = useState({ type: "", reason: "", milestone: "", deliverable: "", impact: "Medium", attachments: [] });
+  const [denyData, setDenyData] = useState({ type: "", reason: "", milestone: "", deliverable: "", targetTaskId: "", targetEmpId: "", impact: "Medium", attachments: [] });
+  const [reworkMilestones, setReworkMilestones] = useState([]);
+  const [reworkTasks, setReworkTasks] = useState([]);
+  const [reworkProjectTasks, setReworkProjectTasks] = useState([]);
+  const [loadingReworkMilestones, setLoadingReworkMilestones] = useState(false);
+  const [loadingReworkTasks, setLoadingReworkTasks] = useState(false);
 
   const [allProjectTasks, setAllProjectTasks] = useState([]);
   const [taskTeamMembers, setTaskTeamMembers] = useState([]);
@@ -461,6 +477,96 @@ const MyTasks = ({ userRole, onLogout }) => {
   const [selectedNewMember, setSelectedNewMember] = useState("");
   const [loadingTeamMembers, setLoadingTeamMembers] = useState(false);
   const [teamMemberError, setTeamMemberError] = useState("");
+
+  const fetchExternalTask = async () => {
+    try {
+      setIsLoading(true);
+      setApiError(null);
+      const res = await fetch(`${apiBaseUrl}/api/external-tasks/${externalToken}`);
+      const data = await res.json();
+
+      if (res.status === 410 || data.isExpired) {
+        setIsExpired(true);
+        setExpiredReason(data.expiredReason || "EXPIRED");
+        setExpiredMessage(data.message || "This task access link has expired.");
+        const taskObj = data.task || data;
+        setSelectedTask({
+          id: taskObj.taskCd || `TSK-${taskObj.taskId}`,
+          taskCode: taskObj.taskCd || `TSK-${taskObj.taskId}`,
+          taskId: taskObj.taskId,
+          title: taskObj.taskNm,
+          dueDate: taskObj.endDt,
+          project: taskObj.prjNm || "Project",
+          milestone: taskObj.mlstnTtl || "—",
+          rawTask: taskObj
+        });
+        setShowDetailView(true);
+      } else if (!res.ok) {
+        setApiError(data.message || "Unable to load task details.");
+      } else {
+        const taskObj = {
+          id: data.taskCd || `TSK-${data.taskId}`,
+          taskCode: data.taskCd || `TSK-${data.taskId}`,
+          taskId: data.taskId,
+          title: data.taskNm,
+          description: data.taskDesc,
+          status: data.taskSts || "OPEN",
+          rawStatus: data.taskSts || "OPEN",
+          priority: data.priority || "Normal",
+          dueDate: data.endDt,
+          stDt: data.stDt,
+          endDt: data.endDt,
+          progress: data.taskSts === "COMPLETED" || data.taskSts === "CLOSED" ? 100 : (data.checklists?.length ? Math.round((data.checklists.filter(c => c.chkSts).length / data.checklists.length) * 100) : 0),
+          project: data.prjNm || "Assignment",
+          projectId: data.prjId,
+          milestone: data.mlstnTtl || "—",
+          milestoneId: data.mId,
+          rawTask: {
+            ...data,
+            empId: data.extEmpId,
+            assignedTo: data.extEmpId,
+            extEmpNm: data.extEmpNm,
+            companyNm: data.companyNm,
+            taskSts: data.taskSts,
+            priority: data.priority,
+            stDt: data.stDt,
+            endDt: data.endDt,
+            taskDesc: data.taskDesc,
+            addlRem: data.addlRem,
+            isExternal: true,
+            prcsYesActn: "NONE"
+          },
+          isExternal: true
+        };
+
+        const chks = (data.checklists || []).map(c => ({
+          id: c.chkId,
+          text: (c.chkCd ? `[${c.chkCd}] ` : "") + (c.chkNm || c.chkDesc || ""),
+          completed: !!c.chkSts
+        }));
+
+        const atts = (data.attachments || []).map(a => ({
+          fileId: a.fileId,
+          fileNm: a.fileNm,
+          fileName: a.fileNm,
+          atPath: a.atPath,
+          url: a.atPath
+        }));
+
+        setSelectedTask(taskObj);
+        setShowDetailView(true);
+        setUpdateChecklist(chks);
+        setTaskAttachments(atts);
+        setUpdateRemarks(data.addlRem || "");
+        setUpdateProgressVal(taskObj.progress);
+      }
+    } catch (e) {
+      console.error("Failed to fetch external task", e);
+      setApiError("Network error while connecting to server.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // Ref for deny form — used to auto-scroll when Denied is clicked
   const denyFormRef = useRef(null);
@@ -471,6 +577,176 @@ const MyTasks = ({ userRole, onLogout }) => {
       }, 80);
     }
   }, [showDenyForm]);
+
+  // Load project-specific milestones & all project tasks when showDenyForm is opened
+  useEffect(() => {
+    if (!showDenyForm || !selectedTask) {
+      setReworkMilestones([]);
+      setReworkTasks([]);
+      setReworkProjectTasks([]);
+      return;
+    }
+
+    const loadProjectMilestones = async () => {
+      const rawT = selectedTask.rawTask || selectedTask || {};
+      let projId = rawT.prjId || rawT.projectId || rawT.prj_id || selectedTask.projectId || selectedTask.prjId;
+      const mId = rawT.mId || rawT.mid || rawT.milestoneId || selectedTask.milestoneId;
+
+      if (!projId && mId && Array.isArray(milestonesList)) {
+        const foundM = milestonesList.find(m => String(m.mId || m.id || m.mid || "") === String(mId));
+        if (foundM) projId = foundM.prjId || foundM.projectId || foundM.prj_id;
+      }
+
+      if (!projId) return;
+
+      try {
+        setLoadingReworkMilestones(true);
+        const [milesRes, tasksRes] = await Promise.allSettled([
+          apiGet(`/api/milestone-live/by-project/${projId}`),
+          apiGet(`/api/task-live/by-project/${projId}`)
+        ]);
+
+        let pMiles = milesRes.status === 'fulfilled' && Array.isArray(milesRes.value) ? milesRes.value : [];
+        if (pMiles.length === 0 && Array.isArray(milestonesList)) {
+          pMiles = milestonesList.filter(m => String(m.prjId || m.projectId || m.prj_id) === String(projId));
+        }
+
+        let pTasks = tasksRes.status === 'fulfilled' && Array.isArray(tasksRes.value) ? tasksRes.value : [];
+        setReworkProjectTasks(pTasks);
+
+        pMiles.sort((a, b) => {
+          const cdA = String(a.mlstnCd || a.code || a.id || "").trim();
+          const cdB = String(b.mlstnCd || b.code || b.id || "").trim();
+          if (cdA && cdB) {
+            const cmp = cdA.localeCompare(cdB, undefined, { numeric: true, sensitivity: 'base' });
+            if (cmp !== 0) return cmp;
+          }
+          if (a.stDt && b.stDt) {
+            const cmp = String(a.stDt).localeCompare(String(b.stDt));
+            if (cmp !== 0) return cmp;
+          }
+          return Number(a.mId || a.mid || a.id || 0) - Number(b.mId || b.mid || b.id || 0);
+        });
+
+        setReworkMilestones(pMiles);
+
+        // Find available previous milestones for current task
+        const mCode = String(rawT.mlstnCd || selectedTask?.mlstnCd || "").toUpperCase().trim();
+        const mCodeMatch = mCode.match(/MLS-0*([0-9]+)/i);
+        const extractedMNum = mCodeMatch ? parseInt(mCodeMatch[1], 10) : 0;
+
+        let curIndex = pMiles.findIndex(m => {
+          const id = String(m.mId || m.mid || m.id || m.drftMId || "").trim();
+          const cd = String(m.mlstnCd || "").trim().toUpperCase();
+          if (mId && id && String(mId) === id) return true;
+          if (mCode && cd && mCode === cd) return true;
+          return false;
+        });
+
+        const curNum = extractedMNum > 0 ? extractedMNum : (curIndex >= 0 ? curIndex + 1 : 1);
+        let prevMiles = [];
+        if (curIndex > 0) {
+          prevMiles = pMiles.slice(0, curIndex);
+        } else {
+          prevMiles = pMiles.filter(m => {
+            const cd = String(m.mlstnCd || "").toUpperCase().trim();
+            const match = cd.match(/MLS-0*([0-9]+)/i);
+            const num = match ? parseInt(match[1], 10) : 0;
+            return num > 0 && num < curNum;
+          });
+        }
+        if (prevMiles.length === 0 && pMiles.length > 0) {
+          prevMiles = pMiles.filter(m => String(m.mlstnCd || "").toUpperCase().trim() !== mCode);
+        }
+
+        // Auto-select the first previous milestone and immediately load its tasks
+        if (prevMiles.length > 0) {
+          const firstTargetM = prevMiles[0];
+          const targetMId = String(firstTargetM.mId || firstTargetM.mid || firstTargetM.id || firstTargetM.drftMId || "");
+          setDenyData(prev => ({
+            ...prev,
+            type: "REWORK",
+            milestone: targetMId,
+            deliverable: "",
+            targetTaskId: "",
+            targetEmpId: ""
+          }));
+
+          // Filter tasks belonging to target milestone
+          const targetMTasks = pTasks.filter(t => {
+            const r = t.rawTask || t;
+            const tmId = String(r.mId || r.mid || r.milestoneId || t.milestoneId || r.drftMId || "").trim();
+            if (tmId === targetMId) return true;
+            if (firstTargetM.drftMId && String(firstTargetM.drftMId) === tmId) return true;
+            const tCd = String(r.mlstnCd || t.mlstnCd || "").toUpperCase().trim();
+            const mCd = String(firstTargetM.mlstnCd || "").toUpperCase().trim();
+            if (mCd && tCd && mCd === tCd) return true;
+            return false;
+          });
+
+          if (targetMTasks.length > 0) {
+            setReworkTasks(targetMTasks);
+          } else {
+            try {
+              setLoadingReworkTasks(true);
+              const tasksRes = await apiGet(`/api/task-live/by-milestone/${targetMId}`);
+              if (Array.isArray(tasksRes) && tasksRes.length > 0) {
+                setReworkTasks(tasksRes);
+              }
+            } catch (tErr) {
+              console.error("Failed to load target milestone tasks", tErr);
+            } finally {
+              setLoadingReworkTasks(false);
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load project milestones for rework", err);
+      } finally {
+        setLoadingReworkMilestones(false);
+      }
+    };
+
+    loadProjectMilestones();
+  }, [showDenyForm, selectedTask?.id, selectedTask?.taskId]);
+
+  // Load tasks dynamically when a target milestone is changed in deny form
+  useEffect(() => {
+    if (!denyData.milestone) {
+      setReworkTasks([]);
+      return;
+    }
+
+    // If already loaded in reworkProjectTasks, pick from there
+    if (reworkProjectTasks && reworkProjectTasks.length > 0) {
+      const selMidStr = String(denyData.milestone).trim();
+      const filtered = reworkProjectTasks.filter(t => {
+        const r = t.rawTask || t;
+        const tmId = String(r.mId || r.mid || r.milestoneId || t.milestoneId || r.drftMId || "").trim();
+        return tmId === selMidStr;
+      });
+      if (filtered.length > 0) {
+        setReworkTasks(filtered);
+        return;
+      }
+    }
+
+    const loadMilestoneTasks = async () => {
+      try {
+        setLoadingReworkTasks(true);
+        const res = await apiGet(`/api/task-live/by-milestone/${denyData.milestone}`);
+        const mTasks = Array.isArray(res) ? res : [];
+        setReworkTasks(mTasks);
+      } catch (err) {
+        console.error("Failed to load tasks for rework milestone", err);
+        setReworkTasks([]);
+      } finally {
+        setLoadingReworkTasks(false);
+      }
+    };
+
+    loadMilestoneTasks();
+  }, [denyData.milestone]);
 
   // ============================================
   // FETCH TASKS
@@ -916,13 +1192,23 @@ const MyTasks = ({ userRole, onLogout }) => {
       } catch (e) { }
     }
 
+    const mlstnCode = milestoneObj?.mlstnCd || t.mlstnCd || "";
+    const prjIdVal = targetPrjId || t.prjId;
+    const mIdVal = targetMId || t.mId;
+
     return {
       id: taskCodeFormatted,
       taskCode: taskCodeFormatted,
       taskId: t.taskId || t.task_id || t.id,
       title: t.taskNm || t.taskName || t.name || "Untitled Task",
       project: projectName,
+      projectId: prjIdVal,
+      prjId: prjIdVal,
       milestone: milestoneName,
+      milestoneId: mIdVal,
+      mId: mIdVal,
+      mlstnCd: mlstnCode,
+      mlstnTtl: milestoneName,
       priority: calculatedPriority,
       dueDate: endDt ? endDt.split('T')[0] : "",
       status: status,
@@ -930,6 +1216,12 @@ const MyTasks = ({ userRole, onLogout }) => {
       rawStatus: taskSts,
       rawTask: {
         ...t,
+        projectId: prjIdVal,
+        prjId: prjIdVal,
+        milestoneId: mIdVal,
+        mId: mIdVal,
+        mlstnCd: mlstnCode,
+        mlstnTtl: milestoneName,
         empId: t.empId || t.assignedTo || t.executorId,
         assignedBy: t.assignedBy || t.assigned_by || t.createdBy || t.creBy,
         assignedByName: t.assignedByNm || t.assignedByName || t.createdByName,
@@ -1017,8 +1309,12 @@ const MyTasks = ({ userRole, onLogout }) => {
   };
 
   useEffect(() => {
-    fetchTasks();
-  }, []);
+    if (isExternalMode) {
+      fetchExternalTask();
+    } else {
+      fetchTasks();
+    }
+  }, [externalToken]);
 
   // ============================================
   // SIDEBAR COLLAPSE LISTENER
@@ -1053,7 +1349,6 @@ const MyTasks = ({ userRole, onLogout }) => {
   const [selectedProject, setSelectedProject] = useState("All Projects");
   const [selectedMilestone, setSelectedMilestone] = useState("All Milestones");
   const [selectedPriority, setSelectedPriority] = useState("All Priorities");
-  const location = useLocation();
   const [selectedStatus, setSelectedStatus] = useState(location.state?.selectedStatus || "To Do");
 
   useEffect(() => {
@@ -1144,6 +1439,28 @@ const MyTasks = ({ userRole, onLogout }) => {
 
   const handleStartTask = async (task, skipAlert = false) => {
     if (!task) return task;
+    if (isExternalMode) {
+      try {
+        setLoadingAction(task.id || task.taskId);
+        await fetch(`${apiBaseUrl}/api/external-tasks/${externalToken}/update`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ taskSts: "WIP", remarks: updateRemarks })
+        });
+        setSelectedTask(prev => ({
+          ...prev,
+          status: "WIP",
+          rawStatus: "WIP",
+          rawTask: { ...prev.rawTask, taskSts: "WIP" }
+        }));
+        if (!skipAlert) triggerAlert("success", "Started", "Task moved to Work In Progress.");
+      } catch (e) {
+        console.error("External start error:", e);
+      } finally {
+        setLoadingAction(null);
+      }
+      return task;
+    }
     try {
       setLoadingAction(task.id || task.taskId);
       const taskId = task.taskId || task.id;
@@ -1239,6 +1556,29 @@ const MyTasks = ({ userRole, onLogout }) => {
 
   const handleSubmitReview = async (task) => {
     if (!task) return;
+    if (isExternalMode) {
+      try {
+        setLoadingAction(task.id || task.taskId);
+        await fetch(`${apiBaseUrl}/api/external-tasks/${externalToken}/update`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ taskSts: "SUBMIT_REVIEW", subStatus: "Under Review", remarks: updateRemarks })
+        });
+        setSelectedTask(prev => ({
+          ...prev,
+          status: "UNDER_REVIEW",
+          rawStatus: "UNDER_REVIEW",
+          rawTask: { ...prev.rawTask, taskSts: "UNDER_REVIEW" }
+        }));
+        triggerAlert("success", "Submitted", "Task submitted for review.");
+      } catch (err) {
+        console.error("Error submitting for review:", err);
+        triggerAlert("danger", "Error", "Failed to submit for review.");
+      } finally {
+        setLoadingAction(null);
+      }
+      return;
+    }
     try {
       setLoadingAction(task.id || task.taskId);
       const taskId = task.taskId || task.id;
@@ -1281,6 +1621,29 @@ const MyTasks = ({ userRole, onLogout }) => {
 
   const handleCompleteTask = async (task) => {
     if (!task) return;
+    if (isExternalMode) {
+      try {
+        setLoadingAction(task.id || task.taskId);
+        await fetch(`${apiBaseUrl}/api/external-tasks/${externalToken}/update`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ taskSts: "COMPLETED", remarks: updateRemarks })
+        });
+        setSelectedTask(prev => ({
+          ...prev,
+          status: "COMPLETED",
+          rawStatus: "COMPLETED",
+          rawTask: { ...prev.rawTask, taskSts: "COMPLETED" }
+        }));
+        triggerAlert("success", "Completed", "Task completed successfully.");
+      } catch (err) {
+        console.error("Error completing task:", err);
+        triggerAlert("danger", "Error", "Failed to complete task.");
+      } finally {
+        setLoadingAction(null);
+      }
+      return;
+    }
     try {
       setLoadingAction(task.id || task.taskId);
       const taskId = task.taskId || task.id;
@@ -1546,6 +1909,23 @@ const MyTasks = ({ userRole, onLogout }) => {
 
   const handleSaveProgress = async () => {
     if (!selectedTask) return;
+    if (isExternalMode) {
+      try {
+        setLoadingAction(selectedTask.id || selectedTask.taskId);
+        await fetch(`${apiBaseUrl}/api/external-tasks/${externalToken}/update`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ taskSts: selectedTask.rawStatus || "WIP", remarks: updateRemarks })
+        });
+        triggerAlert("success", "Success", "Task progress updated successfully.");
+      } catch (err) {
+        console.error("Error saving progress:", err);
+        triggerAlert("danger", "Error", "Failed to update task progress.");
+      } finally {
+        setLoadingAction(null);
+      }
+      return;
+    }
     try {
       setLoadingAction(selectedTask.id || selectedTask.taskId);
       const originalTask = selectedTask.rawTask || selectedTask;
@@ -1588,8 +1968,34 @@ const MyTasks = ({ userRole, onLogout }) => {
     }
   };
 
-  const handleToggleChecklist = (id) => {
+  const handleToggleChecklist = async (id) => {
     if (!id) return;
+    if (isExternalMode) {
+      if (isExpired || selectedTask?.rawStatus === "COMPLETED" || selectedTask?.rawStatus === "CLOSED") return;
+      const targetItem = updateChecklist.find(c => c.id === id);
+      const nextCompleted = !targetItem?.completed;
+
+      setUpdateChecklist(prev => {
+        const newList = prev.map(item =>
+          item.id === id ? { ...item, completed: nextCompleted } : item
+        );
+        const progress = computeProgress(newList, selectedTask);
+        setUpdateProgressVal(progress);
+        return newList;
+      });
+
+      try {
+        await fetch(`${apiBaseUrl}/api/external-tasks/${externalToken}/checklist/${id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ chkSts: nextCompleted })
+        });
+      } catch (e) {
+        console.error("Failed to update external checklist item", e);
+      }
+      return;
+    }
+
     if (selectedTask?.status === "WIP" && selectedTask?.rawTask?.prcsYesActn === "PENDING_APPROVER") return;
     if (selectedTask?.status === "COMPLETED") return;
     const executorId = selectedTask?.rawTask?.empId || selectedTask?.rawTask?.assignedTo;
@@ -1621,10 +2027,10 @@ const MyTasks = ({ userRole, onLogout }) => {
     if (!selectedTask) return;
     try {
       const originalTask = selectedTask.rawTask || selectedTask;
-      const newStatus = actionType || denyData.type;
-      const taskId = selectedTask.taskId || selectedTask.id;
+      const newStatus = actionType || denyData.type || "REASSIGN";
+      const taskId = selectedTask.taskId || (originalTask && originalTask.taskId) || (typeof selectedTask.id === 'number' ? selectedTask.id : Number(String(selectedTask.id).replace(/\D/g, '')));
 
-      console.log(`📝 Processing denial for task ${taskId} via ProcessController`);
+      console.log(`📝 Processing denial for task ${taskId} (${newStatus}) via ProcessController`);
 
       let finalRemarks = denyData.reason || "";
 
@@ -1666,65 +2072,52 @@ const MyTasks = ({ userRole, onLogout }) => {
           finalRemarks += "\n\n||ATTACHMENTS: " + JSON.stringify(uploadedUrls) + "||";
         }
       }
+      const targetMilestoneObj = reworkMilestones.find(m => String(m.mId || m.mid || m.id || m.drftMId) === String(denyData.milestone));
+      const poolTasks = (reworkProjectTasks && reworkProjectTasks.length > 0) ? reworkProjectTasks : reworkTasks;
+      const targetTaskObj = poolTasks.find(t => String(t.taskId || t.id) === String(denyData.targetTaskId || denyData.deliverable));
+
       // Include selected target milestone and task details in remarks if present
       let targetDetails = [];
-      if (denyData.milestone) targetDetails.push(`Target Milestone: ${denyData.milestone}`);
-      if (denyData.deliverable) targetDetails.push(`Target Task: ${denyData.deliverable}`);
+      const mDisplayTitle = targetMilestoneObj ? `${targetMilestoneObj.mlstnCd || ''} ${targetMilestoneObj.mlstnTtl || targetMilestoneObj.title || ''}`.trim() : denyData.milestone;
+      const tDisplayTitle = targetTaskObj ? `${targetTaskObj.taskCd || ''} ${targetTaskObj.taskNm || targetTaskObj.title || ''}`.trim() : denyData.deliverable;
+      if (mDisplayTitle) targetDetails.push(`Target Milestone: ${mDisplayTitle}`);
+      if (tDisplayTitle) targetDetails.push(`Target Task: ${tDisplayTitle}`);
       if (targetDetails.length > 0) {
         finalRemarks = `[${targetDetails.join(" | ")}]\n${finalRemarks}`;
       }
 
-      const isApprover = originalTask.approverId && String(originalTask.approverId) === String(currentUserEmpId);
+      const isApprover = (originalTask.prcsYesActn === "PENDING_APPROVER") || (originalTask.approverId && String(originalTask.approverId) === String(currentUserEmpId)) || (originalTask.approver && String(originalTask.approver) === String(currentUserEmpId));
       const endpoint = isApprover ? 'reviewer-action' : 'checker-action';
+
+      const targetEmpIdVal = (newStatus === "REASSIGN" && denyData.targetEmpId)
+        ? Number(denyData.targetEmpId)
+        : (originalTask.empId || originalTask.assignedTo || originalTask.extEmpId || null);
 
       const payload = {
         decision: "NO",
         rejectionType: newStatus === "REWORK" ? "REWORK" : "REASSIGN",
         empId: currentUserEmpId,
         remarks: finalRemarks,
-        isIndividual: selectedTask.isIndividual,
-        targetMilestone: denyData.milestone,
-        targetDeliverable: denyData.deliverable,
+        isIndividual: selectedTask.isIndividual === true,
+        targetMId: denyData.milestone ? Number(denyData.milestone) : null,
+        targetTaskId: denyData.targetTaskId ? Number(denyData.targetTaskId) : (targetTaskObj ? Number(targetTaskObj.taskId || targetTaskObj.id) : null),
+        targetEmpId: targetEmpIdVal ? Number(targetEmpIdVal) : null,
+        targetMilestone: mDisplayTitle || denyData.milestone,
+        targetDeliverable: tDisplayTitle || denyData.deliverable,
         impact: denyData.impact || "Medium"
       };
 
-      if (newStatus === "REASSIGN") {
-        const executorId = denyData.targetEmpId || originalTask.empId || originalTask.assignedTo;
-        payload.targetEmpId = executorId;
-      }
-
       await apiPost(`/api/process/task/${taskId}/${endpoint}`, payload);
 
-      // Append remark to current task's addlRem / remarks
-      const senderName = sessionStorage.getItem("userName") || (isApprover ? "Approver" : "Reviewer");
-      const currentRemHeader = `[${newStatus === "REWORK" ? "Rework" : "Reassign"} - ${senderName}]: ${finalRemarks}`;
+      // Uncheck all checklists in local state
+      setUpdateChecklist(prev => prev.map(c => ({ ...c, completed: false })));
 
-      try {
-        const existingRem = selectedTask.isIndividual ? originalTask.remarks : originalTask.addlRem;
-        const newRem = existingRem ? `${existingRem}\n---\n${currentRemHeader}` : currentRemHeader;
-        const updatePath = selectedTask.isIndividual ? `/api/assignments/${taskId}` : `/api/task-live/${taskId}`;
-        const taskUpdatePayload = selectedTask.isIndividual
-          ? { ...originalTask, remarks: newRem }
-          : { ...originalTask, addlRem: newRem };
-        await apiPut(`${updatePath}?_t=${Date.now()}`, taskUpdatePayload);
-      } catch (errTaskRem) {
-        console.error("Failed to append remark to current task", errTaskRem);
-      }
-
-      // If a Target Deliverable / Task was selected (e.g. TSK-001 in Milestone 1), append remark to target task as well
-      const targetDeliverableId = denyData.deliverable;
-      if (targetDeliverableId && String(targetDeliverableId) !== String(taskId)) {
-        const allTasksSource = (tasks && tasks.length > 0) ? tasks : allProjectTasks;
-        const targetTaskObj = (allTasksSource || []).find(t => {
-          const r = t.rawTask || t;
-          const id = String(t.id || t.taskId || r.taskId || r.id || t.taskCode || r.taskCd || "");
-          return id && (id === String(targetDeliverableId) || String(t.taskCode) === String(targetDeliverableId));
-        });
-
+      // If a Target Deliverable / Task was selected for Rework (e.g. TSK-001 in Milestone 1), append remark to target task as well
+      const realTargetId = denyData.targetTaskId || (targetTaskObj ? (targetTaskObj.taskId || targetTaskObj.id) : null);
+      if (realTargetId && String(realTargetId) !== String(taskId)) {
         const targetRaw = targetTaskObj ? (targetTaskObj.rawTask || targetTaskObj) : null;
-        const realTargetId = targetRaw ? (targetRaw.taskId || targetRaw.id || targetRaw.empTaskId) : targetDeliverableId;
         const isTargetInd = targetTaskObj ? (targetTaskObj.isIndividual || targetRaw?.taskSource === "INDIVIDUAL") : false;
-
+        const senderName = sessionStorage.getItem("userName") || (isApprover ? "Approver" : "Reviewer");
         const targetRemHeader = `[Rework - ${senderName}]: ${finalRemarks}`;
 
         // Save to target task's DB record (addlRem/remarks)
@@ -1756,34 +2149,34 @@ const MyTasks = ({ userRole, onLogout }) => {
         }
       }
 
-      if (updateChecklist.length > 0) {
-        await Promise.all(updateChecklist
-          .filter(item => item.id != null)
-          .map(item => {
-            const path = `/api/checklists/${item.id}/reopen?_t=${Date.now()}`;
-            return apiPatch(path, {});
-          })
-        );
-      }
-
       if (newStatus === "REASSIGN") {
-        const executorId = denyData.targetEmpId || originalTask.empId || originalTask.assignedTo;
-        await sendNotification(executorId, `Task reassigned to you: ${selectedTask.id}`, selectedTask);
+        const executorId = targetEmpIdVal || originalTask.empId || originalTask.assignedTo;
+        if (executorId) {
+          await sendNotification(executorId, `Task reassigned to you: ${selectedTask.id}`, selectedTask);
+        }
       } else {
-        await sendNotification(originalTask.empId || originalTask.assignedTo, `Task rejected, needs rework: ${selectedTask.id}`, selectedTask);
+        const reworkExecutorId = denyData.targetEmpId || targetTaskObj?.empId || originalTask.empId || originalTask.assignedTo;
+        if (reworkExecutorId) {
+          await sendNotification(reworkExecutorId, `Task rejected, needs rework: ${selectedTask.id}`, selectedTask);
+        }
       }
 
-      await fetchTasks();
+      setShowDenyForm(false);
+      triggerAlert("success", "Success", `Task ${newStatus === "REWORK" ? 'sent back for rework' : 'reassigned'}.`);
+
+      const latestTasks = await fetchTasks();
       try {
         const historyData = await apiGet(`/api/process/task/${taskId}?isIndividual=${selectedTask.isIndividual === true}`);
         setProcessHistory(Array.isArray(historyData) ? historyData : []);
       } catch (hErr) { }
 
-      setShowDenyForm(false);
-      triggerAlert("success", "Success", `Task ${newStatus === "REWORK" ? 'sent back for rework' : 'reassigned'}.`);
-      if (selectedTask) {
-        const updatedTask = tasks.find(t => t.id === selectedTask.id);
-        if (updatedTask) setSelectedTask(updatedTask);
+      if (latestTasks && selectedTask) {
+        const updatedTask = latestTasks.find(t => String(t.taskId || t.id) === String(taskId) || t.id === selectedTask.id);
+        if (updatedTask) {
+          setSelectedTask(updatedTask);
+        } else {
+          setShowDetailView(false);
+        }
       }
     } catch (err) {
       console.error("Error processing denial:", err);
@@ -2053,7 +2446,36 @@ const MyTasks = ({ userRole, onLogout }) => {
     setUpdateRemarks("");
     setUpdateAttachments([]);
     setShowDenyForm(false);
-    setDenyData({ type: "", reason: "", milestone: "", deliverable: "", impact: "Medium" });
+    setDenyData({ type: "REWORK", reason: "", milestone: "", deliverable: "", targetTaskId: "", targetEmpId: "", impact: "Medium" });
+
+    // Pre-load project milestones for rework
+    const rawT = task.rawTask || task;
+    let pId = task.projectId || task.prjId || rawT.prjId || rawT.projectId;
+    const mId = task.milestoneId || task.mId || rawT.mId || rawT.mid;
+    if (!pId && mId && Array.isArray(milestonesList)) {
+      const foundM = milestonesList.find(m => String(m.mId || m.id || m.mid || "") === String(mId));
+      if (foundM) pId = foundM.prjId || foundM.projectId || foundM.prj_id;
+    }
+    if (pId) {
+      apiGet(`/api/milestone-live/by-project/${pId}`).then(pMiles => {
+        if (Array.isArray(pMiles) && pMiles.length > 0) {
+          pMiles.sort((a, b) => {
+            const cdA = String(a.mlstnCd || a.code || a.id || "").trim();
+            const cdB = String(b.mlstnCd || b.code || b.id || "").trim();
+            if (cdA && cdB) {
+              const cmp = cdA.localeCompare(cdB, undefined, { numeric: true, sensitivity: 'base' });
+              if (cmp !== 0) return cmp;
+            }
+            if (a.stDt && b.stDt) {
+              const cmp = String(a.stDt).localeCompare(String(b.stDt));
+              if (cmp !== 0) return cmp;
+            }
+            return Number(a.mId || a.id || 0) - Number(b.mId || b.id || 0);
+          });
+          setReworkMilestones(pMiles);
+        }
+      }).catch(() => {});
+    }
 
     try {
       const taskId = task.taskId || task.id;
@@ -2568,7 +2990,7 @@ const MyTasks = ({ userRole, onLogout }) => {
     const priorityBadge = getPriorityBadge(task.priority);
 
     // Get dynamic action based on current state
-    const action = getActionButton(rawTask, currentUserEmpId);
+    const action = getActionButton(rawTask, currentUserEmpId, isExternalMode);
 
     const isOverdue = (() => {
       if (!rawTask?.endDt) return false;
@@ -2582,12 +3004,12 @@ const MyTasks = ({ userRole, onLogout }) => {
 
     const isCompleted = task.rawStatus === "COMPLETED" || task.rawStatus === "CLOSED";
     const isTeamMember = taskTeamMembers.some(tm => String(tm.empId) === String(currentUserEmpId)) || (Array.isArray(rawTask?.teamMembers) && rawTask.teamMembers.some(tm => String(tm.empId) === String(currentUserEmpId)));
-    const isDoer = String(rawTask.empId || rawTask.assignedTo) === String(currentUserEmpId) || isTeamMember;
-    const isReviewer = String(rawTask.reviewerId || rawTask.reviewer) === String(currentUserEmpId);
-    const isApprover = String(rawTask.approverId || rawTask.approver) === String(currentUserEmpId);
+    const isDoer = isExternalMode || String(rawTask.empId || rawTask.assignedTo) === String(currentUserEmpId) || isTeamMember;
+    const isReviewer = !isExternalMode && String(rawTask.reviewerId || rawTask.reviewer) === String(currentUserEmpId);
+    const isApprover = !isExternalMode && String(rawTask.approverId || rawTask.approver) === String(currentUserEmpId);
 
     // Get current progress and process for display
-    const currentProgress = task.rawStatus || task.status || "OPEN";
+    const currentProgress = (rawTask.taskSts || task.rawStatus || task.status || "OPEN").toUpperCase();
     const currentProcess = rawTask.prcsYesActn || "NONE";
 
     // Determine if task is in review
@@ -2599,11 +3021,15 @@ const MyTasks = ({ userRole, onLogout }) => {
       if ((!name || name === "Unknown" || name.startsWith("User ")) && fallbackName) {
         name = fallbackName;
       }
-      let initials = getEmployeeInitials(empId, employeesList);
-      if ((!initials || initials === "UN") && name && name !== "Unknown") {
+      let initials = null;
+      if (empId) {
+        initials = getEmployeeInitials(empId, employeesList);
+      }
+      if ((!initials || initials === "UN" || initials === "NU" || initials === "TM" || initials === "null") && name && name !== "Unknown") {
         const parts = name.trim().split(" ");
         initials = parts.length >= 2 ? (parts[0][0] + parts[1][0]).toUpperCase() : parts[0].substring(0, 2).toUpperCase();
       }
+      if (!initials) initials = "TM";
       const photo = getEmployeePhoto(empId, employeesList);
 
       const roleColors = {
@@ -2713,7 +3139,7 @@ const MyTasks = ({ userRole, onLogout }) => {
               onClick={() => {
                 setShowDenyForm(true);
                 setIsRaiseRequest(true);
-                setDenyData({ type: "", reason: "", milestone: "", deliverable: "", impact: "Medium", attachments: [] });
+                setDenyData({ type: "REWORK", reason: "", milestone: "", deliverable: "", targetTaskId: "", targetEmpId: "", impact: "Medium", attachments: [] });
               }}
               style={{ borderRadius: "6px", backgroundColor: "#ef4444", color: "white", border: "none", width: "100%" }}
             >
@@ -2742,7 +3168,7 @@ const MyTasks = ({ userRole, onLogout }) => {
               onClick={() => {
                 setShowDenyForm(true);
                 setIsRaiseRequest(true);
-                setDenyData({ type: "", reason: "", milestone: "", deliverable: "", impact: "Medium", attachments: [] });
+                setDenyData({ type: "REWORK", reason: "", milestone: "", deliverable: "", targetTaskId: "", targetEmpId: "", impact: "Medium", attachments: [] });
               }}
               style={{ borderRadius: "6px", backgroundColor: "#ef4444", color: "white", border: "none", width: "100%" }}
             >
@@ -2773,16 +3199,16 @@ const MyTasks = ({ userRole, onLogout }) => {
                 onClick={async () => {
                   await handleStartTask(task);
                 }}
-                style={{ borderRadius: "6px", backgroundColor: "#3b82f6", border: "none", color: "white", width: "100%" }}
+                style={{ borderRadius: "6px", backgroundColor: "#3b82f6", border: "none", color: "white", width: "100%", padding: "10px", fontWeight: "600", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px" }}
               >
-                Start
+                <Play size={16} fill="white" /> Start
               </button>
             </div>
           );
         }
 
         // WORK_IN_PROGRESS with NONE or YES or REWORK or REASSIGN -> Update / Submit Review / Mark as Complete
-        if ((currentProgress === "WIP" || currentProgress === "IN_PROGRESS") &&
+        if ((currentProgress === "WIP" || currentProgress === "IN_PROGRESS" || currentProgress === "WORK_IN_PROGRESS") &&
           (currentProcess === "NONE" || currentProcess === "YES" || currentProcess === "REWORK" || currentProcess === "REASSIGN" || !currentProcess)) {
           const allChecked = updateChecklist.length > 0 && updateChecklist.every(c => c.completed);
           const noChecklist = updateChecklist.length === 0;
@@ -2790,9 +3216,9 @@ const MyTasks = ({ userRole, onLogout }) => {
           const hasReviewer = !!(rawTask?.reviewerId || rawTask?.reviewer || rawTask?.approverId || rawTask?.approver);
 
           // Determine label:
-          // - Not all checked -> Save Progress
-          // - All checked + has reviewer OR workflow flag -> Submit Review
-          // - All checked + no reviewer + no workflow -> Mark as Complete
+          // - Not all checked -> Save Updated Progress
+          // - All checked + (has reviewer OR workflow flag) -> Send to Reviewer
+          // - All checked + no reviewer + no workflow -> Mark as Completed
           let label = "Save Updated Progress";
           if (allChecked || noChecklist) {
             if (hasWorkflow || hasReviewer) {
@@ -2814,13 +3240,22 @@ const MyTasks = ({ userRole, onLogout }) => {
                     try {
                       setLoadingAction(selectedTask.id || selectedTask.taskId);
                       if (updateChecklist.length > 0) {
-                        await Promise.all(updateChecklist
-                          .filter(item => item.id != null)
-                          .map(item => {
-                            const path = `/api/checklists/${item.id}/${item.completed ? 'complete' : 'reopen'}?_t=${Date.now()}`;
-                            return apiPatch(path, {});
-                          })
-                        );
+                        if (isExternalMode) {
+                          await Promise.all(updateChecklist
+                            .filter(item => item.id != null)
+                            .map(item => {
+                              return apiPatch(`/api/external-tasks/${externalToken}/checklist/${item.id}?completed=${item.completed}`);
+                            })
+                          );
+                        } else {
+                          await Promise.all(updateChecklist
+                            .filter(item => item.id != null)
+                            .map(item => {
+                              const path = `/api/checklists/${item.id}/${item.completed ? 'complete' : 'reopen'}?_t=${Date.now()}`;
+                              return apiPatch(path, {});
+                            })
+                          );
+                        }
                       }
                     } catch (e) {
                       console.error("Checklist save error:", e);
@@ -2838,7 +3273,8 @@ const MyTasks = ({ userRole, onLogout }) => {
                   border: "none",
                   color: "white",
                   width: "100%",
-                  fontWeight: "600"
+                  fontWeight: "600",
+                  padding: "10px"
                 }}
               >
                 {label}
@@ -2914,27 +3350,29 @@ const MyTasks = ({ userRole, onLogout }) => {
           zIndex: 10
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-            <button
-              onClick={onBack}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
-                background: "none",
-                border: "1px solid #e2e8f0",
-                borderRadius: "8px",
-                padding: "8px 16px",
-                cursor: "pointer",
-                color: "#475569",
-                fontWeight: 500,
-                fontSize: "14px"
-              }}
-              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#f8fafc"}
-              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
-            >
-              <ArrowLeft size={18} />
-              Back
-            </button>
+            {!isExternalMode && (
+              <button
+                onClick={onBack}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  background: "none",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: "8px",
+                  padding: "8px 16px",
+                  cursor: "pointer",
+                  color: "#475569",
+                  fontWeight: 500,
+                  fontSize: "14px"
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#f8fafc"}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
+              >
+                <ArrowLeft size={18} />
+                Back
+              </button>
+            )}
             <div>
               <div style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "500" }}>{task.id}</div>
               <div style={{ fontSize: "18px", fontWeight: "600", color: "#0f172a" }}>{task.title}</div>
@@ -2965,9 +3403,13 @@ const MyTasks = ({ userRole, onLogout }) => {
                   if (action.action === "start") {
                     await handleStartTask(task);
                   } else if (action.action === "update") {
-                    // Already in detail view
+                    if (isExternalMode) {
+                      await handleSaveProgress();
+                    }
                   } else if (action.action === "review") {
-                    // Already in detail view
+                    if (isExternalMode) {
+                      await handleSubmitReview(task);
+                    }
                   } else if (action.action === "approve") {
                     // Already in detail view
                   }
@@ -2989,9 +3431,9 @@ const MyTasks = ({ userRole, onLogout }) => {
                   gap: "8px"
                 }}
               >
-                {action.action === "start" && <Play size={16} />}
+                {action.action === "start" && <Play size={16} fill="white" />}
                 {action.action === "update" && <RotateCw size={16} />}
-                {action.action === "review" && <Eye size={16} />}
+                {action.action === "review" && <RotateCw size={16} />}
                 {action.action === "approve" && <Check size={16} />}
                 {action.label}
               </button>
@@ -3104,7 +3546,7 @@ const MyTasks = ({ userRole, onLogout }) => {
                     {rawTask.prcsYesActn === "PENDING_REVIEWER" && "⏳ Under Review (Reviewer)"}
                     {rawTask.prcsYesActn === "PENDING_APPROVER" && "⏳ Under Review (Approver)"}
                     {rawTask.prcsYesActn === "REWORK" && <><RefreshCw size={16} color="#F97316" style={{ display: "inline", marginRight: "6px" }} /><span style={{ color: "#F97316" }}>Rework Required</span></>}
-                    {rawTask.prcsYesActn === "REASSIGN" && <><UserCheck size={16} color="#4F46E5" style={{ display: "inline", marginRight: "6px" }} /><span style={{ color: "#4F46E5" }}>Reassigned</span></>}
+                    {rawTask.prcsYesActn === "REASSIGN" && <><ReassignIcon size={16} color="#4F46E5" style={{ display: "inline", marginRight: "6px" }} /><span style={{ color: "#4F46E5" }}>Reassigned</span></>}
 
                     {(() => {
                       const parsed = parseRemarksHistory(rawTask.addlRem || rawTask.remarks, task, employeesList);
@@ -3112,7 +3554,7 @@ const MyTasks = ({ userRole, onLogout }) => {
                       if (isPrevReassigned && rawTask.prcsYesActn !== "REASSIGN") {
                         return (
                           <span style={{ backgroundColor: "#EEF2FF", color: "#4F46E5", fontSize: "11px", padding: "2px 6px", borderRadius: "4px", display: "flex", alignItems: "center", gap: "4px" }}>
-                            <UserCheck size={12} color="#4F46E5" /> Reassigned Task
+                            <ReassignIcon size={12} color="#4F46E5" /> Reassigned Task
                           </span>
                         );
                       }
@@ -3861,17 +4303,26 @@ const MyTasks = ({ userRole, onLogout }) => {
                 Team
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                {(task.isIndividual || projectInfo.isIndividual || rawTask?.assignedBy || rawTask?.assigned_by) && (
-                  renderTeamMember(
-                    rawTask?.assignedBy || rawTask?.assigned_by || rawTask?.createdBy,
-                    "Assigned By",
-                    "AB",
-                    rawTask?.assignedByNm || rawTask?.assignedByName
-                  )
+                {isExternalMode ? (
+                  <>
+                    {renderTeamMember(null, "Assigned By", "AB", "Project Admin")}
+                    {renderTeamMember(null, "Executor", "EX", rawTask?.extEmpNm || "External Associate")}
+                  </>
+                ) : (
+                  <>
+                    {(task.isIndividual || projectInfo.isIndividual || rawTask?.assignedBy || rawTask?.assigned_by) && (
+                      renderTeamMember(
+                        rawTask?.assignedBy || rawTask?.assigned_by || rawTask?.createdBy,
+                        "Assigned By",
+                        "AB",
+                        rawTask?.assignedByNm || rawTask?.assignedByName
+                      )
+                    )}
+                    {renderTeamMember(rawTask?.empId || rawTask?.assignedTo, "Executor", "EX")}
+                    {renderTeamMember(rawTask?.reviewerId || rawTask?.reviewer, "Reviewer", "RV")}
+                    {renderTeamMember(rawTask?.approverId || rawTask?.approver, "Approver", "AP")}
+                  </>
                 )}
-                {renderTeamMember(rawTask?.empId || rawTask?.assignedTo, "Executor", "EX")}
-                {renderTeamMember(rawTask?.reviewerId || rawTask?.reviewer, "Reviewer", "RV")}
-                {renderTeamMember(rawTask?.approverId || rawTask?.approver, "Approver", "AP")}
               </div>
             </div>
 
@@ -3901,24 +4352,34 @@ const MyTasks = ({ userRole, onLogout }) => {
                     {getCurrentStatusDisplay()}
                   </span>
                 </div>
-                <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid #f1f5f9" }}>
-                  <span style={{ fontSize: "13px", color: "#64748b" }}>Process</span>
-                  <span style={{ fontSize: "13px", fontWeight: "600", color: "#0f172a" }}>
-                    {currentProcess === "NONE" ? "None" : currentProcess}
-                  </span>
-                </div>
+                {!isExternalMode && (
+                  <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid #f1f5f9" }}>
+                    <span style={{ fontSize: "13px", color: "#64748b" }}>Process</span>
+                    <span style={{ fontSize: "13px", fontWeight: "600", color: "#0f172a" }}>
+                      {currentProcess === "NONE" ? "None" : currentProcess}
+                    </span>
+                  </div>
+                )}
                 <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid #f1f5f9" }}>
                   <span style={{ fontSize: "13px", color: "#64748b" }}>Priority</span>
                   <span style={{ fontSize: "13px", fontWeight: "600", color: "#0f172a" }}>
                     {task.priority || "Normal"}
                   </span>
                 </div>
-                <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: isExternalMode ? "1px solid #f1f5f9" : "none" }}>
                   <span style={{ fontSize: "13px", color: "#64748b" }}>Assigned To</span>
                   <span style={{ fontSize: "13px", fontWeight: "500", color: "#0f172a" }}>
-                    {getEmployeeName(rawTask?.empId || rawTask?.assignedTo, employeesList) || "Unassigned"}
+                    {isExternalMode ? (rawTask?.extEmpNm || "External Associate") : (getEmployeeName(rawTask?.empId || rawTask?.assignedTo, employeesList) || "Unassigned")}
                   </span>
                 </div>
+                {isExternalMode && (
+                  <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0" }}>
+                    <span style={{ fontSize: "13px", color: "#64748b" }}>Link Expiry</span>
+                    <span style={{ fontSize: "12px", fontWeight: "600", color: "#059669" }}>
+                      {rawTask?.expiryDt ? new Date(rawTask.expiryDt).toLocaleDateString() : "Active"}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -3955,65 +4416,117 @@ const MyTasks = ({ userRole, onLogout }) => {
               const currentRawT = selectedTask?.rawTask || selectedTask || {};
               const isIndividualTask = selectedTask?.isIndividual === true || currentRawT.taskSource === "INDIVIDUAL";
 
-              // Check if task belongs to the 1st milestone of the project
-              const isFirstMilestone = (() => {
-                if (isIndividualTask) return false;
+              // 1. Resolve project ID and milestone ID for the current task
+              let currentProjId = String(currentRawT.prjId || currentRawT.projectId || currentRawT.prj_id || selectedTask?.projectId || selectedTask?.prjId || "").trim();
+              const currentMId = String(currentRawT.mId || currentRawT.m_id || currentRawT.drftMId || currentRawT.milestoneId || currentRawT.mid || selectedTask?.milestoneId || "").trim();
 
-                const taskTitle = String(selectedTask?.title || currentRawT.title || currentRawT.taskNm || "").toLowerCase();
-                const milestoneName = String(selectedTask?.milestone || currentRawT.mlstnTtl || currentRawT.milestoneName || "").toLowerCase();
-                const combinedText = `${taskTitle} ${milestoneName}`;
-
-                // 1. Explicit m2, m3, m4 or Milestone 2, 3, 4 in task title or milestone name -> NOT first milestone
-                if (/\b(m|milestone)\s*[2-9]\b/i.test(combinedText) || combinedText.includes("(m2)") || combinedText.includes("(m3)") || combinedText.includes("(m4)")) {
-                  return false;
+              if (!currentProjId && currentMId && Array.isArray(milestonesList)) {
+                const mMatch = milestonesList.find(m => String(m.mId || m.id || m.m_id || m.milestoneId || m.drftMId || "") === currentMId);
+                if (mMatch) {
+                  currentProjId = String(mMatch.prjId || mMatch.projectId || mMatch.prj_id || "").trim();
                 }
+              }
 
-                // 2. Explicit m1 or Milestone 1 in task title or milestone name -> IS first milestone
-                if (/\b(m|milestone)\s*1\b/i.test(combinedText) || combinedText.includes("(m1)")) {
-                  return true;
+              // 2. Fetch project-specific milestones sorted strictly in sequence (MLS-001, MLS-002, ...)
+              const rawProjMilestones = (reworkMilestones && reworkMilestones.length > 0)
+                ? reworkMilestones
+                : (milestonesList || []).filter(m => String(m.prjId || m.projectId || m.prj_id || "").trim() === currentProjId);
+
+              const sortedProjMilestones = [...rawProjMilestones].sort((a, b) => {
+                const cdA = String(a.mlstnCd || a.code || "").trim();
+                const cdB = String(b.mlstnCd || b.code || "").trim();
+                if (cdA && cdB) {
+                  const cmp = cdA.localeCompare(cdB, undefined, { numeric: true, sensitivity: 'base' });
+                  if (cmp !== 0) return cmp;
                 }
-
-                // 3. Match against milestonesList for this project
-                const currentProjId = currentRawT.prjId || currentRawT.projectId || selectedTask?.projectId || selectedTask?.prjId;
-                const taskMId = String(currentRawT.mId || currentRawT.mid || currentRawT.milestoneId || selectedTask?.milestoneId || "").trim();
-
-                const projectMilestones = (milestonesList || [])
-                  .filter(m => {
-                    const mPrjId = m.prjId || m.projectId || m.prj_id;
-                    return !currentProjId || !mPrjId || String(mPrjId) === String(currentProjId);
-                  })
-                  .sort((a, b) => {
-                    const seqA = Number(a.seq || a.mlstnSeq || a.mSeq || a.sortOrder || a.mId || 0);
-                    const seqB = Number(b.seq || b.mlstnSeq || b.mSeq || b.sortOrder || b.mId || 0);
-                    return seqA - seqB;
-                  });
-
-                if (projectMilestones.length > 0) {
-                  // Find index of current task's milestone in sorted project milestones
-                  const milestoneIndex = projectMilestones.findIndex(m => {
-                    const mId = String(m.mId || m.mid || m.id || m._id || m.mlstnCd || "").trim();
-                    const mName = String(m.mlstnTtl || m.mlstn_ttl || m.name || m.title || "").toLowerCase();
-                    if (taskMId && mId && taskMId === mId) return true;
-                    if (milestoneName && milestoneName !== "-" && mName && (milestoneName === mName)) return true;
-                    return false;
-                  });
-
-                  if (milestoneIndex === 0) return true; // 1st milestone
-                  if (milestoneIndex > 0) return false;  // 2nd+ milestone
+                if (a.stDt && b.stDt) {
+                  const cmp = String(a.stDt).localeCompare(String(b.stDt));
+                  if (cmp !== 0) return cmp;
                 }
+                return Number(a.mId || a.id || 0) - Number(b.mId || b.id || 0);
+              });
 
-                // 4. Check explicit milestone sequence numbers on raw task
-                const mSeq = Number(currentRawT.mlstnSeq || currentRawT.milestoneSeq || currentRawT.mSeq || 0);
-                if (mSeq > 1) return false;
-                if (mSeq === 1) return true;
+              // 3. Find current milestone index & code pattern (MLS-001, MLS-002, ...)
+              const mCode = String(currentRawT.mlstnCd || selectedTask?.mlstnCd || "").toUpperCase().trim();
+              const mCodeMatch = mCode.match(/MLS-0*([0-9]+)/i);
+              const extractedMNum = mCodeMatch ? parseInt(mCodeMatch[1], 10) : 0;
 
-                // Failsafe default: if we can't prove it's milestone 1, allow Rework
+              let currentMIndex = sortedProjMilestones.findIndex(m => {
+                const id = String(m.mId || m.id || m.mid || m.milestoneId || "").trim();
+                const cd = String(m.mlstnCd || "").trim().toUpperCase();
+                if (currentMId && id && currentMId === id) return true;
+                if (mCode && cd && mCode === cd) return true;
                 return false;
-              })();
+              });
 
-              // Rework is NOT allowed for Individual Assignments or 1st Milestone tasks
-              const canRework = !isIndividualTask && !isFirstMilestone;
-              const isReassignMode = !canRework || (denyData.type ? denyData.type === "REASSIGN" : false);
+              if (currentMIndex === -1 && sortedProjMilestones.length > 0) {
+                const currentMName = String(selectedTask?.milestone || currentRawT.mlstnTtl || currentRawT.milestoneName || "").toLowerCase().trim();
+                currentMIndex = sortedProjMilestones.findIndex(m => {
+                  const mName = String(m.mlstnTtl || m.mlstn_ttl || m.name || m.title || "").toLowerCase().trim();
+                  return currentMName && mName && (currentMName === mName || mName.includes(currentMName) || currentMName.includes(mName));
+                });
+              }
+
+              const mNumber = extractedMNum > 0 ? extractedMNum : (currentMIndex >= 0 ? currentMIndex + 1 : 1);
+
+              // 4. Milestone 1 (MLS-001) cannot rework to previous milestone; 2nd+ milestones (MLS-002, etc.) can rework
+              const isFirstMilestone = isIndividualTask || mNumber === 1 || (currentMIndex === 0 && mNumber <= 1);
+              const canRework = !isIndividualTask && !isFirstMilestone && (mNumber > 1 || currentMIndex > 0);
+              const isReassignMode = !canRework || (denyData.type === "REASSIGN");
+
+              // 5. Only previous milestones belonging to the SAME project
+              let availableMilestones = [];
+              if (canRework) {
+                if (currentMIndex > 0) {
+                  availableMilestones = sortedProjMilestones.slice(0, currentMIndex);
+                } else {
+                  availableMilestones = sortedProjMilestones.filter(m => {
+                    const cd = String(m.mlstnCd || "").toUpperCase().trim();
+                    const match = cd.match(/MLS-0*([0-9]+)/i);
+                    const num = match ? parseInt(match[1], 10) : 0;
+                    return num > 0 && num < mNumber;
+                  });
+                }
+
+                if (availableMilestones.length === 0 && sortedProjMilestones.length > 0) {
+                  availableMilestones = sortedProjMilestones.filter(m => {
+                    const cd = String(m.mlstnCd || "").toUpperCase().trim();
+                    return cd !== mCode;
+                  });
+                }
+              }
+
+              // 6. Tasks for selected target milestone
+              const effectiveMId = String(denyData.milestone || (availableMilestones.length > 0 ? (availableMilestones[0].mId || availableMilestones[0].mid || availableMilestones[0].id || availableMilestones[0].drftMId) : "")).trim();
+
+              const displayedReworkTasks = (() => {
+                if (!effectiveMId) return [];
+                const selMObj = availableMilestones.find(m => String(m.mId || m.mid || m.id || m.drftMId) === effectiveMId);
+                const selCd = selMObj ? String(selMObj.mlstnCd || "").toUpperCase().trim() : "";
+                const selTtl = selMObj ? String(selMObj.mlstnTtl || selMObj.title || selMObj.name || "").toLowerCase().trim() : "";
+
+                const pool = (reworkProjectTasks && reworkProjectTasks.length > 0)
+                  ? reworkProjectTasks
+                  : (reworkTasks && reworkTasks.length > 0)
+                    ? reworkTasks
+                    : (allProjectTasks || []);
+
+                return pool.filter(t => {
+                  const r = t.rawTask || t;
+                  const tmId = String(r.mId || r.mid || r.milestoneId || t.milestoneId || r.drftMId || "").trim();
+                  if (tmId && effectiveMId && tmId === effectiveMId) return true;
+
+                  if (selMObj?.drftMId && String(selMObj.drftMId) === tmId) return true;
+
+                  const tCd = String(r.mlstnCd || t.mlstnCd || "").toUpperCase().trim();
+                  if (selCd && tCd && selCd === tCd) return true;
+
+                  const tTtl = String(t.milestone || r.mlstnTtl || r.milestoneName || "").toLowerCase().trim();
+                  if (selTtl && tTtl && (selTtl === tTtl || tTtl.includes(selTtl) || selTtl.includes(tTtl))) return true;
+
+                  return false;
+                }).map(t => t.rawTask || t);
+              })();
 
               return (
                 <>
@@ -4067,7 +4580,7 @@ const MyTasks = ({ userRole, onLogout }) => {
                           gap: "8px"
                         }}
                       >
-                        <UserCheck size={16} color={denyData.type === "REASSIGN" ? "white" : "#4f46e5"} /> Reassign Request
+                        <ReassignIcon size={16} color={denyData.type === "REASSIGN" ? "white" : "#4f46e5"} /> Reassign Request
                       </button>
                     </div>
                   )}
@@ -4155,144 +4668,71 @@ const MyTasks = ({ userRole, onLogout }) => {
                       }
 
                       // 2. REWORK MODE FOR PROJECT TASKS (Milestone 2+) -> Dynamic Milestones & Tasks Dropdown
-                      const currentMId = String(currentRawT.mId || currentRawT.m_id || currentRawT.drftMId || currentRawT.milestoneId || currentRawT.mid || selectedTask?.milestoneId || "").trim();
-                      const currentMTitle = String(selectedTask?.milestone || currentRawT.mlstnTtl || currentRawT.milestoneName || currentRawT.title || selectedTask?.title || "").trim().toLowerCase();
-
-                      // Resolve current project ID strictly
-                      let currentProjId = String(currentRawT.prjId || currentRawT.projectId || currentRawT.prj_id || selectedTask?.projectId || selectedTask?.prjId || "").trim();
-
-                      // If project ID is missing on task, look it up from milestonesList using currentMId
-                      if (!currentProjId && currentMId && Array.isArray(milestonesList)) {
-                        const mMatch = milestonesList.find(m => String(m.mId || m.id || m.m_id || m.milestoneId || m.drftMId || "") === currentMId);
-                        if (mMatch) {
-                          currentProjId = String(mMatch.prjId || mMatch.projectId || mMatch.prj_id || "").trim();
-                        }
-                      }
-
-                      // If project ID is still missing, search for task in allProjectTasks / tasks to find its prjId
-                      const allTasksSource = (tasks && tasks.length > 0) ? tasks : allProjectTasks;
-                      if (!currentProjId && Array.isArray(allTasksSource)) {
-                        const taskIdStr = String(currentRawT.taskId || currentRawT.id || selectedTask?.id || selectedTask?.taskId || "");
-                        const tMatch = allTasksSource.find(t => {
-                          const r = t.rawTask || t;
-                          const id = String(t.id || t.taskId || r.taskId || r.id || "");
-                          return taskIdStr && id && taskIdStr === id;
-                        });
-                        if (tMatch) {
-                          const r = tMatch.rawTask || tMatch;
-                          currentProjId = String(r.prjId || r.projectId || r.prj_id || tMatch.projectId || tMatch.prjId || "").trim();
-                        }
-                      }
-
-                      // Gather milestones belonging STRICTLY to currentProjId
-                      const milestoneMap = new Map();
-
-                      if (currentProjId && Array.isArray(milestonesList)) {
-                        milestonesList.forEach(m => {
-                          const mPrjId = String(m.prjId || m.projectId || m.prj_id || "").trim();
-                          if (mPrjId === currentProjId) {
-                            const id = String(m.mId || m.mid || m.id || m._id || m.mlstnCd || m.mlstn_cd || "").trim();
-                            const title = m.mlstnTtl || m.mlstn_ttl || m.name || m.title || m.milestoneTitle || (id ? `Milestone ${id}` : null);
-                            const seq = Number(m.seq || m.mlstnSeq || m.mSeq || m.sortOrder || id || 0);
-                            if (id && title) {
-                              milestoneMap.set(id, { id, title, seq, raw: m });
-                            }
-                          }
-                        });
-                      }
-
-                      // Fallback: If milestoneMap is empty, filter by project title / milestone title containing "postman"
-                      if (milestoneMap.size === 0 && Array.isArray(milestonesList)) {
-                        milestonesList.forEach(m => {
-                          const title = String(m.mlstnTtl || m.mlstn_ttl || m.name || m.title || "").trim();
-                          const prjName = String(m.projectName || m.prjNm || m.prj_nm || "").trim().toLowerCase();
-                          if (title.toLowerCase().includes("postman") || prjName.includes("postman")) {
-                            const id = String(m.mId || m.mid || m.id || m._id || m.mlstnCd || m.mlstn_cd || "").trim();
-                            const seq = Number(m.seq || m.mlstnSeq || m.mSeq || m.sortOrder || id || 0);
-                            if (id && title) {
-                              milestoneMap.set(id, { id, title, seq, raw: m });
-                            }
-                          }
-                        });
-                      }
-
-                      const sortedProjMilestones = Array.from(milestoneMap.values()).sort((a, b) => a.seq - b.seq);
-
-                      // Filter out current milestone (Milestone 2 / m2) so ONLY previous milestone (Milestone 1) is shown
-                      let availableMilestones = sortedProjMilestones.filter(m => {
-                        const titleLower = m.title.toLowerCase();
-                        const isCurrentM = (currentMId && m.id && currentMId === m.id) ||
-                          titleLower.includes("milestone 2") ||
-                          titleLower.includes("(m2)") ||
-                          (titleLower.endsWith("m2") && !titleLower.includes("m1"));
-                        return !isCurrentM;
-                      });
-
-                      if (availableMilestones.length === 0 && sortedProjMilestones.length > 0) {
-                        availableMilestones = sortedProjMilestones.slice(0, sortedProjMilestones.length - 1);
-                      }
-
-                      if (availableMilestones.length === 0) {
-                        availableMilestones = [{ id: "M1", title: "Postman Test Milestone 1" }];
-                      }
-
-                      // Filter tasks for selected target milestone ONLY
-                      const selectedM = denyData.milestone;
-                      let availableTasksForSelectedMilestone = [];
-
-                      if (selectedM) {
-                        const selMObj = availableMilestones.find(m => m.id === selectedM || m.title === selectedM);
-                        const targetMId = selMObj ? selMObj.id : selectedM;
-                        const targetMTitle = (selMObj ? selMObj.title : selectedM).toLowerCase();
-
-                        availableTasksForSelectedMilestone = (allTasksSource || []).filter(t => {
-                          const r = t.rawTask || t;
-                          const tPrjId = String(r.prjId || r.projectId || r.prj_id || t.projectId || "").trim();
-                          if (currentProjId && tPrjId && tPrjId !== currentProjId) return false;
-
-                          const tMId = String(r.mId || r.mid || r.milestoneId || t.milestoneId || r.drftMId || r.drft_m_id || "").trim();
-                          const tMTitle = String(t.milestone || r.mlstnTtl || r.milestoneName || t.title || r.title || "").trim().toLowerCase();
-
-                          if (targetMId && tMId && targetMId === tMId) return true;
-                          if (targetMTitle && tMTitle && (targetMTitle === tMTitle || tMTitle.includes(targetMTitle) || targetMTitle.includes(tMTitle))) return true;
-                          return false;
-                        });
-
-                        // Fallback: Show tasks of current project that are not in milestone 2
-                        if (availableTasksForSelectedMilestone.length === 0) {
-                          availableTasksForSelectedMilestone = (allTasksSource || []).filter(t => {
-                            const r = t.rawTask || t;
-                            const tPrjId = String(r.prjId || r.projectId || r.prj_id || t.projectId || "").trim();
-                            if (currentProjId && tPrjId && tPrjId !== currentProjId) return false;
-                            const titleLower = String(t.title || t.taskTtl || "").toLowerCase();
-                            return !titleLower.includes("(m2)") && !titleLower.includes("task2(m2)");
-                          });
-                        }
-                      }
+                      const effectiveMilestone = String(denyData.milestone || (availableMilestones.length > 0 ? (availableMilestones[0].mId || availableMilestones[0].mid || availableMilestones[0].id || availableMilestones[0].drftMId) : "")).trim();
 
                       return (
                         <div key="rework-mode-form">
                           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px", marginBottom: "20px" }}>
                             <div className="myt-form-group">
-                              <label style={{ display: "block", fontSize: "14px", fontWeight: "600", color: "#475569", marginBottom: "8px" }}>Select Target Milestone</label>
-                              <select className="myt-input" style={{ width: "100%", padding: "10px", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "14px" }}
-                                value={denyData.milestone || ""} onChange={e => setDenyData({ ...denyData, milestone: e.target.value, deliverable: "" })}>
-                                <option value="">Select Milestone</option>
-                                {availableMilestones.map(m => (
-                                  <option key={m.id} value={m.id}>{m.title}</option>
-                                ))}
+                              <label style={{ display: "block", fontSize: "14px", fontWeight: "600", color: "#475569", marginBottom: "8px" }}>
+                                Select Target Milestone (Same Project)
+                              </label>
+                              <select
+                                className="myt-input"
+                                style={{ width: "100%", padding: "10px", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "14px" }}
+                                value={effectiveMilestone}
+                                onChange={e => setDenyData({ ...denyData, milestone: e.target.value, deliverable: "", targetTaskId: "", targetEmpId: "" })}
+                                disabled={loadingReworkMilestones}
+                              >
+                                {availableMilestones.length === 0 && (
+                                  <option value="">{loadingReworkMilestones ? "Loading Milestones..." : "No Previous Milestones"}</option>
+                                )}
+                                {availableMilestones.map(m => {
+                                  const mId = String(m.mId || m.mid || m.id || m.drftMId || "");
+                                  const mCd = m.mlstnCd ? `[${m.mlstnCd}] ` : '';
+                                  const mTtl = m.mlstnTtl || m.name || m.title || `Milestone ${mId}`;
+                                  return (
+                                    <option key={mId} value={mId}>
+                                      {mCd}{mTtl}
+                                    </option>
+                                  );
+                                })}
                               </select>
                             </div>
                             <div className="myt-form-group">
-                              <label style={{ display: "block", fontSize: "14px", fontWeight: "600", color: "#475569", marginBottom: "8px" }}>Select Target Task / Deliverable</label>
-                              <select className="myt-input" style={{ width: "100%", padding: "10px", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "14px" }}
-                                value={denyData.deliverable || ""} onChange={e => setDenyData({ ...denyData, deliverable: e.target.value })} disabled={!denyData.milestone}>
-                                <option value="">{denyData.milestone ? "Select Task" : "Select Milestone First"}</option>
-                                {availableTasksForSelectedMilestone.map((t, idx) => {
-                                  const taskTitle = t.title || t.taskTtl || t.rawTask?.title || t.rawTask?.taskTtl || `Task ${t.id || t.taskId}`;
+                              <label style={{ display: "block", fontSize: "14px", fontWeight: "600", color: "#475569", marginBottom: "8px" }}>
+                                Select Target Task / Deliverable
+                              </label>
+                              <select
+                                className="myt-input"
+                                style={{ width: "100%", padding: "10px", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "14px" }}
+                                value={denyData.targetTaskId || ""}
+                                onChange={e => {
+                                  const selTaskId = e.target.value;
+                                  const selTaskObj = displayedReworkTasks.find(t => String(t.taskId || t.id || t.empTaskId) === String(selTaskId));
+                                  setDenyData({
+                                    ...denyData,
+                                    milestone: effectiveMilestone,
+                                    targetTaskId: selTaskId,
+                                    deliverable: selTaskObj ? (selTaskObj.taskNm || selTaskObj.title || selTaskObj.taskCd) : "",
+                                    targetEmpId: selTaskObj ? (selTaskObj.empId || selTaskObj.assignedTo || selTaskObj.executorId) : ""
+                                  });
+                                }}
+                                disabled={!effectiveMilestone || loadingReworkTasks}
+                              >
+                                <option value="">
+                                  {!effectiveMilestone ? "Select Milestone First" : loadingReworkTasks ? "Loading Tasks..." : (displayedReworkTasks.length === 0 ? "No Tasks in this Milestone" : "Select Task")}
+                                </option>
+                                {displayedReworkTasks.map(t => {
+                                  const tId = t.taskId || t.id || t.empTaskId;
+                                  const tCode = t.taskCd || t.taskCode || (tId ? formatTaskCode(t.taskCd, tId, false) : "");
+                                  const tCd = tCode ? `[${tCode}] ` : '';
+                                  const tNm = t.taskNm || t.title || t.name || `Task ${tId}`;
+                                  const executorEmpId = t.empId || t.assignedTo || t.executorId;
+                                  const executorName = getEmployeeName(executorEmpId, employeesList);
                                   return (
-                                    <option key={t.id || t.taskId || idx} value={taskTitle}>
-                                      {taskTitle}
+                                    <option key={tId} value={String(tId)}>
+                                      {tCd}{tNm}{executorName ? ` — (${executorName})` : ''}
                                     </option>
                                   );
                                 })}
@@ -4696,35 +5136,221 @@ const MyTasks = ({ userRole, onLogout }) => {
 
   return (
     <div className={`cc-shell-container ${isSidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
-      <Sidebar onLogout={onLogout} />
-      <div className="cc-shell">
-        <Header
-          title="My Tasks"
-          subtitle={showDetailView && selectedTask ? selectedTask.title : "View and manage all tasks assigned to you."}
-          onLogout={onLogout}
-          userRole={userRole}
-        />
-
-        <main className="cc-main" style={{ overflow: "visible" }}>
-          {apiError && (
-            <div style={{ backgroundColor: "#fee2e2", color: "#b91c1c", padding: "16px", borderRadius: "8px", marginBottom: "20px", border: "1px solid #fca5a5", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div><strong>⚠️ Error:</strong> {apiError}</div>
-              <button onClick={() => fetchTasks()} style={{ padding: "6px 16px", backgroundColor: "#b91c1c", color: "white", border: "none", borderRadius: "6px", cursor: "pointer", fontWeight: "500" }}>Retry</button>
+      {!isExternalMode && <Sidebar onLogout={onLogout} />}
+      <div className="cc-shell" style={isExternalMode ? { marginLeft: 0, width: "100%", maxWidth: "100vw" } : {}}>
+        {!isExternalMode ? (
+          <Header
+            title="My Tasks"
+            subtitle={showDetailView && selectedTask ? selectedTask.title : "View and manage all tasks assigned to you."}
+            onLogout={onLogout}
+            userRole={userRole}
+          />
+        ) : (
+          <header style={{ background: "#ffffff", borderBottom: "1px solid #e2e8f0", padding: "14px 28px", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 100 }}>
+            <div style={{ display: "flex", flexDirection: "column" }}>
+              <h1 style={{ fontSize: "20px", fontWeight: "800", color: "#0f172a", margin: 0, lineHeight: "1.2" }}>My Tasks</h1>
+              <span style={{ fontSize: "13px", color: "#64748b", marginTop: "2px" }}>{selectedTask?.title || "Task Details"}</span>
             </div>
-          )}
+            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginRight: "8px" }}>
+                <span style={{ fontSize: "13px", fontWeight: "600", color: "#0f172a" }}>{selectedTask?.rawTask?.extEmpNm || "External Associate"}</span>
+                <span style={{ fontSize: "11px", fontWeight: "700", color: "#2563eb", backgroundColor: "#eff6ff", border: "1px solid #bfdbfe", padding: "2px 8px", borderRadius: "12px" }}>
+                  External
+                </span>
+              </div>
+              <div
+                style={{ position: "relative" }}
+                onMouseEnter={() => setIsExternalProfileHovered(true)}
+                onMouseLeave={() => setIsExternalProfileHovered(false)}
+              >
+                <div
+                  style={{
+                    width: "38px",
+                    height: "38px",
+                    borderRadius: "50%",
+                    backgroundColor: "#1e3a8a",
+                    color: "#ffffff",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontWeight: "700",
+                    fontSize: "14px",
+                    cursor: "pointer",
+                    boxShadow: "0 2px 8px rgba(30, 58, 138, 0.25)",
+                    overflow: "hidden"
+                  }}
+                >
+                  {selectedTask?.rawTask?.photoPath ? (
+                    <img
+                      src={selectedTask.rawTask.photoPath.startsWith('data:') || selectedTask.rawTask.photoPath.startsWith('http') ? selectedTask.rawTask.photoPath : `data:image/jpeg;base64,${selectedTask.rawTask.photoPath}`}
+                      alt="Avatar"
+                      style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                      onError={(e) => {
+                        e.target.style.display = "none";
+                        e.target.parentElement.textContent = selectedTask?.rawTask?.extEmpNm ? selectedTask.rawTask.extEmpNm.split(" ").map(p => p[0]).join("").toUpperCase().substring(0, 2) : "KU";
+                      }}
+                    />
+                  ) : (
+                    selectedTask?.rawTask?.extEmpNm ? selectedTask.rawTask.extEmpNm.split(" ").map(p => p[0]).join("").toUpperCase().substring(0, 2) : "KU"
+                  )}
+                </div>
 
-          {showDetailView && selectedTask ? (
-            renderTaskDetailScreen(
-              selectedTask,
-              () => {
-                setShowDetailView(false);
-                setSelectedTask(null);
-                setShowDenyForm(false);
-                setUpdateRemarks("");
-                setUpdateAttachments([]);
-              }
-            )
+                {isExternalProfileHovered && (
+                  <div
+                    className="profile-hover-card"
+                    style={{
+                      position: "absolute",
+                      top: "44px",
+                      right: 0,
+                      background: "white",
+                      border: "1px solid #e2e8f0",
+                      borderRadius: "12px",
+                      boxShadow: "0 10px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1)",
+                      padding: "20px",
+                      minWidth: "260px",
+                      zIndex: 1000,
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "12px"
+                    }}
+                  >
+                    <div style={{ borderBottom: "1px solid #f1f5f9", paddingBottom: "12px" }}>
+                      <h4 style={{ margin: 0, fontSize: "15px", fontWeight: "700", color: "#0f172a" }}>
+                        {selectedTask?.rawTask?.extEmpNm || "External Associate"}
+                      </h4>
+                      <span style={{ fontSize: "12px", color: "#64748b", fontWeight: "500" }}>
+                        {selectedTask?.rawTask?.companyNm ? `External Associate • ${selectedTask.rawTask.companyNm}` : "External Associate"}
+                      </span>
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                      <div style={{ display: "flex", flexDirection: "column" }}>
+                        <small style={{ fontSize: "10px", textTransform: "uppercase", color: "#94a3b8", fontWeight: "600", letterSpacing: "0.5px" }}>Email</small>
+                        <span style={{ fontSize: "13px", color: "#334155", wordBreak: "break-all" }}>
+                          {selectedTask?.rawTask?.email || "—"}
+                        </span>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "4px" }}>
+                        <span style={{
+                          width: "8px",
+                          height: "8px",
+                          background: "#10b981",
+                          borderRadius: "50%"
+                        }}></span>
+                        <span style={{
+                          fontSize: "12px",
+                          color: "#10b981",
+                          fontWeight: "600"
+                        }}>
+                          Active Status
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </header>
+        )}
+
+        <main className="cc-main" style={{ overflow: "visible", padding: isExternalMode ? "24px" : undefined }}>
+          {isExternalMode && isExpired ? (
+            <div style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              minHeight: "65vh",
+              textAlign: "center",
+              padding: "40px 20px"
+            }}>
+              <div style={{
+                width: "88px",
+                height: "88px",
+                borderRadius: "50%",
+                backgroundColor: expiredReason === "TASK_CLOSED" ? "#dcfce7" : "#fee2e2",
+                color: expiredReason === "TASK_CLOSED" ? "#16a34a" : "#dc2626",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                marginBottom: "24px",
+                boxShadow: "0 4px 12px rgba(0,0,0,0.05)"
+              }}>
+                {expiredReason === "TASK_CLOSED" ? <CheckCircle2 size={48} /> : <AlertCircle size={48} />}
+              </div>
+
+              <h2 style={{ fontSize: "24px", fontWeight: "700", color: "#0f172a", marginBottom: "12px" }}>
+                {expiredReason === "TASK_CLOSED" ? "Task Completed & Link Expired" : "Task Link Expired"}
+              </h2>
+
+              <p style={{ fontSize: "15px", color: "#64748b", maxWidth: "520px", lineHeight: "1.6", margin: "0 auto 28px auto" }}>
+                {expiredMessage || (expiredReason === "TASK_CLOSED" 
+                  ? "This task has been marked as Completed / Closed. Access via this link is now expired and locked." 
+                  : "The scheduled due date for this task has passed and the access link is now expired. Please contact your Project Administrator if you need an extension.")}
+              </p>
+
+              <div style={{
+                backgroundColor: "#ffffff",
+                border: "1px solid #e2e8f0",
+                borderRadius: "12px",
+                padding: "20px 28px",
+                display: "flex",
+                flexDirection: "column",
+                gap: "10px",
+                width: "100%",
+                maxWidth: "420px",
+                textAlign: "left",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.05)"
+              }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13.5px" }}>
+                  <span style={{ color: "#64748b" }}>Task ID:</span>
+                  <span style={{ fontWeight: "600", color: "#0f172a" }}>{selectedTask?.id || "—"}</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13.5px" }}>
+                  <span style={{ color: "#64748b" }}>Task Name:</span>
+                  <span style={{ fontWeight: "600", color: "#0f172a" }}>{selectedTask?.title || "—"}</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13.5px" }}>
+                  <span style={{ color: "#64748b" }}>Assigned To:</span>
+                  <span style={{ fontWeight: "600", color: "#0f172a" }}>{selectedTask?.rawTask?.extEmpNm || "External Associate"}</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13.5px", borderTop: "1px solid #f1f5f9", paddingTop: "10px", marginTop: "2px" }}>
+                  <span style={{ color: "#64748b" }}>Link Status:</span>
+                  <span style={{
+                    fontWeight: "700",
+                    fontSize: "12px",
+                    color: expiredReason === "TASK_CLOSED" ? "#16a34a" : "#dc2626",
+                    backgroundColor: expiredReason === "TASK_CLOSED" ? "#f0fdf4" : "#fef2f2",
+                    padding: "2px 10px",
+                    borderRadius: "12px"
+                  }}>
+                    {expiredReason === "TASK_CLOSED" ? "CLOSED & EXPIRED" : "EXPIRED"}
+                  </span>
+                </div>
+              </div>
+            </div>
           ) : (
+            <>
+              {apiError && (
+                <div style={{ backgroundColor: "#fee2e2", color: "#b91c1c", padding: "16px", borderRadius: "8px", marginBottom: "20px", border: "1px solid #fca5a5", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div><strong>⚠️ Error:</strong> {apiError}</div>
+                  <button onClick={() => isExternalMode ? fetchExternalTask() : fetchTasks()} style={{ padding: "6px 16px", backgroundColor: "#b91c1c", color: "white", border: "none", borderRadius: "6px", cursor: "pointer", fontWeight: "500" }}>Retry</button>
+                </div>
+              )}
+
+              {showDetailView && selectedTask ? (
+                renderTaskDetailScreen(
+                  selectedTask,
+                  () => {
+                    if (!isExternalMode) {
+                      setShowDetailView(false);
+                      setSelectedTask(null);
+                      setShowDenyForm(false);
+                      setUpdateRemarks("");
+                      setUpdateAttachments([]);
+                    }
+                  }
+                )
+              ) : (
             /* Tasks List View */
             <>
               {/* Metrics Cards */}
@@ -4959,7 +5585,7 @@ const MyTasks = ({ userRole, onLogout }) => {
                                     <div style={{ display: "flex", gap: "6px" }}>
                                       {processIcon && <div className="myt-custom-tooltip-wrap" title={processIcon.title} style={{ color: processIcon.color, display: "flex", alignItems: "center", cursor: "help" }}><processIcon.icon size={18} strokeWidth={2.5} /></div>}
                                       {wasReassigned && task.rawTask?.prcsYesActn !== "REASSIGN" && (
-                                        <div className="myt-custom-tooltip-wrap" title="Previously Reassigned" style={{ color: "#4F46E5", display: "flex", alignItems: "center", cursor: "help" }}><UserCheck size={18} color="#4F46E5" strokeWidth={2.5} /></div>
+                                        <div className="myt-custom-tooltip-wrap" title="Previously Reassigned" style={{ color: "#4F46E5", display: "flex", alignItems: "center", cursor: "help" }}><ReassignIcon size={18} color="#4F46E5" strokeWidth={2.5} /></div>
                                       )}
                                     </div>
                                   )}
@@ -4995,6 +5621,8 @@ const MyTasks = ({ userRole, onLogout }) => {
                   )}
                 </div>
               </div>
+            </>
+          )}
             </>
           )}
         </main>

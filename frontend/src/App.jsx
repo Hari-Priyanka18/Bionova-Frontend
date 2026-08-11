@@ -121,6 +121,7 @@ const AppContent = () => {
       />
       <Route path="/assignment" element={isLoggedIn ? <Assignment userRole={userRole} onLogout={handleLogout} /> : <Navigate to="/" replace />} />
       <Route path="/reset-password" element={<ResetPassword />} />
+      <Route path="/external-task/:token" element={<MyTasks />} />
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
