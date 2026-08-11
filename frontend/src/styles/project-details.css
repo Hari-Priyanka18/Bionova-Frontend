@@ -110,6 +110,18 @@
   border: 1px solid #fef08a;
 }
 
+.pd-badge.hold, .pd-badge.on-hold {
+  background: #ffedd5;
+  color: #c2410c;
+  border: 1px solid #fed7aa;
+}
+
+.pd-badge.closed, .pd-badge.completed {
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+}
+
 .pd-title-row h2 {
   margin: 0;
   font-size: 20px;

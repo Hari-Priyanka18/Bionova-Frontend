@@ -161,6 +161,18 @@
   color: #475569;
 }
 
+.pd-status-badge.st-overdue {
+  background: #fee2e2;
+  color: #dc2626;
+  border: 1px solid #fca5a5;
+}
+
+.pd-status-badge.st-hold {
+  background: #ffedd5;
+  color: #c2410c;
+  border: 1px solid #fed7aa;
+}
+
 /* Progress */
 .pd-progress-wrap {
   display: flex;

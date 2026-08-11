@@ -25,10 +25,12 @@ import {
   ChevronRight,
   Hand,
   Menu,
-  ChevronDown
+  ChevronDown,
+  Clock
 } from "lucide-react";
 import "../../styles/TaskBoard.css";
 import plantImage from "../../assets/cbg_plant_construction.png";
+import ExtendExternalLinkModal from "../ExtendExternalLinkModal.jsx";
 
 // ─── Searchable Select Component ──────────────────────────────────────────
 const SearchableSelect = ({ options, value, onChange, placeholder, name, style, disabled, showSearch = true }) => {
@@ -349,6 +351,7 @@ const TaskBoard = ({ userRole, onLogout }) => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedTask, setSelectedTask] = useState(null);
+  const [extendModalTask, setExtendModalTask] = useState(null);
 
   // ─── Add task form state ──────────────────────────────────────────────
   const [newTitle, setNewTitle] = useState("");
@@ -441,11 +444,12 @@ const TaskBoard = ({ userRole, onLogout }) => {
 
   // ─── Filter and sorting ──────────────────────────────────────────────
   const baseFilteredTasks = tasks.filter((task) => {
+    const isClosed = task.status === "Closed" || task.status === "Completed";
     const matchProject = selectedProjectId === "All" || String(task.projectId) === String(selectedProjectId);
     const matchMilestone = selectedMilestone === "All Milestones" || task.milestone === selectedMilestone;
     const matchAssignee = selectedAssignee === "All Employees" || task.assignee === selectedAssignee;
     const matchTaskType = selectedTaskType === "All" || task.taskType === selectedTaskType;
-    const matchPriority = selectedPriority === "All" || task.priority === selectedPriority;
+    const matchPriority = selectedPriority === "All" || (!isClosed && task.priority === selectedPriority);
     const matchSearch =
       task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       task.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -848,15 +852,31 @@ const TaskBoard = ({ userRole, onLogout }) => {
                   </div>
                 </div>
                 <div className="tb-cards-container">
-                  {getTasksByStatus("Not Started").map(task => (
+                  {getTasksByStatus("Not Started").map((task, idx) => (
                     <div
-                      key={task.id}
+                      key={task.taskId ? `tb-ns-${task.taskId}` : `tb-ns-${task.id}-${idx}`}
                       className="tb-card"
                       
                       onClick={() => handleCardClick(task)}
                     >
                       <div className="tb-card-header">
                         <span className="tb-card-id">{task.id}</span>
+                        {task.taskType === "External" && (
+                          <span
+                            style={{
+                              background: "#eff6ff",
+                              color: "#2563eb",
+                              border: "1px solid #bfdbfe",
+                              borderRadius: "4px",
+                              padding: "1px 6px",
+                              fontSize: "10px",
+                              fontWeight: "700",
+                            }}
+                            title="External Task (Click to manage access link)"
+                          >
+                            🔗 External
+                          </span>
+                        )}
                         <span className={`tb-card-prio ${task.priority.toLowerCase()}`}>{task.priority}</span>
                       </div>
                       <h4 className="tb-card-title">{task.title}</h4>
@@ -906,15 +926,31 @@ const TaskBoard = ({ userRole, onLogout }) => {
                   </div>
                 </div>
                 <div className="tb-cards-container">
-                  {getTasksByStatus("In Progress").map(task => (
+                  {getTasksByStatus("In Progress").map((task, idx) => (
                     <div
-                      key={task.id}
+                      key={task.taskId ? `tb-ip-${task.taskId}` : `tb-ip-${task.id}-${idx}`}
                       className="tb-card"
                       
                       onClick={() => handleCardClick(task)}
                     >
                       <div className="tb-card-header">
                         <span className="tb-card-id">{task.id}</span>
+                        {task.taskType === "External" && (
+                          <span
+                            style={{
+                              background: "#eff6ff",
+                              color: "#2563eb",
+                              border: "1px solid #bfdbfe",
+                              borderRadius: "4px",
+                              padding: "1px 6px",
+                              fontSize: "10px",
+                              fontWeight: "700",
+                            }}
+                            title="External Task (Click to manage access link)"
+                          >
+                            🔗 External
+                          </span>
+                        )}
                         <span className={`tb-card-prio ${task.priority.toLowerCase()}`}>{task.priority}</span>
                       </div>
                       <h4 className="tb-card-title">{task.title}</h4>
@@ -975,15 +1011,31 @@ const TaskBoard = ({ userRole, onLogout }) => {
                   </div>
                 </div>
                 <div className="tb-cards-container">
-                  {getTasksByStatus("Under Review").map(task => (
+                  {getTasksByStatus("Under Review").map((task, idx) => (
                     <div
-                      key={task.id}
+                      key={task.taskId ? `tb-ur-${task.taskId}` : `tb-ur-${task.id}-${idx}`}
                       className="tb-card"
                       
                       onClick={() => handleCardClick(task)}
                     >
                       <div className="tb-card-header">
                         <span className="tb-card-id">{task.id}</span>
+                        {task.taskType === "External" && (
+                          <span
+                            style={{
+                              background: "#eff6ff",
+                              color: "#2563eb",
+                              border: "1px solid #bfdbfe",
+                              borderRadius: "4px",
+                              padding: "1px 6px",
+                              fontSize: "10px",
+                              fontWeight: "700",
+                            }}
+                            title="External Task (Click to manage access link)"
+                          >
+                            🔗 External
+                          </span>
+                        )}
                         <span className={`tb-card-prio ${task.priority.toLowerCase()}`}>{task.priority}</span>
                       </div>
                       <h4 className="tb-card-title">{task.title}</h4>
@@ -1044,15 +1096,31 @@ const TaskBoard = ({ userRole, onLogout }) => {
                   </div>
                 </div>
                 <div className="tb-cards-container">
-                  {[...getTasksByStatus("Closed"), ...getTasksByStatus("Completed")].map(task => (
+                  {[...getTasksByStatus("Closed"), ...getTasksByStatus("Completed")].map((task, idx) => (
                     <div
-                      key={task.id}
+                      key={task.taskId ? `tb-cl-${task.taskId}` : `tb-cl-${task.id}-${idx}`}
                       className="tb-card"
                       
                       onClick={() => handleCardClick(task)}
                     >
                       <div className="tb-card-header">
                         <span className="tb-card-id completed">{task.id}</span>
+                        {task.taskType === "External" && (
+                          <span
+                            style={{
+                              background: "#eff6ff",
+                              color: "#2563eb",
+                              border: "1px solid #bfdbfe",
+                              borderRadius: "4px",
+                              padding: "1px 6px",
+                              fontSize: "10px",
+                              fontWeight: "700",
+                            }}
+                            title="External Task (Click to manage access link)"
+                          >
+                            🔗 External
+                          </span>
+                        )}
                         {(() => {
                           const info = getScheduleStatusInfo(task);
                           return (
@@ -1129,15 +1197,31 @@ const TaskBoard = ({ userRole, onLogout }) => {
                   </div>
                 </div>
                 <div className="tb-cards-container">
-                  {getTasksByStatus("Overdue").map(task => (
+                  {getTasksByStatus("Overdue").map((task, idx) => (
                     <div
-                      key={task.id}
+                      key={task.taskId ? `tb-od-${task.taskId}` : `tb-od-${task.id}-${idx}`}
                       className="tb-card"
                       
                       onClick={() => handleCardClick(task)}
                     >
                       <div className="tb-card-header">
                         <span className="tb-card-id overdue">{task.id}</span>
+                        {task.taskType === "External" && (
+                          <span
+                            style={{
+                              background: "#eff6ff",
+                              color: "#2563eb",
+                              border: "1px solid #bfdbfe",
+                              borderRadius: "4px",
+                              padding: "1px 6px",
+                              fontSize: "10px",
+                              fontWeight: "700",
+                            }}
+                            title="External Task (Click to manage access link)"
+                          >
+                            🔗 External
+                          </span>
+                        )}
                         <span className="tb-card-prio overdue">OVERDUE</span>
                       </div>
                       <h4 className="tb-card-title">{task.title}</h4>
@@ -1324,12 +1408,44 @@ const TaskBoard = ({ userRole, onLogout }) => {
 
               
             </div>
-            <div className="tb-modal-footer" style={{ justifyContent: "flex-end" }}>
+            <div className="tb-modal-footer" style={{ justifyContent: "space-between", alignItems: "center" }}>
+              {selectedTask.taskType === "External" ? (
+                <button
+                  type="button"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    backgroundColor: "#eff6ff",
+                    color: "#2563eb",
+                    border: "1px solid #bfdbfe",
+                    fontWeight: 600,
+                    fontSize: "13px",
+                    padding: "7px 12px",
+                    borderRadius: "6px",
+                    cursor: "pointer",
+                  }}
+                  onClick={() => setExtendModalTask(selectedTask)}
+                >
+                  <Clock size={14} /> Manage External Link / Extend Expiry
+                </button>
+              ) : (
+                <div></div>
+              )}
               <button className="tb-btn-primary" onClick={() => setShowDetailModal(false)}>Close</button>
             </div>
           </div>
         </div>
       )}
+
+      {/* ====== EXTEND EXTERNAL LINK MODAL ====== */}
+      <ExtendExternalLinkModal
+        isOpen={!!extendModalTask}
+        onClose={() => setExtendModalTask(null)}
+        taskId={extendModalTask?.taskId || extendModalTask?.id}
+        taskName={extendModalTask?.title || extendModalTask?.taskNm}
+        onSuccess={fetchLiveTasks}
+      />
     </div>
   );
 };

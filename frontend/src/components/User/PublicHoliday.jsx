@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Calendar, Plus, Search, Filter, Edit2, Trash2, Info, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Calendar, Plus, Search, Edit2, Trash2, Info, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import Sidebar from "../Sidebar.jsx";
 import Header from "../Header.jsx";
 import AlertModal from "../AlertModal.jsx";
@@ -320,9 +320,6 @@ const PublicHoliday = ({ userRole, onLogout }) => {
                     value={searchQuery}
                     onChange={handleSearch}
                   />
-                  <button className="ph-filter-btn">
-                    <Filter size={16} />
-                  </button>
                 </div>
               </div>
 

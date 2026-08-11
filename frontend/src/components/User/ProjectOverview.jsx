@@ -8,50 +8,14 @@ const getAuthHeaders = () => ({
   "Authorization": `Bearer ${sessionStorage.getItem("authToken") || ""}`
 });
 
-const formatDateDDMMYYYY = (val) => {
-  if (!val || val === 'N/A' || val === '—') return 'N/A';
-  
-  if (Array.isArray(val) && val.length >= 3) {
-    const yyyy = String(val[0]);
-    const mm = String(val[1]).padStart(2, '0');
-    const dd = String(val[2]).padStart(2, '0');
-    return `${dd}/${mm}/${yyyy}`;
-  }
-
-  const str = String(val).trim();
-  if (!str) return 'N/A';
-
-  if (/^\d{2}[\/\-]\d{2}[\/\-]\d{4}$/.test(str)) {
-    return str.replace(/-/g, '/');
-  }
-
-  if (/^\d{4}[\/\-]\d{2}[\/\-]\d{2}/.test(str)) {
-    const datePart = str.split('T')[0].split(' ')[0];
-    const parts = datePart.split(/[\/\-]/);
-    if (parts.length === 3) {
-      return `${parts[2].padStart(2, '0')}/${parts[1].padStart(2, '0')}/${parts[0]}`;
-    }
-  }
-
-  const d = new Date(val);
-  if (isNaN(d.getTime())) return str;
-
-  const day = String(d.getDate()).padStart(2, '0');
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const year = d.getFullYear();
-  return `${day}/${month}/${year}`;
-};
-
 const ProjectOverview = ({ project }) => {
   const [milestones, setMilestones] = useState([]);
   const [tasks, setTasks] = useState([]);
-  const [employees, setEmployees] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
       if (!project?.id) return;
-      setLoading(true);
       try {
         const isDraft = project._type === "draft" || project.status === "DRAFT" || project.status === "Draft";
         const milestonesUrl = isDraft
@@ -136,18 +100,13 @@ const ProjectOverview = ({ project }) => {
             else if (statusUpper === 'IN_PROGRESS' || statusUpper === 'WIP' || statusUpper === 'LIVE') progressPct = 50;
           }
 
-          const rawStart = m.stDt || m.st_dt || m.tentStDt || m.tent_st_dt;
-          const rawEnd = m.endDt || m.end_dt || m.tentEndDt || m.tent_end_dt;
-
           return {
             id: mId,
             code: m.mlstnCd || m.mlstn_cd || m.mlstmCd || m.mlstm_cd || `ML-${String(idx + 1).padStart(3, '0')}`,
             title: m.mlstnTtl || m.mlstn_ttl || m.mlstmTtl || m.mlstm_ttl || 'N/A',
             duration: m.mlstnDays || m.mlstn_days || m.mlstmDays || m.mlstm_days || 0,
-            start: formatDateDDMMYYYY(rawStart),
-            end: formatDateDDMMYYYY(rawEnd),
-            rawStart,
-            rawEnd,
+            start: m.stDt || m.st_dt || m.tentStDt || m.tent_st_dt || 'N/A',
+            end: m.endDt || m.end_dt || m.tentEndDt || m.tent_end_dt || 'N/A',
             status: (m.mlstnSts || m.mlstn_sts || m.mlstmSts || m.mlstm_sts || 'DRAFT').toUpperCase().replace(/_/g, ' '),
             progress: progressPct
           };
@@ -172,19 +131,14 @@ const ProjectOverview = ({ project }) => {
 
           const displayStatus = isTaskDone(t) ? 'CLOSED' : (rawSts.replace(/_/g, ' ') || 'DRAFT');
 
-          const rawStart = t.stDt || t.st_dt || t.tentStDt || t.tent_st_dt;
-          const rawEnd = t.endDt || t.end_dt || t.tentEndDt || t.tent_end_dt;
-
           return {
             rawTask: t,
-            rawStart,
-            rawEnd,
             code: t.taskCd || t.task_cd || `TSK-${String(idx + 1).padStart(3, '0')}`,
             name: t.taskNm || t.task_nm || 'N/A',
             milestone: milestoneCode,
             assignee: assigneeName,
-            start: formatDateDDMMYYYY(rawStart),
-            end: formatDateDDMMYYYY(rawEnd),
+            start: t.stDt || t.st_dt || t.tentStDt || t.tent_st_dt || 'N/A',
+            end: t.endDt || t.end_dt || t.tentEndDt || t.tent_end_dt || 'N/A',
             status: displayStatus,
             progress: progressPct
           };
@@ -202,12 +156,21 @@ const ProjectOverview = ({ project }) => {
     fetchData();
   }, [project]);
 
-  const getStatusClass = (status) => {
+  const getStatusClass = (status, isTaskOverdue = false) => {
+    if (isTaskOverdue) return 'st-overdue';
     if (!status) return 'st-default';
     const s = status.toUpperCase();
     switch (s) {
+      case 'OVERDUE':
+      case 'OVER_DUE':
+        return 'st-overdue';
+      case 'HOLD':
+      case 'ON HOLD':
+      case 'ON_HOLD':
+        return 'st-hold';
       case 'CLOSED':
-      case 'COMPLETED': return 'st-completed';
+      case 'COMPLETED':
+        return 'st-completed';
       case 'IN PROGRESS':
       case 'WIP':
         return 'st-in-progress';
@@ -215,7 +178,8 @@ const ProjectOverview = ({ project }) => {
       case 'OPEN':
       case 'DRAFT':
         return 'st-not-started';
-      default: return 'st-default';
+      default:
+        return 'st-default';
     }
   };
 
@@ -228,8 +192,7 @@ const ProjectOverview = ({ project }) => {
   if (loading) {
     return (
       <div style={{ padding: '60px 20px', textAlign: 'center', color: '#64748b' }}>
-        <div style={{ display: 'inline-block', width: '36px', height: '36px', border: '3px solid #e2e8f0', borderTop: '3px solid #2563eb', borderRadius: '50%', animation: 'spin 1s linear infinite', marginBottom: '12px' }} />
-        <p style={{ margin: 0, fontSize: '15px', fontWeight: '500', color: '#475569' }}>Loading milestones & tasks...</p>
+        Loading project overview data...
       </div>
     );
   }
@@ -243,10 +206,9 @@ const ProjectOverview = ({ project }) => {
 
   const overdueTasks = tasks.filter(t => {
     if (t.status === 'COMPLETED' || t.status === 'CLOSED') return false;
-    const endDateVal = t.rawEnd || t.end;
-    if (!endDateVal || endDateVal === 'N/A') return false;
-    const endD = new Date(endDateVal);
-    return !isNaN(endD.getTime()) && endD < today;
+    if (!t.end || t.end === 'N/A') return false;
+    const endD = new Date(t.end);
+    return endD < today;
   }).length;
 
   const stats = [
@@ -254,9 +216,11 @@ const ProjectOverview = ({ project }) => {
     { label: "Tasks", value: String(totalTasks), subtitle: "Total Tasks", icon: <FileText size={20} color="#1d4ed8" />, bg: "rgba(29, 78, 216, 0.1)" },
     { label: "Not Started Tasks", value: String(notStartedTasks), subtitle: totalTasks > 0 ? `${((notStartedTasks / totalTasks) * 100).toFixed(1)}%` : "0.0%", icon: <AlertCircle size={20} color="#f59e0b" />, bg: "rgba(245, 158, 11, 0.1)" },
     { label: "In Progress Tasks", value: String(inProgressTasks), subtitle: totalTasks > 0 ? `${((inProgressTasks / totalTasks) * 100).toFixed(1)}%` : "0.0%", icon: <Clock size={20} color="#f97316" />, bg: "rgba(249, 115, 22, 0.1)" },
-    { label: "Overdue Tasks", value: String(overdueTasks), subtitle: totalTasks > 0 ? `${((overdueTasks / totalTasks) * 100).toFixed(1)}%` : "0.0%", icon: <AlertTriangle size={20} color="#14b8a6" />, bg: "rgba(20, 184, 166, 0.1)" },
+    { label: "Overdue Tasks", value: String(overdueTasks), subtitle: totalTasks > 0 ? `${((overdueTasks / totalTasks) * 100).toFixed(1)}%` : "0.0%", icon: <AlertTriangle size={20} color="#ef4444" />, bg: "rgba(239, 68, 68, 0.1)" },
     { label: "Closed Tasks", value: String(completedTasks), subtitle: totalTasks > 0 ? `${((completedTasks / totalTasks) * 100).toFixed(1)}%` : "0.0%", icon: <CheckCircle size={20} color="#10b981" />, bg: "rgba(16, 185, 129, 0.1)" },
   ];
+
+  const [employees, setEmployees] = useState([]);
 
   const teamMemberPerformance = () => {
     if (!tasks || tasks.length === 0) return [];
@@ -293,8 +257,7 @@ const ProjectOverview = ({ project }) => {
       if (s === "COMPLETED" || s === "CLOSED" || s === "DONE") {
         empMap[empName].done += 1;
       } else {
-        const endDateVal = t.rawEnd || t.end;
-        if (endDateVal && endDateVal !== 'N/A' && !isNaN(new Date(endDateVal).getTime()) && new Date(endDateVal).setHours(23, 59, 59, 999) < nowMs) {
+        if (t.end && new Date(t.end).setHours(23, 59, 59, 999) < nowMs) {
           empMap[empName].overdue += 1;
         } else {
           empMap[empName].onTime += 1;
@@ -519,26 +482,31 @@ const ProjectOverview = ({ project }) => {
               </tr>
             </thead>
             <tbody>
-              {tasks.length > 0 ? tasks.slice(0, 10).map((t, idx) => (
-                <tr key={idx}>
-                  <td>{idx + 1}</td>
-                  <td className="pd-code-col">{t.code}</td>
-                  <td>{t.name}</td>
-                  <td>{t.milestone}</td>
-                  <td>{t.assignee}</td>
-                  <td>{t.start}</td>
-                  <td>{t.end}</td>
-                  <td><span className={`pd-status-badge ${getStatusClass(t.status)}`}>{t.status}</span></td>
-                  <td>
-                    <div className="pd-progress-wrap">
-                      <div className="pd-progress-bar">
-                        <div className="pd-progress-fill" style={{ width: `${t.progress}%`, backgroundColor: getProgressColor(t.progress) }}></div>
+              {tasks.length > 0 ? tasks.slice(0, 10).map((t, idx) => {
+                const isOverdue = !['COMPLETED', 'CLOSED', 'DONE', 'COMPLETE'].includes(t.status?.toUpperCase()) && 
+                  t.end && t.end !== 'N/A' && new Date(t.end) < today;
+                const displayStatus = isOverdue ? (t.status === 'IN PROGRESS' ? 'OVERDUE' : `${t.status} (OVERDUE)`) : t.status;
+                return (
+                  <tr key={idx}>
+                    <td>{idx + 1}</td>
+                    <td className="pd-code-col">{t.code}</td>
+                    <td>{t.name}</td>
+                    <td>{t.milestone}</td>
+                    <td>{t.assignee}</td>
+                    <td>{t.start}</td>
+                    <td style={{ color: isOverdue ? '#dc2626' : 'inherit', fontWeight: isOverdue ? '600' : 'normal' }}>{t.end}</td>
+                    <td><span className={`pd-status-badge ${getStatusClass(t.status, isOverdue)}`}>{displayStatus}</span></td>
+                    <td>
+                      <div className="pd-progress-wrap">
+                        <div className="pd-progress-bar">
+                          <div className="pd-progress-fill" style={{ width: `${t.progress}%`, backgroundColor: isOverdue ? '#ef4444' : getProgressColor(t.progress) }}></div>
+                        </div>
+                        <span style={{ color: isOverdue ? '#dc2626' : 'inherit', fontWeight: isOverdue ? '600' : 'normal' }}>{t.progress}%</span>
                       </div>
-                      <span>{t.progress}%</span>
-                    </div>
-                  </td>
-                </tr>
-              )) : (
+                    </td>
+                  </tr>
+                );
+              }) : (
                 <tr>
                   <td colSpan={9} style={{ textAlign: 'center', padding: '30px', color: '#64748b' }}>
                     No tasks found for this project.

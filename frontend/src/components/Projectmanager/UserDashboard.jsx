@@ -67,8 +67,8 @@ import "../../styles/userDashboard.css";
 // SECTION 2: API & CONFIGURATION
 // ============================================================
 
-const API_BASE = import.meta.env?.VITE_API_BASE_URL 
-  ? `${import.meta.env.VITE_API_BASE_URL}/api` 
+const API_BASE = import.meta.env?.VITE_API_BASE_URL
+  ? `${import.meta.env.VITE_API_BASE_URL}/api`
   : "http://localhost:8080/api";
 
 const getAuthToken = () => sessionStorage.getItem("authToken") || localStorage.getItem("authToken") || "";
@@ -170,7 +170,7 @@ const getTimeStatusBadge = (timeStatus, isOverdue, isClosed) => {
     }
     return <ClockIcon size={14} color="#3b82f6" title="On Time" />;
   }
-  
+
   if (s === 'DUE_TODAY' || s === 'DUE TODAY' || s === 'DUETODAY') {
     return <ClockIcon size={14} color="#f59e0b" title="Due Today" />;
   }
@@ -238,10 +238,10 @@ const PieChartComponent = ({ data, size = 120 }) => {
   const stroke = 16;
   const radius = (size - stroke) / 2;
   const circumference = 2 * Math.PI * radius;
-  
+
   let currentAngle = 0;
   const filteredData = data.filter(item => item.value > 0);
-  
+
   if (filteredData.length === 0) {
     return (
       <div className="ud-pie-chart-wrapper">
@@ -253,7 +253,7 @@ const PieChartComponent = ({ data, size = 120 }) => {
       </div>
     );
   }
-  
+
   return (
     <div className="ud-pie-chart-wrapper">
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
@@ -262,7 +262,7 @@ const PieChartComponent = ({ data, size = 120 }) => {
           const dashLength = (percentage / 100) * circumference;
           const offset = -currentAngle * circumference / 100;
           currentAngle += percentage;
-          
+
           return percentage > 0 ? (
             <circle
               key={index}
@@ -279,19 +279,19 @@ const PieChartComponent = ({ data, size = 120 }) => {
             />
           ) : null;
         })}
-        <text 
-          x="50%" 
-          y="46%" 
-          textAnchor="middle" 
+        <text
+          x="50%"
+          y="46%"
+          textAnchor="middle"
           dominantBaseline="middle"
           className="ud-pie-center-value"
         >
           {total}
         </text>
-        <text 
-          x="50%" 
-          y="58%" 
-          textAnchor="middle" 
+        <text
+          x="50%"
+          y="58%"
+          textAnchor="middle"
           dominantBaseline="middle"
           className="ud-pie-center-label"
         >
@@ -312,61 +312,12 @@ const PieChartComponent = ({ data, size = 120 }) => {
 };
 
 // ============================================================
-// SECTION 6: GREETINGS BANNER COMPONENT
-// ============================================================
-
-const GreetingsBanner = ({ userName, onClose }) => {
-  const [visible, setVisible] = useState(true);
-  const [isExiting, setIsExiting] = useState(false);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsExiting(true);
-      setTimeout(() => {
-        setVisible(false);
-        if (onClose) onClose();
-      }, 600);
-    }, 2500);
-
-    return () => clearTimeout(timer);
-  }, [onClose]);
-
-  if (!visible) return null;
-
-  return (
-    <div className={`ud-greetings-banner ${isExiting ? 'exiting' : ''}`}>
-      <div className="ud-greetings-content">
-        <div className="ud-greetings-icon">
-          <Sparkles size={24} />
-        </div>
-        <div className="ud-greetings-text">
-          <h3>{getGreeting()}, {userName}! 👋</h3>
-          <p>Welcome back! Have a productive day! 🚀</p>
-        </div>
-        <button 
-          className="ud-greetings-close" 
-          onClick={() => {
-            setIsExiting(true);
-            setTimeout(() => { 
-              setVisible(false); 
-              if (onClose) onClose(); 
-            }, 600);
-          }}
-        >
-          <X size={18} />
-        </button>
-      </div>
-    </div>
-  );
-};
-
-// ============================================================
 // SECTION 7: MAIN COMPONENT
 // ============================================================
 
 const UserDashboard = ({ userRole, onLogout }) => {
   const navigate = useNavigate();
-  
+
   // 7.1: State Management
   const [dashboardData, setDashboardData] = useState(() => {
     try {
@@ -410,7 +361,6 @@ const UserDashboard = ({ userRole, onLogout }) => {
   const [alertOpen, setAlertOpen] = useState(false);
   const [alertConfig, setAlertConfig] = useState({ type: "success", title: "", message: "" });
   const [updatingTaskId, setUpdatingTaskId] = useState(null);
-  const [showGreeting, setShowGreeting] = useState(false);
 
   const renderStars = (score) => {
     const stars = [];
@@ -545,9 +495,9 @@ const UserDashboard = ({ userRole, onLogout }) => {
       });
 
       // Filter tasks & milestones matching Projects.jsx calculation
-      const userTasks = allTasksList.filter(t => 
-        (t.empId || t.empid) === currentEmpId || 
-        (t.reviewer) === currentEmpId || 
+      const userTasks = allTasksList.filter(t =>
+        (t.empId || t.empid) === currentEmpId ||
+        (t.reviewer) === currentEmpId ||
         (t.approver) === currentEmpId
       );
 
@@ -643,9 +593,9 @@ const UserDashboard = ({ userRole, onLogout }) => {
       // ============================================================
       // Calculate Chart Data
       // ============================================================
-      
+
       const projectCount = myProjects.length;
-      
+
       let totalProgress = 0;
       myProjects.forEach(p => {
         let prog = p.progress || 0;
@@ -653,25 +603,25 @@ const UserDashboard = ({ userRole, onLogout }) => {
         totalProgress += prog;
       });
       const overallProgress = projectCount > 0 ? (totalProgress / projectCount) : 0;
-      
+
       const completedProjects = myProjects.filter(p => p.status?.toUpperCase() === 'COMPLETED' || p.status?.toUpperCase() === 'CLOSED').length;
       const inProgressProjects = myProjects.filter(p => p.status?.toUpperCase() === 'IN_PROGRESS' || p.status?.toUpperCase() === 'WIP' || p.status?.toUpperCase() === 'ACTIVE').length;
       const notStartedProjects = myProjects.filter(p => p.status?.toUpperCase() === 'NOT_STARTED' || p.status?.toUpperCase() === 'OPEN' || p.status?.toUpperCase() === 'DRAFT').length;
       const delayedProjects = myProjects.filter(p => p.status?.toUpperCase() === 'DELAYED' || p.status?.toUpperCase() === 'OVERDUE' || p.status?.toUpperCase() === 'HOLD').length;
-      
+
       const portfolioItems = [
         { label: "Closed", count: completedProjects, pct: projectCount > 0 ? ((completedProjects / projectCount) * 100).toFixed(1) + "%" : "0.0%", color: "#10b981" },
         { label: "In Progress", count: inProgressProjects, pct: projectCount > 0 ? ((inProgressProjects / projectCount) * 100).toFixed(1) + "%" : "0.0%", color: "#3b82f6" },
         { label: "Not Started", count: notStartedProjects, pct: projectCount > 0 ? ((notStartedProjects / projectCount) * 100).toFixed(1) + "%" : "0.0%", color: "#f59e0b" },
         { label: "Delayed", count: delayedProjects, pct: projectCount > 0 ? ((delayedProjects / projectCount) * 100).toFixed(1) + "%" : "0.0%", color: "#ef4444" },
       ];
-      
+
       let milestoneTotal = 0;
       let milestoneCompleted = 0;
       let milestoneInProgress = 0;
       let milestoneNotStarted = 0;
       let milestoneDelayed = 0;
-      
+
       if (data.milestoneStatus) {
         milestoneTotal = data.milestoneStatus.total || 0;
         milestoneCompleted = data.milestoneStatus.completed || 0;
@@ -693,14 +643,14 @@ const UserDashboard = ({ userRole, onLogout }) => {
           milestoneTotal += 1;
         });
       }
-      
+
       const milestoneItems = [
         { label: "Closed", count: milestoneCompleted, pct: milestoneTotal > 0 ? ((milestoneCompleted / milestoneTotal) * 100).toFixed(1) + "%" : "0.0%", color: "#10b981" },
         { label: "In Progress", count: milestoneInProgress, pct: milestoneTotal > 0 ? ((milestoneInProgress / milestoneTotal) * 100).toFixed(1) + "%" : "0.0%", color: "#3b82f6" },
         { label: "Not Started", count: milestoneNotStarted, pct: milestoneTotal > 0 ? ((milestoneNotStarted / milestoneTotal) * 100).toFixed(1) + "%" : "0.0%", color: "#f59e0b" },
         { label: "Delayed", count: milestoneDelayed, pct: milestoneTotal > 0 ? ((milestoneDelayed / milestoneTotal) * 100).toFixed(1) + "%" : "0.0%", color: "#ef4444" },
       ];
-      
+
       const taskTotal = taskCounts.assigned || 0;
       const taskStatusItems = [
         { label: "Closed", count: taskCounts.completed || 0, pct: taskTotal > 0 ? ((taskCounts.completed / taskTotal) * 100).toFixed(1) + "%" : "0.0%", color: "#10b981" },
@@ -741,15 +691,6 @@ const UserDashboard = ({ userRole, onLogout }) => {
       setUserRoleState(dashboard.role);
       setEmpId(dashboard.empId);
 
-      // Show greeting banner only once per session
-      const userId = dashboard.empId || dashboard.fullName || 'user';
-      const greetingKey = `greetingShown_${userId}`;
-      const greetingShown = sessionStorage.getItem(greetingKey);
-      if (!greetingShown) {
-        setShowGreeting(true);
-        sessionStorage.setItem(greetingKey, 'true');
-      }
-
     } catch (err) {
       console.error("Dashboard fetch error:", err);
       setError(err.message || "Failed to load dashboard. Please try again.");
@@ -780,9 +721,9 @@ const UserDashboard = ({ userRole, onLogout }) => {
 
   const handleStartTask = async (task) => {
     if (updatingTaskId) return;
-    
+
     setUpdatingTaskId(task.id);
-    
+
     try {
       const payload = { taskSts: "WIP" };
       const endpoint = task.isIndividual
@@ -803,11 +744,11 @@ const UserDashboard = ({ userRole, onLogout }) => {
 
       setDashboardData(prevData => {
         if (!prevData) return prevData;
-        
+
         const updatedTodoList = prevData.todoList.map(t => {
           if (t.id === task.id) {
-            return { 
-              ...t, 
+            return {
+              ...t,
               status: "IN_PROGRESS",
               rawTask: { ...t.rawTask, taskSts: "WIP", status: "IN_PROGRESS" },
               isOverdue: false
@@ -815,20 +756,20 @@ const UserDashboard = ({ userRole, onLogout }) => {
           }
           return t;
         });
-        
+
         const newTaskCounts = { ...prevData.taskCounts };
         newTaskCounts.open = Math.max(0, (newTaskCounts.open || 0) - 1);
         newTaskCounts.inProgress = (newTaskCounts.inProgress || 0) + 1;
-        
+
         return {
           ...prevData,
           todoList: updatedTodoList,
           taskCounts: newTaskCounts,
         };
       });
-      
+
       triggerAlert("success", "Started", "Task moved to In Progress.");
-      
+
       setTimeout(() => {
         fetchDashboardData();
       }, 500);
@@ -847,19 +788,19 @@ const UserDashboard = ({ userRole, onLogout }) => {
 
   const handleExportData = () => {
     if (!dashboardData) return;
-    
+
     let csvContent = "data:text/csv;charset=utf-8,";
     csvContent += `User Dashboard Export\n\n`;
     csvContent += `User,${dashboardData.fullName}\n`;
     csvContent += `Role,${dashboardData.role}\n\n`;
-    
+
     csvContent += "Task Summary\nTask Type,Count\n";
     csvContent += `Assigned Tasks,${dashboardData.taskCounts.assigned || 0}\n`;
     csvContent += `Open Tasks,${dashboardData.taskCounts.open || 0}\n`;
     csvContent += `In Progress,${dashboardData.taskCounts.inProgress || 0}\n`;
     csvContent += `Overdue Tasks,${dashboardData.taskCounts.overdue || 0}\n`;
     csvContent += `Closed Tasks,${dashboardData.taskCounts.completed || 0}\n\n`;
-    
+
     csvContent += "My To-Do List\nTask Name,Project,Due Date,Status\n";
     dashboardData.todoList.forEach(t => {
       csvContent += `"${t.name}","${t.project}","${formatDate(t.endDate)}","${getStatusLabel(t.status)}"\n`;
@@ -883,12 +824,12 @@ const UserDashboard = ({ userRole, onLogout }) => {
       <div className="ud-container">
         <Sidebar userRole={userRoleState} onLogout={onLogout} />
         <div className="ud-shell">
-          <Header 
-            title="User Dashboard" 
-            showSearch={false} 
-            userName={userName} 
-            userRole={userRoleState} 
-            initials={getInitials(userName)} 
+          <Header
+            title="User Dashboard"
+            showSearch={false}
+            userName={userName}
+            userRole={userRoleState}
+            initials={getInitials(userName)}
           />
           <main className="ud-main">
             <div className="ud-loading-container">
@@ -906,12 +847,12 @@ const UserDashboard = ({ userRole, onLogout }) => {
       <div className="ud-container">
         <Sidebar userRole={userRoleState} onLogout={onLogout} />
         <div className="ud-shell">
-          <Header 
-            title="User Dashboard" 
-            showSearch={false} 
-            userName={userName} 
-            userRole={userRoleState} 
-            initials={getInitials(userName)} 
+          <Header
+            title="User Dashboard"
+            showSearch={false}
+            userName={userName}
+            userRole={userRoleState}
+            initials={getInitials(userName)}
           />
           <main className="ud-main">
             <div className="ud-error-container">
@@ -933,23 +874,14 @@ const UserDashboard = ({ userRole, onLogout }) => {
       <div className="ud-container">
         <Sidebar userRole={userRoleState} onLogout={onLogout} />
         <div className="ud-shell">
-          <Header 
-            title="User Dashboard" 
-            showSearch={false} 
-            userName={userName} 
-            userRole={userRoleState} 
-            initials={getInitials(userName)} 
+          <Header
+            title="User Dashboard"
+            showSearch={false}
+            userName={userName}
+            userRole={userRoleState}
+            initials={getInitials(userName)}
           />
-          <main className="ud-main">
-            <div className="ud-error-container">
-              <AlertTriangle size={48} color="#f59e0b" />
-              <h2>No data available</h2>
-              <p>We couldn't load your dashboard data.</p>
-              <button className="ud-retry-btn" onClick={fetchDashboardData}>
-                <RotateCw size={16} /> Retry
-              </button>
-            </div>
-          </main>
+
         </div>
       </div>
     );
@@ -993,8 +925,8 @@ const UserDashboard = ({ userRole, onLogout }) => {
     const s = t.status?.toUpperCase() || "";
     return s !== "COMPLETED" && s !== "CLOSED" && s !== "DONE";
   });
-  const displayedTasks = showAllTasks ? activeTodoList : activeTodoList.slice(0, 5);
-  const displayedUpcoming = showAllUpcoming ? sortedUpcomingTasks : sortedUpcomingTasks.slice(0, 5);
+  const displayedTasks = showAllTasks ? activeTodoList : activeTodoList.slice(0, 3);
+  const displayedUpcoming = showAllUpcoming ? sortedUpcomingTasks : sortedUpcomingTasks.slice(0, 4);
   const totalTasks = taskCounts.assigned || 0;
 
   const pieData = [
@@ -1013,23 +945,15 @@ const UserDashboard = ({ userRole, onLogout }) => {
       <Sidebar userRole={userRoleState} onLogout={onLogout} />
 
       <div className="ud-shell">
-        <Header 
-          title="User Dashboard" 
-          showSearch={false} 
-          userName={userName} 
-          userRole={userRoleState} 
-          initials={getInitials(userName)} 
+        <Header
+          title="User Dashboard"
+          showSearch={false}
+          userName={userName}
+          userRole={userRoleState}
+          initials={getInitials(userName)}
         />
 
         <main className="ud-main">
-          
-          {/* ==========================================================
-              SLIDING GREETINGS BANNER
-          ========================================================== */}
-          {showGreeting && (
-            <GreetingsBanner userName={userName} onClose={handleGreetingClose} />
-          )}
-
           {/* ==========================================================
               FILTER BAR - Only User Name & Export
           ========================================================== */}
@@ -1037,13 +961,13 @@ const UserDashboard = ({ userRole, onLogout }) => {
             <div className="ud-filter-group">
               <div className="ud-user-greeting">
                 <span className="ud-user-greeting-text">
-                  {getGreeting()}, <strong>{userName}</strong>
+                  <strong>{userName}</strong>
                 </span>
                 <span className="ud-user-role-badge">{userRoleState || 'User'}</span>
               </div>
             </div>
             <button className="ud-export-btn" onClick={handleExportData}>
-              <Download size={14}/> Export
+              <Download size={14} /> Export
             </button>
           </div>
 
@@ -1122,7 +1046,7 @@ const UserDashboard = ({ userRole, onLogout }) => {
               ROW 2: To Do List (5 Tasks), Milestone Progress, Task Progress
           ========================================================== */}
           <div className="ud-row-2-grid">
-            
+
             {/* Tile 1: My To-Do List - 5 Tasks */}
             <div className="ud-card ud-todo-panel">
               <div className="ud-card-header">
@@ -1135,7 +1059,7 @@ const UserDashboard = ({ userRole, onLogout }) => {
                 {displayedTasks && displayedTasks.length > 0 ? (
                   displayedTasks.map((task, index) => {
                     const isCompleted = task.status === "COMPLETED" || task.status === "DONE" || task.status === "CLOSED";
-                    
+
                     return (
                       <div key={task.id || index} className="ud-todo-card" onClick={() => handleTaskClick(task)}>
                         <div className="ud-todo-card-left">
@@ -1257,7 +1181,7 @@ const UserDashboard = ({ userRole, onLogout }) => {
               ROW 3: Upcoming Tasks (5 Tasks), My Active Projects (3 Projects), My Performance
           ========================================================== */}
           <div className="ud-row-3-grid">
-            
+
             {/* Tile 1: Upcoming Tasks - 5 Tasks */}
             <div className="ud-card ud-upcoming-panel">
               <div className="ud-card-header">
@@ -1345,11 +1269,11 @@ const UserDashboard = ({ userRole, onLogout }) => {
                       progressValue = progressValue * 100;
                     }
                     progressValue = Math.min(100, Math.max(0, progressValue));
-                    
-                    const progressColor = progressValue >= 80 ? '#16a34a' : 
-                                         progressValue >= 50 ? '#f59e0b' : 
-                                         progressValue >= 30 ? '#ea580c' : '#ef4444';
-                    
+
+                    const progressColor = progressValue >= 80 ? '#16a34a' :
+                      progressValue >= 50 ? '#f59e0b' :
+                        progressValue >= 30 ? '#ea580c' : '#ef4444';
+
                     return (
                       <div className="ud-project-card" key={project.id || index} onClick={() => handleProjectClick(project)}>
                         <div className="ud-project-card-left">
@@ -1386,8 +1310,8 @@ const UserDashboard = ({ userRole, onLogout }) => {
                                 return (
                                   <svg viewBox="0 0 44 44" className="ud-card-ring-svg">
                                     <circle cx="22" cy="22" r={radius} fill="none" stroke="#e2e8f0" strokeWidth="4" />
-                                    <circle 
-                                      cx="22" cy="22" r={radius} fill="none" 
+                                    <circle
+                                      cx="22" cy="22" r={radius} fill="none"
                                       stroke={progressColor}
                                       strokeWidth="4"
                                       strokeDasharray={`${dashArray} ${gapArray}`}
@@ -1448,7 +1372,7 @@ const UserDashboard = ({ userRole, onLogout }) => {
                     </div>
                   </div>
                 </div>
-                
+
                 <div className="ud-performance-metrics">
                   <div className="ud-metric-item">
                     <div className="ud-metric-header">
@@ -1474,9 +1398,9 @@ const UserDashboard = ({ userRole, onLogout }) => {
                       <span className="ud-metric-value">{performanceData.qualityScore || 0}/5</span>
                     </div>
                     <div className="ud-metric-bar">
-                      <div className="ud-metric-fill" style={{ 
-                        width: `${Math.min(((performanceData.qualityScore || 0) / 5) * 100, 100)}%`, 
-                        background: '#8b5cf6' 
+                      <div className="ud-metric-fill" style={{
+                        width: `${Math.min(((performanceData.qualityScore || 0) / 5) * 100, 100)}%`,
+                        background: '#8b5cf6'
                       }} />
                     </div>
                   </div>
@@ -1494,16 +1418,16 @@ const UserDashboard = ({ userRole, onLogout }) => {
             </div>
             <div className="ud-quick-grid">
               <button className="ud-action-btn ud-action-blue" onClick={() => navigate("/my-tasks")}>
-                <ListTodo size={18}/> My Tasks
+                <ListTodo size={18} /> My Tasks
               </button>
               <button className="ud-action-btn ud-action-green" onClick={() => navigate("/projects")}>
-                <FolderKanban size={18}/> My Projects
+                <FolderKanban size={18} /> My Projects
               </button>
               <button className="ud-action-btn ud-action-purple" onClick={() => navigate("/calendar")}>
-                <CalendarDays size={18}/> Calendar
+                <CalendarDays size={18} /> Calendar
               </button>
-              <button className="ud-action-btn ud-action-orange" onClick={() => navigate("/assignment")}>
-                <Plus size={18}/> Assign Task
+              <button className="ud-action-btn ud-action-orange" onClick={() => navigate("/assignment", { state: { openForm: true } })}>
+                <Plus size={18} /> Assign Task
               </button>
             </div>
           </div>
@@ -1567,11 +1491,11 @@ const UserDashboard = ({ userRole, onLogout }) => {
             </div>
             <div className="ud-modal-footer">
               {!selectedTask.isUpcoming && selectedTask.status !== "UPCOMING" && selectedTask.status !== "Upcoming" && (selectedTask.status === "OPEN" || selectedTask.status === "PENDING" || selectedTask.status === "NOT_STARTED") && (
-                <button 
-                  className="ud-btn-primary" 
-                  onClick={() => { 
-                    handleStartTask(selectedTask); 
-                    setShowTaskDetail(false); 
+                <button
+                  className="ud-btn-primary"
+                  onClick={() => {
+                    handleStartTask(selectedTask);
+                    setShowTaskDetail(false);
                   }}
                   disabled={updatingTaskId === selectedTask.id}
                 >
@@ -1584,12 +1508,12 @@ const UserDashboard = ({ userRole, onLogout }) => {
         </div>
       )}
 
-      <AlertModal 
-        isOpen={alertOpen} 
-        type={alertConfig.type} 
-        title={alertConfig.title} 
-        message={alertConfig.message} 
-        onClose={() => setAlertOpen(false)} 
+      <AlertModal
+        isOpen={alertOpen}
+        type={alertConfig.type}
+        title={alertConfig.title}
+        message={alertConfig.message}
+        onClose={() => setAlertOpen(false)}
       />
     </div>
   );

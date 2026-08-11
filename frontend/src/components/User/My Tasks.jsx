@@ -967,16 +967,30 @@ const MyTasks = ({ userRole, onLogout }) => {
       let mappedInd = filteredIndTasks.map(t => mapIndividualTask(t, employeesData || []));
       mapped = [...mapped, ...mappedInd];
 
-      // Final strict deduplication by unique database primary ID
+      // Final strict deduplication by unique task code, database primary ID, and composite keys
       const uniqueMapped = [];
-      const seenKeys = new Set();
+      const seenTaskCodes = new Set();
+      const seenPrimaryKeys = new Set();
+
       mapped.forEach(t => {
-        const idVal = t.taskId || t.id || t.empTaskId;
-        const idKey = `${t.isIndividual ? 'IND' : 'LIVE'}_${idVal}`;
-        if (idVal && !seenKeys.has(idKey)) {
-          seenKeys.add(idKey);
-          uniqueMapped.push(t);
+        const rawCode = String(t.taskCode || t.id || t.rawTask?.taskCd || t.rawTask?.taskCode || t.code || "").toUpperCase().trim();
+        const rawId = String(t.taskId || t.empTaskId || t.rawTask?.empTaskId || t.rawTask?.taskId || t.rawTask?.id || "").trim();
+        const typePrefix = t.isIndividual ? 'IND' : 'LIVE';
+        const primaryKey = rawId ? `${typePrefix}_${rawId}` : null;
+
+        // Skip if task code already seen (e.g. "INDTSK-004")
+        if (rawCode && seenTaskCodes.has(rawCode)) {
+          return;
         }
+
+        // Skip if database primary ID already seen
+        if (primaryKey && seenPrimaryKeys.has(primaryKey)) {
+          return;
+        }
+
+        if (rawCode) seenTaskCodes.add(rawCode);
+        if (primaryKey) seenPrimaryKeys.add(primaryKey);
+        uniqueMapped.push(t);
       });
       mapped = uniqueMapped;
 
@@ -2342,19 +2356,22 @@ const MyTasks = ({ userRole, onLogout }) => {
   };
 
   const filteredTasks = tasks.filter(task => {
-    // 1. Basic filters
+    // 1. Search filter: only task code or task title
     if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      if (!task.title?.toLowerCase().includes(q) &&
-        !task.id?.toLowerCase().includes(q) &&
-        !task.taskCode?.toLowerCase().includes(q)) {
+      const q = searchQuery.toLowerCase().trim();
+      const code = String(task.taskCode || task.id || task.code || task.rawTask?.taskCd || task.rawTask?.taskCode || "").toLowerCase().trim();
+      const title = String(task.title || task.name || task.taskNm || task.rawTask?.taskNm || "").toLowerCase().trim();
+      if (!code.includes(q) && !title.includes(q)) {
         return false;
       }
     }
 
     if (selectedProject !== "All Projects" && task.project !== selectedProject) return false;
     if (selectedMilestone !== "All Milestones" && task.milestone !== selectedMilestone) return false;
-    if (selectedPriority !== "All Priorities" && task.priority !== selectedPriority) return false;
+    if (selectedPriority !== "All Priorities") {
+      const isClosed = isCompletedTab(task);
+      if (isClosed || task.priority !== selectedPriority) return false;
+    }
 
     if (taskFilter !== "All" && selectedStatus !== "Completed") {
       const statusFilter = getTaskStatusFilter(task);
@@ -5377,8 +5394,8 @@ const MyTasks = ({ userRole, onLogout }) => {
               </div>
 
               {/* Search and Filters */}
-              {showTaskFilters && (
-                <div className="myt-tabs-container" style={{ marginBottom: "20px", borderBottom: "none", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px" }}>
+              <div className="myt-tabs-container" style={{ marginBottom: "20px", borderBottom: "none", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px" }}>
+                {showTaskFilters ? (
                   <div className="myt-tabs-left" style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
                     <button
                       className={`myt-filter-btn ${taskFilter === "All" ? "active" : ""}`}
@@ -5483,24 +5500,28 @@ const MyTasks = ({ userRole, onLogout }) => {
                       Overdue
                     </button>
                   </div>
-                  <div className="myt-tabs-right" style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                    <div className="myt-search-box" style={{ position: "relative" }}>
-                      <Search size={15} className="myt-search-icon" style={{ position: "absolute", left: "10px", top: "50%", transform: "translateY(-50%)", color: "#94a3b8" }} />
-                      <input
-                        type="text"
-                        placeholder="Search task..."
-                        value={searchInput}
-                        onChange={(e) => { setSearchInput(e.target.value); setSearchQuery(e.target.value); }}
-                        style={{ padding: "8px 12px 8px 32px", border: "1px solid #e2e8f0", borderRadius: "6px", outline: "none", fontSize: "13px", width: "220px" }}
-                        onKeyDown={handleSearchKeyDown}
-                      />
-                    </div>
+                ) : (
+                  <div className="myt-tabs-left" />
+                )}
+                <div className="myt-tabs-right" style={{ display: "flex", gap: "8px", alignItems: "center", marginLeft: showTaskFilters ? "0" : "auto" }}>
+                  <div className="myt-search-box" style={{ position: "relative" }}>
+                    <Search size={15} className="myt-search-icon" style={{ position: "absolute", left: "10px", top: "50%", transform: "translateY(-50%)", color: "#94a3b8" }} />
+                    <input
+                      type="text"
+                      placeholder="Search task code or title..."
+                      value={searchInput}
+                      onChange={(e) => { setSearchInput(e.target.value); setSearchQuery(e.target.value); }}
+                      style={{ padding: "8px 12px 8px 32px", border: "1px solid #e2e8f0", borderRadius: "6px", outline: "none", fontSize: "13px", width: "240px" }}
+                      onKeyDown={handleSearchKeyDown}
+                    />
+                  </div>
+                  {(searchInput || searchQuery) && (
                     <button onClick={handleResetFilters} style={{ padding: "6px 12px", border: "1px solid #e2e8f0", borderRadius: "6px", backgroundColor: "white", cursor: "pointer", fontSize: "12px", color: "#64748b" }}>
                       Clear
                     </button>
-                  </div>
+                  )}
                 </div>
-              )}
+              </div>
 
               {/* Table */}
               <div className="cc-table-panel" style={{ border: "none", boxShadow: "none", padding: 0 }}>

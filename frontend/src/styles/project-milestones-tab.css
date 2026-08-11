@@ -414,7 +414,8 @@
 .mt-status-badge.st-completed { background: #dcfce7; color: #166534; }
 .mt-status-badge.st-in-progress { background: #dbeafe; color: #2563eb; }
 .mt-status-badge.st-not-started { background: #f1f5f9; color: #475569; }
-.mt-status-badge.st-overdue { background: #fee2e2; color: #991b1b; }
+.mt-status-badge.st-hold { background: #ffedd5; color: #c2410c; }
+.mt-status-badge.st-overdue { background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; }
 .mt-status-badge.st-default { background: #f1f5f9; color: #475569; }
 
 .mt-progress-cell {

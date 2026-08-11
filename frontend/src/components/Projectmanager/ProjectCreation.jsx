@@ -24,6 +24,7 @@ import Sidebar from "../Sidebar.jsx";
 import Header from "../Header.jsx";
 import AlertModal from "../AlertModal.jsx";
 import { getScreenPermission } from "../../utils/permissions";
+import { calculateDynamicPriority } from "../../utils/priority";
 import GoLiveCalendar from "./GoLiveCalendar.jsx";
 import "../../styles/projectCreation.css";
 
@@ -364,7 +365,9 @@ const ProjectCreation = ({ userRole, onLogout }) => {
       setCompanies(coyData);
       setPlants(pltData);
       setDepartments(deptData);
-      const mappedDrafts = drafts.map(d => ({
+      const mappedDrafts = drafts.map(d => {
+        const dynamicPrio = calculateDynamicPriority(d.prjPrty || "LOW", d.tentStDt, d.tentEndDt, d.noOfDays);
+        return {
           id: d.drftPrjId,
           _type: "draft",
           projectCode: d.prjCd || "",
@@ -372,7 +375,9 @@ const ProjectCreation = ({ userRole, onLogout }) => {
           projectDescription: d.prjDesc || "",
           projectObjective: d.prjObjtv || "",
           expectedDeliverables: d.expDlvbls || "",
-          priority: d.prjPrty || "MEDIUM",
+          priority: dynamicPrio.priority,
+          priorityMeta: dynamicPrio,
+          rawPriority: d.prjPrty || "MEDIUM",
           status: "DRAFT",
           startDate: d.tentStDt || "",
           endDate: d.tentEndDt || "",
@@ -386,7 +391,8 @@ const ProjectCreation = ({ userRole, onLogout }) => {
           remarks: d.addlRem || "",
           logo: d.logo || null,
           createdBy: getLoggedInUser()
-        }));
+        };
+      });
       const statusOverrides = JSON.parse(localStorage.getItem("project_status_overrides") || "{}");
       const mappedLive = live.map(l => {
         const backendSts = l.prjSts || "LIVE";
@@ -394,6 +400,7 @@ const ProjectCreation = ({ userRole, onLogout }) => {
         if (displaySts === "IN_PROGRESS" && backendSts !== "LIVE") {
           displaySts = backendSts;
         }
+        const dynamicPrio = calculateDynamicPriority(l.prjPrty || "LOW", l.stDt, l.endDt, l.noOfDays);
         return {
           id: l.prjId,
           _type: "live",
@@ -402,7 +409,9 @@ const ProjectCreation = ({ userRole, onLogout }) => {
           projectDescription: l.prjDesc || "",
           projectObjective: l.prjObjtv || "",
           expectedDeliverables: l.expDlvbls || "",
-          priority: l.prjPrty || "MEDIUM",
+          priority: dynamicPrio.priority,
+          priorityMeta: dynamicPrio,
+          rawPriority: l.prjPrty || "MEDIUM",
           status: displaySts,
           startDate: l.stDt || "",
           endDate: l.endDt || "",
@@ -1728,14 +1737,29 @@ const ProjectCreation = ({ userRole, onLogout }) => {
                                   padding: '4px 10px',
                                   borderRadius: '4px',
                                   fontSize: '12px',
-                                  fontWeight: '600',
+                                  fontWeight: '700',
                                   display: 'inline-block',
-                                  backgroundColor: project.priority === 'HIGH' ? '#fef2f2' :
-                                    project.priority === 'NORMAL' ? '#eff6ff' :
-                                      project.priority === 'MEDIUM' ? '#fefce8' : '#f0fdf4',
-                                  color: project.priority === 'HIGH' ? '#dc2626' :
-                                    project.priority === 'NORMAL' ? '#2563eb' :
-                                      project.priority === 'MEDIUM' ? '#ca8a04' : '#16a34a'
+                                  backgroundColor: project.priorityMeta?.bgColor || (
+                                    project.priority === 'ATMOST CRITICAL' ? '#ffe4e6' :
+                                      project.priority === 'CRITICAL' ? '#fee2e2' :
+                                        project.priority === 'HIGH' ? '#ffedd5' :
+                                          project.priority === 'NORMAL' ? '#dbeafe' :
+                                            project.priority === 'MEDIUM' ? '#fef3c7' : '#dcfce7'
+                                  ),
+                                  color: project.priorityMeta?.color || (
+                                    project.priority === 'ATMOST CRITICAL' ? '#7f1d1d' :
+                                      project.priority === 'CRITICAL' ? '#dc2626' :
+                                        project.priority === 'HIGH' ? '#ea580c' :
+                                          project.priority === 'NORMAL' ? '#3b82f6' :
+                                            project.priority === 'MEDIUM' ? '#d97706' : '#16a34a'
+                                  ),
+                                  border: `1px solid ${project.priorityMeta?.borderColor || (
+                                    project.priority === 'ATMOST CRITICAL' ? '#fda4af' :
+                                      project.priority === 'CRITICAL' ? '#fca5a5' :
+                                        project.priority === 'HIGH' ? '#fed7aa' :
+                                          project.priority === 'NORMAL' ? '#bfdbfe' :
+                                            project.priority === 'MEDIUM' ? '#fde68a' : '#bbf7d0'
+                                  )}`
                                 }}>
                                   {project.priority}
                                 </span>
@@ -1826,64 +1850,83 @@ const ProjectCreation = ({ userRole, onLogout }) => {
                                   <MoreVertical size={18} />
                                 </button>
 
-                                {activeDropdown === `${project._type}-${project.id}` && (
-                                  <>
-                                    <div
-                                      className="proj-actions-dropdown-backdrop"
-                                      onClick={() => setActiveDropdown(null)}
-                                      style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9 }}
-                                    />
-                                    <div className="proj-actions-dropdown-menu" style={{ position: 'absolute', right: '30px', top: '8px', backgroundColor: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', zIndex: 10, display: 'flex', flexDirection: 'column', padding: '4px 0', minWidth: '170px' }}>
-                                      <button
-                                        type="button"
-                                        style={{ padding: '10px 16px', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', color: '#334155', borderRadius: '4px', margin: '2px 4px' }}
-                                        onClick={() => {
-                                          if (project._type === 'live') {
-                                            navigate(`/project-details/${project.id}`, { state: { viewMode: 'live' } });
-                                          } else {
-                                            navigate(`/project-details/${project.id}`, { state: { viewMode: 'milestones_only' } });
-                                          }
-                                          setActiveDropdown(null);
+                                {activeDropdown === `${project._type}-${project.id}` && (() => {
+                                  const isNearBottom = currentItems.length > 1 && index >= Math.max(1, currentItems.length - 3);
+                                  return (
+                                    <>
+                                      <div
+                                        className="proj-actions-dropdown-backdrop"
+                                        onClick={() => setActiveDropdown(null)}
+                                        style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9 }}
+                                      />
+                                      <div
+                                        className="proj-actions-dropdown-menu"
+                                        style={{
+                                          position: 'absolute',
+                                          right: '30px',
+                                          ...(isNearBottom ? { bottom: '8px', top: 'auto' } : { top: '8px', bottom: 'auto' }),
+                                          backgroundColor: 'white',
+                                          border: '1px solid #e2e8f0',
+                                          borderRadius: '8px',
+                                          boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                                          zIndex: 10,
+                                          display: 'flex',
+                                          flexDirection: 'column',
+                                          padding: '4px 0',
+                                          minWidth: '170px'
                                         }}
-                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f1f5f9'}
-                                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                                       >
-                                        <Eye size={15} /> View
-                                      </button>
-                                      {project._type !== 'live' && (
-                                        <>
-                                          <button
-                                            type="button"
-                                            style={{ padding: '10px 16px', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', color: '#2563eb', borderRadius: '4px', margin: '2px 4px' }}
-                                            onClick={() => handleDuplicate(project)}
-                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#eff6ff'}
-                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                                          >
-                                            <Copy size={15} /> Duplicate (Template)
-                                          </button>
-                                          <button
-                                            type="button"
-                                            style={{ padding: '10px 16px', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', color: '#334155', borderRadius: '4px', margin: '2px 4px' }}
-                                            onClick={() => handleEdit(project)}
-                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f1f5f9'}
-                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                                          >
-                                            <Edit size={15} /> Edit
-                                          </button>
-                                          <button
-                                            type="button"
-                                            style={{ padding: '10px 16px', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', color: '#ef4444', borderRadius: '4px', margin: '2px 4px' }}
-                                            onClick={() => handleDelete(project.id)}
-                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#fef2f2'}
-                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                                          >
-                                            <Trash2 size={15} /> Delete
-                                          </button>
-                                        </>
-                                      )}
-                                    </div>
-                                  </>
-                                )}
+                                        <button
+                                          type="button"
+                                          style={{ padding: '10px 16px', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', color: '#334155', borderRadius: '4px', margin: '2px 4px' }}
+                                          onClick={() => {
+                                            if (project._type === 'live') {
+                                              navigate(`/project-details/${project.id}`, { state: { viewMode: 'live' } });
+                                            } else {
+                                              navigate(`/project-details/${project.id}`, { state: { viewMode: 'milestones_only' } });
+                                            }
+                                            setActiveDropdown(null);
+                                          }}
+                                          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f1f5f9'}
+                                          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                                        >
+                                          <Eye size={15} /> View
+                                        </button>
+                                        {project._type !== 'live' && (
+                                          <>
+                                            <button
+                                              type="button"
+                                              style={{ padding: '10px 16px', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', color: '#2563eb', borderRadius: '4px', margin: '2px 4px' }}
+                                              onClick={() => handleDuplicate(project)}
+                                              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#eff6ff'}
+                                              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                                            >
+                                              <Copy size={15} /> Duplicate (Template)
+                                            </button>
+                                            <button
+                                              type="button"
+                                              style={{ padding: '10px 16px', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', color: '#334155', borderRadius: '4px', margin: '2px 4px' }}
+                                              onClick={() => handleEdit(project)}
+                                              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f1f5f9'}
+                                              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                                            >
+                                              <Edit size={15} /> Edit
+                                            </button>
+                                            <button
+                                              type="button"
+                                              style={{ padding: '10px 16px', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', color: '#ef4444', borderRadius: '4px', margin: '2px 4px' }}
+                                              onClick={() => handleDelete(project.id)}
+                                              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#fef2f2'}
+                                              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                                            >
+                                              <Trash2 size={15} /> Delete
+                                            </button>
+                                          </>
+                                        )}
+                                      </div>
+                                    </>
+                                  );
+                                })()}
                               </td>
                             </tr>
                           ))
