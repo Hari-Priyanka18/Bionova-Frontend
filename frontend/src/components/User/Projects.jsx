@@ -87,7 +87,7 @@ const MyProjects = ({ userRole, onLogout }) => {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const projectsPerPage = 5;
+  const projectsPerPage = 6;
 
   useEffect(() => {
     const fetchData = async () => {

@@ -1410,7 +1410,18 @@ const EmployeeCreation = ({ userRole, onLogout }) => {
   };
 
   const handleExtChange = (e) => {
-    const { name, value } = e.target;
+    let { name, value } = e.target;
+    if (name === "extEmpNm") {
+      value = value.replace(/[^a-zA-Z\s]/g, "");
+    } else if (name === "mobNum") {
+      value = value.replace(/\D/g, "");
+      if (value.length === 1 && !/^[6-9]$/.test(value)) {
+        value = "";
+      } else if (value.length > 1 && !/^[6-9]/.test(value)) {
+        value = value.replace(/^[^6-9]+/, "");
+      }
+      value = value.slice(0, 10);
+    }
     setExtForm(prev => ({ ...prev, [name]: value }));
     const fieldNameForValidation = name === "mobNum" ? "mobile" : name;
     const error = validateField(fieldNameForValidation, value, extForm);
@@ -2271,13 +2282,13 @@ const EmployeeCreation = ({ userRole, onLogout }) => {
                     </div>
                     <div className="emp-form-item">
                       <label>Reporting To</label>
-                      <div className="emp-input-icon-wrap">
-                        <span className="emp-input-prefix-icon"><User size={16} /></span>
-                        <select name="repEmpId" value={extForm.repEmpId} onChange={handleExtChange} style={{ width: '100%', padding: '8px 12px 8px 36px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '14px', outline: 'none', backgroundColor: '#f8fafc' }} disabled={isExtViewing}>
-                          <option value="">Select Manager</option>
-                          {employees.map(e => <option key={e.id} value={e.id}>{e.employeeName}</option>)}
-                        </select>
-                      </div>
+                      <SearchableSelect
+                        options={employees.map(e => ({ value: e.id, label: e.employeeName }))}
+                        value={extForm.repEmpId}
+                        onChange={(e) => handleExtChange({ target: { name: 'repEmpId', value: e.target.value } })}
+                        placeholder="Select Manager"
+                        disabled={isExtViewing}
+                      />
                     </div>
                   </div>
                 </div>

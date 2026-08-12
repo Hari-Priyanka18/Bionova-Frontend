@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Flag, ListTodo, CheckSquare, RefreshCcw, HelpCircle, Clock, Plus, Filter, Search, Eye, Edit2, Trash2, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { Flag, ListTodo, CheckSquare, RefreshCcw, HelpCircle, Clock, Plus, Filter, Search, Eye, Edit2, Trash2, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, X, Loader2 } from 'lucide-react';
 import '../../styles/project-milestones-tab.css';
 import ProjectGanttChart from './ProjectGanttChart.jsx';
 import ExtendExternalLinkModal from '../ExtendExternalLinkModal.jsx';
@@ -17,7 +17,8 @@ const ProjectMilestonesTab = ({ project, userRole }) => {
   const [collapseAll, setCollapseAll] = useState(false);
   const [tasks, setTasks] = useState([]);
   const [employees, setEmployees] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [externalEmployees, setExternalEmployees] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [selectedMilestone, setSelectedMilestone] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [viewTaskModal, setViewTaskModal] = useState(null);
@@ -44,6 +45,7 @@ const ProjectMilestonesTab = ({ project, userRole }) => {
   useEffect(() => {
     const fetchData = async () => {
       try {
+        setLoading(true);
         const isDraft = project?.status === "DRAFT" || project?.status === "Draft";
         const mlUrl = isDraft
           ? `${API_BASE}/milestone-drafts/by-project/${project.id}`
@@ -52,17 +54,19 @@ const ProjectMilestonesTab = ({ project, userRole }) => {
           ? `${API_BASE}/task-drafts`
           : `${API_BASE}/task-live`;
 
-        const [mlRes, taskRes, profileRes, empRes] = await Promise.all([
+        const [mlRes, taskRes, profileRes, empRes, extEmpRes] = await Promise.all([
           fetch(mlUrl, { headers: authHeaders() }),
           fetch(taskUrl, { headers: authHeaders() }),
           fetch(`${API_BASE}/profile`, { headers: authHeaders() }),
-          fetch(`${API_BASE}/employees`, { headers: authHeaders() })
+          fetch(`${API_BASE}/employees`, { headers: authHeaders() }),
+          fetch(`${API_BASE}/external-employees`, { headers: authHeaders() })
         ]);
 
         const mlData = mlRes.ok ? await mlRes.json() : [];
         const taskDataRaw = taskRes.ok ? await taskRes.json() : [];
         const profile = profileRes.ok ? await profileRes.json() : null;
         const empData = empRes.ok ? await empRes.json() : [];
+        const extEmpData = extEmpRes.ok ? await extEmpRes.json() : [];
 
         const taskData = await Promise.all((taskDataRaw || []).map(async task => {
            try {
@@ -83,6 +87,7 @@ const ProjectMilestonesTab = ({ project, userRole }) => {
         }));
 
         setEmployees(empData);
+        setExternalEmployees(extEmpData);
 
         // Filter milestones by project id
         const projectId = project?.id;
@@ -109,7 +114,7 @@ const ProjectMilestonesTab = ({ project, userRole }) => {
         }
 
       } catch (err) {
-        console.error("Error fetching milestones:", err);
+        console.error("Error fetching data:", err);
       } finally {
         setLoading(false);
       }
@@ -191,16 +196,30 @@ const ProjectMilestonesTab = ({ project, userRole }) => {
     }
   };
 
-  const getAssigneeInfo = (empId) => {
+  const getAssigneeInfo = (empId, extEmpId = null, taskAsgnTo = null) => {
+    const isExt = String(taskAsgnTo || '').toUpperCase() === 'EXTERNAL' || extEmpId != null;
+    if (isExt) {
+      const targetId = extEmpId || empId;
+      const ext = (externalEmployees || []).find(e => 
+        String(e.extEmpId || e.ext_emp_id || e.id) === String(targetId)
+      );
+      if (ext) {
+        return {
+          name: ext.extEmpNm || ext.ext_emp_nm || ext.companyNm || ext.company_nm || 'External Employee',
+          role: ext.companyNm || ext.company_nm || 'External'
+        };
+      }
+      return { name: 'External Employee', role: 'External' };
+    }
     if (!empId) return { name: 'Unassigned', role: '' };
-    const emp = employees.find(e => String(e.empId) === String(empId));
+    const emp = employees.find(e => String(e.empId || e.id) === String(empId));
     if (emp) {
       return {
-        name: `${emp.fstNm || ''} ${emp.lstNm || ''}`.trim(),
-        role: emp.jobTtl || 'Employee'
+        name: `${emp.fstNm || emp.firstName || ''} ${emp.lstNm || emp.lastName || ''}`.trim() || 'Employee',
+        role: emp.jobTtl || emp.designation || 'Employee'
       };
     }
-    return { name: 'Unknown', role: '' };
+    return { name: 'Unassigned', role: '' };
   };
 
   const getTaskStatusStr = (t) => {
@@ -263,8 +282,17 @@ const ProjectMilestonesTab = ({ project, userRole }) => {
 
   if (loading) {
     return (
-      <div style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>
-        Loading milestones & tasks...
+      <div style={{
+        padding: '80px 20px',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '12px',
+        color: '#64748b'
+      }}>
+        <Loader2 size={32} style={{ animation: 'spin 1s linear infinite', color: '#2563eb' }} />
+        <span style={{ fontSize: '14px', fontWeight: '500' }}>Loading milestones & tasks...</span>
       </div>
     );
   }
@@ -517,7 +545,7 @@ const ProjectMilestonesTab = ({ project, userRole }) => {
                       const sDt = formatDate(t.tentStDt || t.tent_st_dt || t.stDt || t.st_dt);
                       const eDt = formatDate(t.tentEndDt || t.tent_end_dt || t.endDt || t.end_dt);
                       const rawSt = t.taskSts || t.task_sts || 'DRAFT';
-                      const executor = getAssigneeInfo(t.empId);
+                      const executor = getAssigneeInfo(t.empId, t.extEmpId || t.ext_emp_id, t.taskAsgnTo || t.task_asgn_to);
                       const approver = getAssigneeInfo(t.approverId || t.approver_id);
                       const reviewer = getAssigneeInfo(t.reviewerId || t.reviewer_id);
                       const prog = calculateTaskProgress(t);
@@ -651,7 +679,7 @@ const ProjectMilestonesTab = ({ project, userRole }) => {
               </div>
               <div className="mt-view-row">
                 <span className="mt-view-label">Assignee</span>
-                <span className="mt-view-value">{getAssigneeInfo(viewTaskModal.empId).name}</span>
+                <span className="mt-view-value">{getAssigneeInfo(viewTaskModal.empId, viewTaskModal.extEmpId || viewTaskModal.ext_emp_id, viewTaskModal.taskAsgnTo || viewTaskModal.task_asgn_to).name}</span>
               </div>
               <div className="mt-view-row">
                 <span className="mt-view-label">Description</span>
