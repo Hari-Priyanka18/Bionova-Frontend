@@ -242,7 +242,8 @@ const GoLiveCalendar = ({ project, onCancel, onPreview }) => {
         const ed = parseLocal(projEnd);
         if (sd && ed) totalDays = Math.round((ed - sd) / 86400000) + 1;
       }
-      const projAdjustedEnd = totalDays ? calcEndDate(projStart, totalDays, skipSat, skipSun, publicHolidayDates) : projEnd;
+      const projAdjustedStart = projStart ? getNextWorkingDay(projStart, skipSat, skipSun, publicHolidayDates) : '';
+      const projAdjustedEnd = (totalDays && projAdjustedStart) ? calcEndDate(projAdjustedStart, totalDays, skipSat, skipSun, publicHolidayDates) : (totalDays && projStart ? calcEndDate(projStart, totalDays, skipSat, skipSun, publicHolidayDates) : projEnd);
 
       let hierarchy = [];
       const drftPrjId = project.drftPrjId || project.drft_prj_id || project.projectId || project.project_id || project.id;
@@ -252,11 +253,28 @@ const GoLiveCalendar = ({ project, onCancel, onPreview }) => {
         if (milestonesRes.ok) {
           const milestonesData = await milestonesRes.json();
           const sortedMilestones = [...(milestonesData || [])].sort((a, b) => {
+            const cdA = a.mlstnCd || a.mlstn_cd || '';
+            const cdB = b.mlstnCd || b.mlstn_cd || '';
+            if (cdA && cdB) {
+              const cmp = cdA.localeCompare(cdB, undefined, { numeric: true, sensitivity: 'base' });
+              if (cmp !== 0) return cmp;
+            }
+            const stA = a.tentStDt || a.tent_st_dt || '';
+            const stB = b.tentStDt || b.tent_st_dt || '';
+            if (stA && stB) {
+              const cmp = stA.localeCompare(stB);
+              if (cmp !== 0) return cmp;
+            }
             const idA = a.drftMId || a.drft_m_id || 0;
             const idB = b.drftMId || b.drft_m_id || 0;
-            return idA - idB;
+            return Number(idA) - Number(idB);
           });
+
+          const milestoneMap = {};
+          const globalTaskMap = {};
+
           for (const m of sortedMilestones) {
+            const mId = m.drftMId || m.drft_m_id || m.id;
             const mStart = m.tentStDt || m.tent_st_dt || '';
             const mEnd = m.tentEndDt || m.tent_end_dt || '';
             let mDays = parseInt(m.mlstnDays || m.mlstn_days || m.workingDays || 0, 10);
@@ -265,20 +283,66 @@ const GoLiveCalendar = ({ project, onCancel, onPreview }) => {
               const ed = parseLocal(mEnd);
               if (sd && ed) mDays = Math.round((ed - sd) / 86400000) + 1;
             }
-            const fallbackMAdjEnd = mDays ? calcEndDate(mStart, mDays, skipSat, skipSun, publicHolidayDates) : mEnd;
 
-            const mId = m.drftMId || m.drft_m_id || m.id;
+            let rawMStart = mStart || projAdjustedStart || projStart;
+            const mDepFlg = m.mlstnDepFlg ?? m.mlstn_dep_flg ?? false;
+            const mDepMId = m.mlstnDepMId || m.mlstn_dep_m_id;
+            const mDepTyp = (m.mlstnDepTyp || m.mlstn_dep_typ || 'SEQUENTIAL').toUpperCase();
+
+            if (mDepFlg && mDepMId && milestoneMap[mDepMId]) {
+              const depM = milestoneMap[mDepMId];
+              if (mDepTyp === 'PARALLEL') {
+                rawMStart = depM.adjStart;
+              } else {
+                rawMStart = addDays(depM.adjEnd, 1);
+              }
+            } else {
+              // Check if sequential based on previous milestones
+              let maxPrevMilestoneEnd = '';
+              for (const prevM of sortedMilestones) {
+                const prevId = prevM.drftMId || prevM.drft_m_id || prevM.id;
+                if (milestoneMap[prevId] && prevId !== mId) {
+                  const prevEnd = prevM.tentEndDt || prevM.tent_end_dt || '';
+                  if (prevEnd && mStart && parseLocal(prevEnd) <= parseLocal(mStart)) {
+                    const prevAdjEnd = milestoneMap[prevId].adjEnd;
+                    if (!maxPrevMilestoneEnd || parseLocal(prevAdjEnd) > parseLocal(maxPrevMilestoneEnd)) {
+                      maxPrevMilestoneEnd = prevAdjEnd;
+                    }
+                  }
+                }
+              }
+              if (maxPrevMilestoneEnd) {
+                const nextDay = addDays(maxPrevMilestoneEnd, 1);
+                if (!mStart || parseLocal(nextDay) > parseLocal(rawMStart)) {
+                  rawMStart = nextDay;
+                }
+              }
+            }
+
+            const fallbackMAdjStart = getNextWorkingDay(rawMStart, skipSat, skipSun, publicHolidayDates);
+            const fallbackMAdjEnd = (mDays && fallbackMAdjStart) ? calcEndDate(fallbackMAdjStart, mDays, skipSat, skipSun, publicHolidayDates) : (mEnd || fallbackMAdjStart);
+
             const tasksRes = await fetch(`${apiBaseUrl}/api/task-drafts/by-milestone/${mId}`, { headers: getAuthHeaders() });
             let taskRows = [];
             if (tasksRes.ok) {
               const tasksData = await tasksRes.json();
               const sortedTasks = [...(tasksData || [])].sort((a, b) => {
+                const cdA = a.taskCd || a.task_cd || '';
+                const cdB = b.taskCd || b.task_cd || '';
+                if (cdA && cdB) {
+                  const cmp = cdA.localeCompare(cdB, undefined, { numeric: true, sensitivity: 'base' });
+                  if (cmp !== 0) return cmp;
+                }
+                const stA = a.tentStDt || a.tent_st_dt || '';
+                const stB = b.tentStDt || b.tent_st_dt || '';
+                if (stA && stB) {
+                  const cmp = stA.localeCompare(stB);
+                  if (cmp !== 0) return cmp;
+                }
                 const idA = a.drftTaskId || a.drft_task_id || 0;
                 const idB = b.drftTaskId || b.drft_task_id || 0;
-                return idA - idB;
+                return Number(idA) - Number(idB);
               });
-
-              const taskMap = {};
 
               const rawTaskRows = sortedTasks.map(t => {
                 const tStart = t.tentStDt || t.tent_st_dt || '';
@@ -290,26 +354,26 @@ const GoLiveCalendar = ({ project, onCancel, onPreview }) => {
                   if (sd && ed) tDays = Math.round((ed - sd) / 86400000) + 1;
                 }
 
-                let rawStart = tStart || mStart || projStart;
+                let rawStart = tStart || fallbackMAdjStart;
                 const depId = t.depTaskId || t.dep_task_id;
+                const tDepFlg = t.taskDepFlg ?? t.task_dep_flg ?? false;
+                const tDepTyp = (t.taskDepTyp || t.task_dep_typ || 'SEQUENTIAL').toUpperCase();
 
-                if (depId && taskMap[depId]) {
-                  const depObj = taskMap[depId];
+                if (tDepFlg && depId && globalTaskMap[depId]) {
+                  const depObj = globalTaskMap[depId];
                   if (depObj && depObj.adjEnd) {
-                    const depStart = depObj.start || '';
-                    if (!depStart || !tStart || parseLocal(tStart) > parseLocal(depStart)) {
-                      const nextDay = addDays(depObj.adjEnd, 1);
-                      if (parseLocal(nextDay) > parseLocal(rawStart)) {
-                        rawStart = nextDay;
-                      }
+                    if (tDepTyp === 'PARALLEL') {
+                      rawStart = depObj.adjStart;
+                    } else {
+                      rawStart = addDays(depObj.adjEnd, 1);
                     }
                   }
                 } else if (tStart) {
                   let maxPrevAdjEnd = '';
                   sortedTasks.forEach(pt => {
                     const pId = pt.drftTaskId || pt.drft_task_id;
-                    const pObj = taskMap[pId] || (pt.taskCd ? taskMap[pt.taskCd] : null);
-                    if (pObj && pObj.end && parseLocal(pObj.end) < parseLocal(tStart)) {
+                    const pObj = globalTaskMap[pId] || (pt.taskCd ? globalTaskMap[pt.taskCd] : null);
+                    if (pObj && pObj.end && parseLocal(pObj.end) <= parseLocal(tStart)) {
                       if (!maxPrevAdjEnd || parseLocal(pObj.adjEnd) > parseLocal(maxPrevAdjEnd)) {
                         maxPrevAdjEnd = pObj.adjEnd;
                       }
@@ -320,7 +384,18 @@ const GoLiveCalendar = ({ project, onCancel, onPreview }) => {
                     if (parseLocal(nextDay) > parseLocal(rawStart)) {
                       rawStart = nextDay;
                     }
+                  } else if (mStart && parseLocal(tStart) > parseLocal(mStart)) {
+                    const offsetDays = Math.round((parseLocal(tStart) - parseLocal(mStart)) / 86400000);
+                    const candidate = addDays(fallbackMAdjStart, offsetDays);
+                    if (parseLocal(candidate) > parseLocal(rawStart)) {
+                      rawStart = candidate;
+                    }
                   }
+                }
+
+                // Ensure task never starts before parent milestone adjusted start date
+                if (fallbackMAdjStart && parseLocal(rawStart) < parseLocal(fallbackMAdjStart)) {
+                  rawStart = fallbackMAdjStart;
                 }
 
                 const tAdjStart = getNextWorkingDay(rawStart, skipSat, skipSun, publicHolidayDates);
@@ -339,8 +414,8 @@ const GoLiveCalendar = ({ project, onCancel, onPreview }) => {
                 };
 
                 const tKey = t.drftTaskId || t.drft_task_id;
-                if (tKey) taskMap[tKey] = taskObj;
-                if (t.taskCd) taskMap[t.taskCd] = taskObj;
+                if (tKey) globalTaskMap[tKey] = taskObj;
+                if (t.taskCd) globalTaskMap[t.taskCd] = taskObj;
 
                 return taskObj;
               });
@@ -359,20 +434,33 @@ const GoLiveCalendar = ({ project, onCancel, onPreview }) => {
                 if (t.start && startGroupMap[t.start]) {
                   const syncedAdjStart = startGroupMap[t.start];
                   const syncedAdjEnd = (t.adjDays && syncedAdjStart) ? calcEndDate(syncedAdjStart, t.adjDays, skipSat, skipSun, publicHolidayDates) : t.adjEnd;
-                  return { ...t, adjStart: syncedAdjStart, adjEnd: syncedAdjEnd };
+                  const updatedTask = { ...t, adjStart: syncedAdjStart, adjEnd: syncedAdjEnd };
+                  const tKey = t.id;
+                  if (tKey) globalTaskMap[tKey] = updatedTask;
+                  if (t.code) globalTaskMap[t.code] = updatedTask;
+                  return updatedTask;
                 }
                 return t;
               });
             }
 
-            // Derive Milestone Adjusted End Date as maximum Adjusted End Date of its tasks
+            // Derive Milestone Adjusted Start & End Date from child tasks
+            let minTaskAdjStart = '';
             let maxTaskAdjEnd = '';
             taskRows.forEach(t => {
-              if (t.adjEnd && (!maxTaskAdjEnd || t.adjEnd > maxTaskAdjEnd)) {
+              if (t.adjStart && (!minTaskAdjStart || parseLocal(t.adjStart) < parseLocal(minTaskAdjStart))) {
+                minTaskAdjStart = t.adjStart;
+              }
+              if (t.adjEnd && (!maxTaskAdjEnd || parseLocal(t.adjEnd) > parseLocal(maxTaskAdjEnd))) {
                 maxTaskAdjEnd = t.adjEnd;
               }
             });
+            const mAdjStart = minTaskAdjStart || fallbackMAdjStart;
             const mAdjEnd = maxTaskAdjEnd || fallbackMAdjEnd;
+
+            milestoneMap[mId] = { adjStart: mAdjStart, adjEnd: mAdjEnd };
+
+            const mCalculatedDays = (mAdjStart && mAdjEnd) ? calcWorkingDays(mAdjStart, mAdjEnd, skipSat, skipSun, publicHolidayDates) : mDays;
 
             hierarchy.push({
               type: 'M',
@@ -381,29 +469,49 @@ const GoLiveCalendar = ({ project, onCancel, onPreview }) => {
               name: m.mlstnTtl || m.mlstn_ttl || m.mlstnNm || m.mlstn_nm || '',
               start: mStart,
               end: mEnd,
+              adjStart: mAdjStart,
               adjEnd: mAdjEnd,
-              adjDays: mDays,
+              adjDays: mCalculatedDays,
               tasks: taskRows
             });
           }
         }
       }
 
-      // Derive Project Adjusted End Date based on project's total working days (e.g. 100 days -> 19 Nov 2026)
+      // Derive Project Adjusted Start and End Date
+      let minMilestoneAdjStart = '';
       let maxMilestoneAdjEnd = '';
       hierarchy.forEach(m => {
-        if (m.adjEnd && (!maxMilestoneAdjEnd || m.adjEnd > maxMilestoneAdjEnd)) {
+        if (m.adjStart && (!minMilestoneAdjStart || parseLocal(m.adjStart) < parseLocal(minMilestoneAdjStart))) {
+          minMilestoneAdjStart = m.adjStart;
+        }
+        if (m.adjEnd && (!maxMilestoneAdjEnd || parseLocal(m.adjEnd) > parseLocal(maxMilestoneAdjEnd))) {
           maxMilestoneAdjEnd = m.adjEnd;
         }
       });
-      const projFinalAdjustedEnd = projAdjustedEnd || maxMilestoneAdjEnd;
+      const projFinalAdjustedStart = (hierarchy.length > 0 && minMilestoneAdjStart) ? minMilestoneAdjStart : (projAdjustedStart || projStart);
+      const projFinalAdjustedEnd = projAdjustedEnd || maxMilestoneAdjEnd || projEnd;
+      const projFinalDuration = totalDays || ((projFinalAdjustedStart && projFinalAdjustedEnd) ? calcWorkingDays(projFinalAdjustedStart, projFinalAdjustedEnd, skipSat, skipSun, publicHolidayDates) : 0);
 
       const pType = project.isIndividualTask ? 'T' : 'P';
       const pCode = project.isIndividualTask ? (project.taskCd || project.task_cd || `TSK-${project.id || 'NEW'}`) : (project.prjCd || project.prj_cd || project.projectCode || '');
       
       setPreview({
-        projectRow: { type: pType, id: 'project', code: pCode, name: project.prjNm || project.prj_nm || project.projectName || '', start: projStart, end: projEnd, adjEnd: projFinalAdjustedEnd, adjDays: totalDays },
-        hierarchy, skipSat, skipSun, skipPub
+        projectRow: {
+          type: pType,
+          id: 'project',
+          code: pCode,
+          name: project.prjNm || project.prj_nm || project.projectName || '',
+          start: projStart,
+          end: projEnd,
+          adjStart: projFinalAdjustedStart,
+          adjEnd: projFinalAdjustedEnd,
+          adjDays: projFinalDuration
+        },
+        hierarchy,
+        skipSat,
+        skipSun,
+        skipPub
       });
       setStep('preview');
       setExpandedRows(new Set(['project', ...hierarchy.map(m => m.id)]));
@@ -443,6 +551,7 @@ const GoLiveCalendar = ({ project, onCancel, onPreview }) => {
       <td>{fmtDate(item.start)}</td>
       <td>{fmtDate(item.end)}</td>
       <td>{item.adjDays || '—'}</td>
+      <td className="glm-highlight-cell">{fmtDate(item.adjStart)}</td>
       <td className="glm-highlight-cell">{fmtDate(item.adjEnd)}</td>
     </tr>
   );
@@ -528,18 +637,19 @@ const GoLiveCalendar = ({ project, onCancel, onPreview }) => {
                 {!preview.skipSat && !preview.skipSun && !preview.skipPub && <span className="glm-tag">All days included</span>}
               </div>
               <div className="glm-info-note" style={{ marginTop: '10px', fontSize: '13px', color: '#666' }}>
-                <Info size={14} /> Note: Adjusted End Dates are extended to accommodate the excluded non-working days while maintaining the original duration.
+                <Info size={14} /> Note: Actual dates are adjusted to accommodate the excluded non-working days while maintaining the original duration.
               </div>
             </div>
 
             <table className="glm-preview-table">
               <thead>
                 <tr>
-                  <th style={{ width: '40%' }}>Entity Name</th>
-                  <th>Start Date</th>
-                  <th>End Date</th>
+                  <th style={{ width: '30%' }}>Entity Name</th>
+                  <th>Tentative Start Date</th>
+                  <th>Tentative End Date</th>
                   <th>Duration</th>
-                  <th>Adjusted End Date</th>
+                  <th>Actual Start Date</th>
+                  <th>Actual End Date</th>
                 </tr>
               </thead>
               <tbody>

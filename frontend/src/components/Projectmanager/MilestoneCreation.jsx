@@ -198,11 +198,133 @@ const externalEmployeeApi = {
       method: "POST",
       headers: authHeaders(),
       body: JSON.stringify(mapToCamelCase(data))
-    }).then(res => {
-      if (!res.ok) throw new Error("Failed to create external employee");
+    }).then(async res => {
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.message || "Failed to create external employee");
+      }
       return res.json();
     }).then(mapToSnakeCase),
   save: (list) => Promise.resolve(list) // backward compatibility fallback
+};
+
+// ── Searchable Select Component ──────────────────────────────
+const SearchableSelect = ({ options, value, onChange, placeholder, style, disabled, className }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const wrapperRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const filtered = options.filter(o => o.label.toLowerCase().includes(search.toLowerCase()));
+  const selected = options.find(o => String(o.value) === String(value));
+
+  return (
+    <div ref={wrapperRef} style={{ position: 'relative', width: '100%', ...style }}>
+      <div
+        onClick={() => !disabled && setIsOpen(!isOpen)}
+        className={className}
+        style={{
+          padding: '8px 12px',
+          border: '1px solid #cbd5e1',
+          borderRadius: '6px',
+          background: disabled ? '#f1f5f9' : 'white',
+          cursor: disabled ? 'not-allowed' : 'pointer',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          minHeight: '38px',
+          fontSize: '13px',
+          color: selected ? '#0f172a' : '#94a3b8',
+          boxSizing: 'border-box'
+        }}
+      >
+        <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          {selected ? selected.label : (placeholder || "Select...")}
+        </span>
+        <ChevronDown size={14} style={{ color: '#64748b', flexShrink: 0, marginLeft: '6px', transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+      </div>
+      {isOpen && !disabled && (
+        <div
+          style={{
+            position: 'absolute',
+            top: '100%',
+            left: 0,
+            right: 0,
+            background: 'white',
+            border: '1px solid #cbd5e1',
+            borderRadius: '6px',
+            marginTop: '4px',
+            zIndex: 9999,
+            maxHeight: '220px',
+            overflowY: 'auto',
+            boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)'
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div style={{ padding: '6px 8px', position: 'sticky', top: 0, background: 'white', borderBottom: '1px solid #e2e8f0', zIndex: 2 }}>
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search..."
+              autoFocus
+              style={{
+                width: '100%',
+                padding: '6px 8px',
+                border: '1px solid #cbd5e1',
+                borderRadius: '4px',
+                fontSize: '12px',
+                outline: 'none',
+                boxSizing: 'border-box'
+              }}
+            />
+          </div>
+          <div style={{ padding: '4px 0' }}>
+            {filtered.map(opt => (
+              <div
+                key={opt.value}
+                onClick={() => {
+                  onChange({ target: { value: opt.value } });
+                  setIsOpen(false);
+                  setSearch("");
+                }}
+                style={{
+                  padding: '7px 12px',
+                  cursor: 'pointer',
+                  background: String(value) === String(opt.value) ? '#eff6ff' : 'white',
+                  fontSize: '13px',
+                  color: String(value) === String(opt.value) ? '#1d4ed8' : '#334155',
+                  fontWeight: String(value) === String(opt.value) ? '600' : '400'
+                }}
+                onMouseOver={(e) => {
+                  if (String(value) !== String(opt.value)) e.currentTarget.style.background = '#f8fafc';
+                }}
+                onMouseOut={(e) => {
+                  if (String(value) !== String(opt.value)) e.currentTarget.style.background = 'white';
+                }}
+              >
+                {opt.label}
+              </div>
+            ))}
+            {filtered.length === 0 && (
+              <div style={{ padding: '10px 12px', color: '#94a3b8', fontSize: '12px', textAlign: 'center' }}>
+                No matches found
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 };
 
 // ============================================================
@@ -428,8 +550,18 @@ const MilestoneCreation = ({ onLogout, userRole }) => {
     return `TSK-${String(nextNum).padStart(3, '0')}`;
   };
   const generateExternalEmployeeCode = () => {
-    const count = externalEmployees.length + 1;
-    return `EXT-${String(count).padStart(3, '0')}`;
+    let maxNum = 0;
+    if (Array.isArray(externalEmployees)) {
+      externalEmployees.forEach(e => {
+        const code = e.ext_emp_cd || e.extEmpCode || "";
+        const match = code.match(/^EXT-(\d+)$/i);
+        if (match) {
+          const num = parseInt(match[1], 10);
+          if (!isNaN(num) && num > maxNum) maxNum = num;
+        }
+      });
+    }
+    return `EXT-${String(maxNum + 1).padStart(3, '0')}`;
   };
 
   const calculateTaskStartDate = (task) => {
@@ -2064,8 +2196,9 @@ const MilestoneCreation = ({ onLogout, userRole }) => {
     if (!externalEmployeeForm.ext_emp_nm.trim()) errors.ext_emp_nm = "Name is required";
     if (!externalEmployeeForm.email.trim()) errors.email = "Email is required";
     else if (!/\S+@\S+\.\S+/.test(externalEmployeeForm.email)) errors.email = "Invalid email format";
-    if (!externalEmployeeForm.mob_num.trim()) errors.mob_num = "Mobile is required";
-    else if (!/^[0-9]{10}$/.test(externalEmployeeForm.mob_num)) errors.mob_num = "Enter valid 10-digit number";
+    if (!externalEmployeeForm.mob_num.trim()) errors.mob_num = "Mobile number is required";
+    else if (!/^[6-9]/.test(externalEmployeeForm.mob_num)) errors.mob_num = "Mobile number must start with 6, 7, 8, or 9";
+    else if (!/^[6-9][0-9]{9}$/.test(externalEmployeeForm.mob_num)) errors.mob_num = "Mobile number must be exactly 10 digits";
     if (!externalEmployeeForm.company_nm.trim()) errors.company_nm = "Company name is required";
     if (!externalEmployeeForm.rep_emp_id) errors.rep_emp_id = "Reporting employee is required";
     if (!externalEmployeeForm.ext_emp_cd.trim()) externalEmployeeForm.ext_emp_cd = generateExternalEmployeeCode();
@@ -2225,37 +2358,52 @@ const MilestoneCreation = ({ onLogout, userRole }) => {
         </div>
         <label className="mc-field">
           <span>{selectedTask.task_typ === "INTERNAL" ? "Assign Employee" : "Assign External Employee"} <b>*</b></span>
-          <div className="mc-employee-select">
-            <select value={selectedTask.task_typ === "INTERNAL" ? selectedTask.emp_id : selectedTask.ext_emp_id} onChange={(e) => {
-              const v = e.target.value;
-              if (selectedTask.task_typ === "INTERNAL") {
-                updateTask("emp_id", v);
-              } else {
-                updateTask("ext_emp_id", v);
-              }
-              let process = selectedTask.process ? { ...selectedTask.process } : { enabled: false, reviewer_id: "", approver_id: "", steps: [] };
-              if (selectedTask.task_typ === "INTERNAL") {
-                if (String(v) === String(process.reviewer_id)) process.reviewer_id = "";
-                if (String(v) === String(process.approver_id)) process.approver_id = "";
-              }
-              const updated = {
-                ...selectedTask,
-                [selectedTask.task_typ === "INTERNAL" ? "emp_id" : "ext_emp_id"]: v,
-                process
-              };
-              setSelectedTask(updated);
-              const ut = [...tasks];
-              ut[editingTaskIndex] = updated;
-              setTasks(ut);
-            }} className={getTaskError(editingTaskIndex, selectedTask.task_typ === "INTERNAL" ? "assignee" : "ext_assignee") ? "mc-error" : ""}>
-              <option value="">Select {selectedTask.task_typ === "INTERNAL" ? "Employee" : "External Employee"}...</option>
-              {(selectedTask.task_typ === "INTERNAL" ? employees : externalEmployees).map(emp => {
+          <div className="mc-employee-select" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <SearchableSelect
+              options={(selectedTask.task_typ === "INTERNAL" ? employees : externalEmployees).map(emp => {
                 const id = selectedTask.task_typ === "INTERNAL" ? emp.emp_id : emp.ext_emp_id;
-                const name = selectedTask.task_typ === "INTERNAL" ? `${emp.emp_nm} (${emp.role})` : `${emp.ext_emp_nm || emp.name} (${emp.company_nm || emp.company})`;
-                return <option key={id} value={id}>{name}</option>;
+                const name = selectedTask.task_typ === "INTERNAL"
+                  ? `${emp.emp_nm} (${emp.role})`
+                  : `${emp.ext_emp_nm || emp.name} (${emp.company_nm || emp.company})`;
+                return { value: id, label: name };
               })}
-            </select>
-            {selectedTask.task_typ === "EXTERNAL" && <button type="button" className="mc-add-employee-btn" onClick={() => setShowExternalEmployeeModal(true)}><UserPlus size={14} /></button>}
+              value={selectedTask.task_typ === "INTERNAL" ? selectedTask.emp_id : selectedTask.ext_emp_id}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (selectedTask.task_typ === "INTERNAL") {
+                  updateTask("emp_id", v);
+                } else {
+                  updateTask("ext_emp_id", v);
+                }
+                let process = selectedTask.process ? { ...selectedTask.process } : { enabled: false, reviewer_id: "", approver_id: "", steps: [] };
+                if (selectedTask.task_typ === "INTERNAL") {
+                  if (String(v) === String(process.reviewer_id)) process.reviewer_id = "";
+                  if (String(v) === String(process.approver_id)) process.approver_id = "";
+                }
+                const updated = {
+                  ...selectedTask,
+                  [selectedTask.task_typ === "INTERNAL" ? "emp_id" : "ext_emp_id"]: v,
+                  process
+                };
+                setSelectedTask(updated);
+                const ut = [...tasks];
+                ut[editingTaskIndex] = updated;
+                setTasks(ut);
+              }}
+              placeholder={`Select ${selectedTask.task_typ === "INTERNAL" ? "Employee" : "External Employee"}...`}
+              className={getTaskError(editingTaskIndex, selectedTask.task_typ === "INTERNAL" ? "assignee" : "ext_assignee") ? "mc-error" : ""}
+            />
+            {selectedTask.task_typ === "EXTERNAL" && (
+              <button
+                type="button"
+                className="mc-add-employee-btn"
+                onClick={() => setShowExternalEmployeeModal(true)}
+                title="Add External Employee"
+                style={{ flexShrink: 0 }}
+              >
+                <UserPlus size={14} />
+              </button>
+            )}
           </div>
           {getTaskError(editingTaskIndex, selectedTask.task_typ === "INTERNAL" ? "assignee" : "ext_assignee") && <small className="mc-error-text">{getTaskError(editingTaskIndex, selectedTask.task_typ === "INTERNAL" ? "assignee" : "ext_assignee")}</small>}
         </label>
@@ -2414,40 +2562,46 @@ const MilestoneCreation = ({ onLogout, userRole }) => {
                   <div className="mc-process-review-approver">
                     <div className="mc-form-grid two">
                       <label className="mc-field"><span>Reviewer <b>*</b></span>
-                        <select value={selectedTask.process?.reviewer_id || ""} onChange={(e) => {
-                          const v = e.target.value;
-                          let process = { ...selectedTask.process, reviewer_id: v };
-                          if (String(v) === String(process.approver_id)) {
-                            process.approver_id = "";
-                          }
-                          const updated = { ...selectedTask, process };
-                          setSelectedTask(updated);
-                          const ut = [...tasks];
-                          ut[editingTaskIndex] = updated;
-                          setTasks(ut);
-                        }} className={getTaskError(editingTaskIndex, "reviewer") ? "mc-error" : ""}>
-                          <option value="">Select Reviewer</option>
-                          {reviewersList
+                        <SearchableSelect
+                          options={reviewersList
                             .filter(r => String(r.r_id) !== String(selectedTask.emp_id))
-                            .map(r => <option key={r.r_id} value={r.r_id}>{r.r_nm}</option>)}
-                        </select>
+                            .map(r => ({ value: r.r_id, label: r.r_nm }))}
+                          value={selectedTask.process?.reviewer_id || ""}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            let process = { ...selectedTask.process, reviewer_id: v };
+                            if (String(v) === String(process.approver_id)) {
+                              process.approver_id = "";
+                            }
+                            const updated = { ...selectedTask, process };
+                            setSelectedTask(updated);
+                            const ut = [...tasks];
+                            ut[editingTaskIndex] = updated;
+                            setTasks(ut);
+                          }}
+                          placeholder="Select Reviewer"
+                          className={getTaskError(editingTaskIndex, "reviewer") ? "mc-error" : ""}
+                        />
                         {getTaskError(editingTaskIndex, "reviewer") && <small className="mc-error-text">{getTaskError(editingTaskIndex, "reviewer")}</small>}
                       </label>
                       <label className="mc-field"><span>Approver <b>*</b></span>
-                        <select value={selectedTask.process?.approver_id || ""} onChange={(e) => {
-                          const v = e.target.value;
-                          let process = { ...selectedTask.process, approver_id: v };
-                          const updated = { ...selectedTask, process };
-                          setSelectedTask(updated);
-                          const ut = [...tasks];
-                          ut[editingTaskIndex] = updated;
-                          setTasks(ut);
-                        }} className={getTaskError(editingTaskIndex, "approver") ? "mc-error" : ""}>
-                          <option value="">Select Approver</option>
-                          {approversList
+                        <SearchableSelect
+                          options={approversList
                             .filter(r => String(r.r_id) !== String(selectedTask.emp_id) && String(r.r_id) !== String(selectedTask.process?.reviewer_id || ""))
-                            .map(r => <option key={r.r_id} value={r.r_id}>{r.r_nm}</option>)}
-                        </select>
+                            .map(r => ({ value: r.r_id, label: r.r_nm }))}
+                          value={selectedTask.process?.approver_id || ""}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            let process = { ...selectedTask.process, approver_id: v };
+                            const updated = { ...selectedTask, process };
+                            setSelectedTask(updated);
+                            const ut = [...tasks];
+                            ut[editingTaskIndex] = updated;
+                            setTasks(ut);
+                          }}
+                          placeholder="Select Approver"
+                          className={getTaskError(editingTaskIndex, "approver") ? "mc-error" : ""}
+                        />
                         {getTaskError(editingTaskIndex, "approver") && <small className="mc-error-text">{getTaskError(editingTaskIndex, "approver")}</small>}
                       </label>
                     </div>
@@ -2576,10 +2730,16 @@ const MilestoneCreation = ({ onLogout, userRole }) => {
         <div className="mc-form-section">
           <div className="mc-form-grid three">
             <label className="mc-field"><span>Project <b>*</b></span>
-              <select value={milestone.drft_prj_id} onChange={(e) => updateMilestone("drft_prj_id", e.target.value)} className={errors.drft_prj_id ? "mc-error" : ""}>
-                <option value="">Select Project</option>
-                {projects.map(p => <option key={p.prj_id} value={p.prj_id}>{p.prj_cd} - {p.prj_nm}</option>)}
-              </select>
+              <SearchableSelect
+                options={projects.map(p => ({
+                  value: p.prj_id,
+                  label: `${p.prj_cd} - ${p.prj_nm}`
+                }))}
+                value={milestone.drft_prj_id}
+                onChange={(e) => updateMilestone("drft_prj_id", e.target.value)}
+                placeholder="Select Project"
+                className={errors.drft_prj_id ? "mc-error" : ""}
+              />
               {errors.drft_prj_id && <small className="mc-error-text">{errors.drft_prj_id}</small>}
             </label>
             <label className="mc-field"><span>Milestone Code <b>*</b></span>
@@ -2650,21 +2810,18 @@ const MilestoneCreation = ({ onLogout, userRole }) => {
               {milestone.mlstm_dep_flg && (
                 <>
                   <div className="mc-dependency-row"><label className="mc-field"><span>Dependent Milestone <b>*</b></span>
-                    <select
+                    <SearchableSelect
+                      options={projectMilestones
+                        .filter(m => m.drftMId !== milestone.drft_m_id)
+                        .map(m => ({
+                          value: m.drftMId,
+                          label: `${m.mlstnCd} - ${m.mlstnTtl}`
+                        }))}
                       value={milestone.mlstm_dep_m_id || ""}
                       onChange={(e) => updateMilestone("mlstm_dep_m_id", e.target.value)}
+                      placeholder="Select Milestone"
                       className={errors.mlstm_dep_m_id ? "mc-error" : ""}
-                    >
-                      <option value="">Select Milestone</option>
-
-                      {projectMilestones
-                        .filter(m => m.drftMId !== milestone.drft_m_id)
-                        .map(m => (
-                          <option key={m.drftMId} value={m.drftMId}>
-                            {m.mlstnCd} - {m.mlstnTtl}
-                          </option>
-                        ))}
-                    </select>
+                    />
                     {errors.mlstm_dep_m_id && <small className="mc-error-text">{errors.mlstm_dep_m_id}</small>}
                   </label></div>
                   <div className="mc-dependency-row"><label className="mc-field"><span>Dependency Type <b>*</b></span>
@@ -2703,15 +2860,21 @@ const MilestoneCreation = ({ onLogout, userRole }) => {
           <div className="mc-modal-body">
             <div className="mc-external-form-grid">
               <label className="mc-field"><span>Employee Code</span><input value={externalEmployeeForm.ext_emp_cd || generateExternalEmployeeCode()} onChange={(e) => handleExternalEmployeeChange("ext_emp_cd", e.target.value)} placeholder="Auto-generated" className="mc-code-input" /></label>
-              <label className="mc-field"><span>Employee Name <b>*</b></span><input value={externalEmployeeForm.ext_emp_nm} onChange={(e) => handleExternalEmployeeChange("ext_emp_nm", e.target.value)} placeholder="Enter employee name" className={getError("ext_emp_nm") ? "mc-error" : ""} />{getError("ext_emp_nm") && <small className="mc-error-text">{getError("ext_emp_nm")}</small>}</label>
+              <label className="mc-field"><span>Employee Name <b>*</b></span><input value={externalEmployeeForm.ext_emp_nm} onChange={(e) => { const lettersOnly = e.target.value.replace(/[^a-zA-Z\s]/g, ""); handleExternalEmployeeChange("ext_emp_nm", lettersOnly); }} placeholder="Enter employee name" className={getError("ext_emp_nm") ? "mc-error" : ""} />{getError("ext_emp_nm") && <small className="mc-error-text">{getError("ext_emp_nm")}</small>}</label>
               <label className="mc-field"><span>Email <b>*</b></span><input type="email" value={externalEmployeeForm.email} onChange={(e) => handleExternalEmployeeChange("email", e.target.value)} placeholder="Enter email address" className={getError("email") ? "mc-error" : ""} />{getError("email") && <small className="mc-error-text">{getError("email")}</small>}</label>
-              <label className="mc-field"><span>Mobile Number <b>*</b></span><input type="tel" value={externalEmployeeForm.mob_num} onChange={(e) => handleExternalEmployeeChange("mob_num", e.target.value)} placeholder="Enter 10-digit mobile number" className={getError("mob_num") ? "mc-error" : ""} maxLength="10" />{getError("mob_num") && <small className="mc-error-text">{getError("mob_num")}</small>}</label>
+              <label className="mc-field"><span>Mobile Number <b>*</b></span><input type="tel" value={externalEmployeeForm.mob_num} onChange={(e) => { let digitsOnly = e.target.value.replace(/\D/g, ""); if (digitsOnly.length === 1 && !/^[6-9]$/.test(digitsOnly)) { digitsOnly = ""; } else if (digitsOnly.length > 1 && !/^[6-9]/.test(digitsOnly)) { digitsOnly = digitsOnly.replace(/^[^6-9]+/, ""); } digitsOnly = digitsOnly.slice(0, 10); handleExternalEmployeeChange("mob_num", digitsOnly); }} placeholder="Enter 10-digit mobile number" className={getError("mob_num") ? "mc-error" : ""} maxLength="10" />{getError("mob_num") && <small className="mc-error-text">{getError("mob_num")}</small>}</label>
               <label className="mc-field"><span>Company Name <b>*</b></span><input value={externalEmployeeForm.company_nm} onChange={(e) => handleExternalEmployeeChange("company_nm", e.target.value)} placeholder="Enter company name" className={getError("company_nm") ? "mc-error" : ""} />{getError("company_nm") && <small className="mc-error-text">{getError("company_nm")}</small>}</label>
               <label className="mc-field"><span>Reporting To <b>*</b></span>
-                <select value={externalEmployeeForm.rep_emp_id} onChange={(e) => handleExternalEmployeeChange("rep_emp_id", e.target.value)} className={getError("rep_emp_id") ? "mc-error" : ""}>
-                  <option value="">Select Reporting Employee</option>
-                  {employees.map(emp => <option key={emp.emp_id} value={emp.emp_id}>{emp.emp_nm} ({emp.role})</option>)}
-                </select>
+                <SearchableSelect
+                  options={employees.map(emp => ({
+                    value: emp.emp_id,
+                    label: `${emp.emp_nm} (${emp.role})`
+                  }))}
+                  value={externalEmployeeForm.rep_emp_id}
+                  onChange={(e) => handleExternalEmployeeChange("rep_emp_id", e.target.value)}
+                  placeholder="Select Reporting Employee"
+                  className={getError("rep_emp_id") ? "mc-error" : ""}
+                />
                 {getError("rep_emp_id") && <small className="mc-error-text">{getError("rep_emp_id")}</small>}
               </label>
               <label className="mc-field"><span>Status</span>
