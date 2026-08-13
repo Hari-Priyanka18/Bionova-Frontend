@@ -42,7 +42,8 @@ import {
   MessageSquare,
   Paperclip,
   History,
-  MoreVertical
+  MoreVertical,
+  Lock
 } from "lucide-react";
 import "../../styles/MyTasks.css";
 import { apiGet, apiPut, apiPatch, apiPost, apiPostMultipart, apiDelete } from "../../utils/api";
@@ -303,7 +304,7 @@ const getActionButton = (task, currentUserEmpId, isExternal = false) => {
   if (progress === "OPEN") normalizedProgress = "OPEN";
   if (progress === "COMPLETED" || progress === "CLOSED") normalizedProgress = "COMPLETED";
   if (progress === "HOLD") normalizedProgress = "HOLD";
-  if (progress === "DRAFT") normalizedProgress = "OPEN";
+  if (progress === "DRAFT") normalizedProgress = "DRAFT";
 
   // Normalize process
   let normalizedProcess = process;
@@ -328,7 +329,13 @@ const getActionButton = (task, currentUserEmpId, isExternal = false) => {
   // EXECUTOR (DOER) ACTIONS - DYNAMIC
   // ============================================
   if (isDoer) {
-    // OPEN / DRAFT -> Start
+    const isLocked = rawTask?.isSequentialLocked === true || task?.isSequentialLocked === true || normalizedProgress === "DRAFT";
+    // Locked (Waiting for Predecessor)
+    if (isLocked) {
+      return { label: "Locked", action: "view", variant: "secondary" };
+    }
+
+    // OPEN -> Start
     if (normalizedProgress === "OPEN") {
       return { label: "Start", action: "start", variant: "primary" };
     }
@@ -518,11 +525,13 @@ const MyTasks = ({ userRole, onLogout }) => {
           dueDate: data.endDt,
           stDt: data.stDt,
           endDt: data.endDt,
-          progress: data.taskSts === "COMPLETED" || data.taskSts === "CLOSED" ? 100 : (data.checklists?.length ? Math.round((data.checklists.filter(c => c.chkSts).length / data.checklists.length) * 100) : 0),
+          progress: 0,
           project: data.prjNm || "Assignment",
           projectId: data.prjId,
           milestone: data.mlstnTtl || "—",
           milestoneId: data.mId,
+          isSequentialLocked: !!data.isSequentialLocked,
+          lockReason: data.lockReason || null,
           rawTask: {
             ...data,
             empId: data.extEmpId,
@@ -536,7 +545,16 @@ const MyTasks = ({ userRole, onLogout }) => {
             taskDesc: data.taskDesc,
             addlRem: data.addlRem,
             isExternal: true,
-            prcsYesActn: "NONE"
+            isSequentialLocked: !!data.isSequentialLocked,
+            lockReason: data.lockReason || null,
+            reviewerId: data.reviewerId || null,
+            reviewer: data.reviewerId || null,
+            reviewerNm: data.reviewerNm || null,
+            approverId: data.approverId || null,
+            approver: data.approverId || null,
+            approverNm: data.approverNm || null,
+            prcsFlg: data.prcsFlg || false,
+            prcsYesActn: data.prcsYesActn || "NONE"
           },
           isExternal: true
         };
@@ -546,6 +564,9 @@ const MyTasks = ({ userRole, onLogout }) => {
           text: (c.chkCd ? `[${c.chkCd}] ` : "") + (c.chkNm || c.chkDesc || ""),
           completed: !!c.chkSts
         }));
+
+        const calculatedProgress = computeProgress(chks, taskObj);
+        taskObj.progress = calculatedProgress;
 
         const atts = (data.attachments || []).map(a => ({
           fileId: a.fileId,
@@ -560,7 +581,7 @@ const MyTasks = ({ userRole, onLogout }) => {
         setUpdateChecklist(chks);
         setTaskAttachments(atts);
         setUpdateRemarks(data.addlRem || "");
-        setUpdateProgressVal(taskObj.progress);
+        setUpdateProgressVal(calculatedProgress);
       }
     } catch (e) {
       console.error("Failed to fetch external task", e);
@@ -1462,11 +1483,15 @@ const MyTasks = ({ userRole, onLogout }) => {
     if (isExternalMode) {
       try {
         setLoadingAction(task.id || task.taskId);
-        await fetch(`${apiBaseUrl}/api/external-tasks/${externalToken}/update`, {
+        const res = await fetch(`${apiBaseUrl}/api/external-tasks/${externalToken}/update`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ taskSts: "WIP", remarks: updateRemarks })
         });
+        const resData = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(resData.message || "Failed to start external task");
+        }
         setSelectedTask(prev => ({
           ...prev,
           status: "WIP",
@@ -1476,6 +1501,7 @@ const MyTasks = ({ userRole, onLogout }) => {
         if (!skipAlert) triggerAlert("success", "Started", "Task moved to Work In Progress.");
       } catch (e) {
         console.error("External start error:", e);
+        if (!skipAlert) triggerAlert("danger", "Error", "Failed to start task: " + e.message);
       } finally {
         setLoadingAction(null);
       }
@@ -1989,9 +2015,33 @@ const MyTasks = ({ userRole, onLogout }) => {
   };
 
   const handleToggleChecklist = async (id) => {
-    if (!id) return;
+    if (!id || !selectedTask) return;
+
+    const rawTask = selectedTask.rawTask || selectedTask;
+    const taskStatus = String(rawTask.taskSts || rawTask.status || selectedTask.rawStatus || selectedTask.status || "").toUpperCase();
+    const isCompleted = ['COMPLETED', 'CLOSED', 'DONE', 'COMPLETE'].includes(taskStatus) || selectedTask.progress === 100;
+    const isUnderReview = rawTask.prcsYesActn === "PENDING_REVIEWER" || rawTask.prcsYesActn === "PENDING_APPROVER" || rawTask.prcsYesActn === "UNDER_REVIEW";
+
+    // 1. If task has not been started yet (OPEN or DRAFT), block and alert user
+    if (taskStatus === "OPEN" || taskStatus === "DRAFT") {
+      triggerAlert("warning", "Task Not Started", "Please click the 'Start' button to begin working on this task before checking off items.");
+      return;
+    }
+
+    // 2. If task is already completed/closed, block
+    if (isCompleted) {
+      triggerAlert("warning", "Task Closed", "Checklists cannot be edited because this task is already closed.");
+      return;
+    }
+
+    // 3. If task is under review, block
+    if (isUnderReview) {
+      triggerAlert("warning", "Under Review", "Checklists cannot be edited while the task is under review.");
+      return;
+    }
+
     if (isExternalMode) {
-      if (isExpired || selectedTask?.rawStatus === "COMPLETED" || selectedTask?.rawStatus === "CLOSED") return;
+      if (isExpired) return;
       const targetItem = updateChecklist.find(c => c.id === id);
       const nextCompleted = !targetItem?.completed;
 
@@ -2016,10 +2066,9 @@ const MyTasks = ({ userRole, onLogout }) => {
       return;
     }
 
-    if (selectedTask?.status === "WIP" && selectedTask?.rawTask?.prcsYesActn === "PENDING_APPROVER") return;
-    if (selectedTask?.status === "COMPLETED") return;
-    const executorId = selectedTask?.rawTask?.empId || selectedTask?.rawTask?.assignedTo;
-    if (String(executorId) !== String(currentUserEmpId)) return;
+    const executorId = rawTask.empId || rawTask.assignedTo;
+    const isTeamMember = (Array.isArray(rawTask?.teamMembers) && rawTask.teamMembers.some(tm => String(tm.empId) === String(currentUserEmpId))) || (Array.isArray(selectedTask?.teamMembers) && selectedTask.teamMembers.some(tm => String(tm.empId) === String(currentUserEmpId)));
+    if (String(executorId) !== String(currentUserEmpId) && !isTeamMember) return;
 
     setUpdateChecklist(prev => {
       const newList = prev.map(item =>
@@ -3151,8 +3200,38 @@ const MyTasks = ({ userRole, onLogout }) => {
 
       // EXECUTOR ACTIONS - DYNAMIC BASED ON PROGRESS & PROCESS
       if (isDoer) {
-        // OPEN / DRAFT -> Start
-        if (currentProgress === "OPEN" || currentProgress === "DRAFT") {
+        const isLocked = rawTask?.isSequentialLocked === true || task?.isSequentialLocked === true || currentProgress === "DRAFT";
+        // Locked
+        if (isLocked) {
+          return (
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px", width: "100%" }}>
+              <div style={{
+                padding: "10px 14px",
+                backgroundColor: "#fffbeb",
+                border: "1px solid #fde68a",
+                borderRadius: "6px",
+                color: "#92400e",
+                fontSize: "12px",
+                display: "flex",
+                alignItems: "center",
+                gap: "8px"
+              }}>
+                <Lock size={15} color="#d97706" style={{ flexShrink: 0 }} />
+                <span><strong>Sequential Task:</strong> {rawTask?.lockReason || task?.lockReason || "Waiting for previous predecessor task/milestone to complete and close."}</span>
+              </div>
+              <button
+                className="cc-btn secondary"
+                disabled
+                style={{ borderRadius: "6px", backgroundColor: "#f1f5f9", border: "1px solid #cbd5e1", color: "#94a3b8", width: "100%", padding: "10px", fontWeight: "600", cursor: "not-allowed", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px" }}
+              >
+                <Lock size={15} /> Locked (Predecessor Incomplete)
+              </button>
+            </div>
+          );
+        }
+
+        // OPEN -> Start
+        if (currentProgress === "OPEN") {
           return (
             <div style={{ display: "flex", flexDirection: "column", gap: "8px", width: "100%" }}>
               <button
@@ -3545,28 +3624,86 @@ const MyTasks = ({ userRole, onLogout }) => {
                   {updateChecklist.filter(c => c.completed).length}/{updateChecklist.length}
                 </div>
               </div>
-              {updateChecklist.length === 0 ? (
-                <div style={{ textAlign: "center", padding: "20px", color: "#64748b" }}>
-                  No checklist items defined for this task.
-                </div>
-              ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                  {updateChecklist.map(item => (
-                    <div
-                      key={item.id}
-                      onClick={() => handleToggleChecklist(item.id)}
-                      style={{
+              {(() => {
+                const isStarted = currentProgress === "WIP" || currentProgress === "IN_PROGRESS" || currentProgress === "WORK_IN_PROGRESS";
+                const canEditChecklist = isDoer && isStarted && !isCompleted && !isUnderReview;
+
+                return (
+                  <>
+                    {!isStarted && !isCompleted && (
+                      <div style={{
+                        fontSize: "12px",
+                        color: "#b45309",
+                        backgroundColor: "#fffbeb",
+                        border: "1px solid #fde68a",
+                        padding: "8px 12px",
+                        borderRadius: "6px",
+                        marginBottom: "12px",
                         display: "flex",
                         alignItems: "center",
-                        gap: "12px",
-                        padding: "10px 12px",
-                        backgroundColor: item.completed ? "#f0fdf4" : "#f8fafc",
-                        borderRadius: "8px",
-                        border: `1px solid ${item.completed ? "#bbf7d0" : "#e2e8f0"}`,
-                        cursor: isCompleted || isUnderReview ? "not-allowed" : "pointer",
-                        opacity: isCompleted || isUnderReview ? 0.7 : 1
-                      }}
-                    >
+                        gap: "8px"
+                      }}>
+                        <AlertCircle size={15} color="#d97706" style={{ flexShrink: 0 }} />
+                        <span>Click the <strong>Start</strong> button above to begin working on this task before checking off items.</span>
+                      </div>
+                    )}
+                    {isCompleted && (
+                      <div style={{
+                        fontSize: "12px",
+                        color: "#15803d",
+                        backgroundColor: "#f0fdf4",
+                        border: "1px solid #bbf7d0",
+                        padding: "8px 12px",
+                        borderRadius: "6px",
+                        marginBottom: "12px",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px"
+                      }}>
+                        <CheckCircle2 size={15} color="#16a34a" style={{ flexShrink: 0 }} />
+                        <span>Task is closed. Checklists are locked (read-only).</span>
+                      </div>
+                    )}
+                    {isUnderReview && (
+                      <div style={{
+                        fontSize: "12px",
+                        color: "#6b21a8",
+                        backgroundColor: "#faf5ff",
+                        border: "1px solid #e9d5ff",
+                        padding: "8px 12px",
+                        borderRadius: "6px",
+                        marginBottom: "12px",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px"
+                      }}>
+                        <Clock size={15} color="#9333ea" style={{ flexShrink: 0 }} />
+                        <span>Task is under review. Checklists are read-only.</span>
+                      </div>
+                    )}
+
+                    {updateChecklist.length === 0 ? (
+                      <div style={{ textAlign: "center", padding: "20px", color: "#64748b" }}>
+                        No checklist items defined for this task.
+                      </div>
+                    ) : (
+                      <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                        {updateChecklist.map(item => (
+                          <div
+                            key={item.id}
+                            onClick={() => handleToggleChecklist(item.id)}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "12px",
+                              padding: "10px 12px",
+                              backgroundColor: item.completed ? "#f0fdf4" : "#f8fafc",
+                              borderRadius: "8px",
+                              border: `1px solid ${item.completed ? "#bbf7d0" : "#e2e8f0"}`,
+                              cursor: canEditChecklist ? "pointer" : "not-allowed",
+                              opacity: canEditChecklist ? 1 : 0.75
+                            }}
+                          >
                       <div style={{
                         width: "20px",
                         height: "20px",
@@ -3595,7 +3732,10 @@ const MyTasks = ({ userRole, onLogout }) => {
                   ))}
                 </div>
               )}
-            </div>
+            </>
+          );
+        })()}
+      </div>
 
             {/* Description */}
             {task.description && (
@@ -4268,12 +4408,16 @@ const MyTasks = ({ userRole, onLogout }) => {
               <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                 {isExternalMode ? (
                   <>
-                    {renderTeamMember(null, "Assigned By", "AB", "Project Admin")}
+                    {(task.isIndividual || projectInfo.isIndividual) && (
+                      renderTeamMember(null, "Assigned By", "AB", "Project Admin")
+                    )}
                     {renderTeamMember(null, "Executor", "EX", rawTask?.extEmpNm || "External Associate")}
+                    {rawTask?.reviewerId && renderTeamMember(rawTask?.reviewerId, "Reviewer", "RV", rawTask?.reviewerNm)}
+                    {rawTask?.approverId && renderTeamMember(rawTask?.approverId, "Approver", "AP", rawTask?.approverNm)}
                   </>
                 ) : (
                   <>
-                    {(task.isIndividual || projectInfo.isIndividual || rawTask?.assignedBy || rawTask?.assigned_by) && (
+                    {(task.isIndividual || projectInfo.isIndividual) && (
                       renderTeamMember(
                         rawTask?.assignedBy || rawTask?.assigned_by || rawTask?.createdBy,
                         "Assigned By",
@@ -4772,7 +4916,7 @@ const MyTasks = ({ userRole, onLogout }) => {
     const assignedById = rawTask.assignedBy || rawTask.assigned_by || rawTask.createdBy;
 
     let teamMembers = [
-      ...((task.isIndividual || rawTask.taskSource === "INDIVIDUAL" || assignedById) && (assignedById || rawTask.assignedByNm) ? [{
+      ...((task.isIndividual || rawTask.taskSource === "INDIVIDUAL" || (!task.isProject && !rawTask.mId && !rawTask.prjId && !rawTask.mlstnCd && !rawTask.prjCd && assignedById)) && (assignedById || rawTask.assignedByNm) ? [{
         empId: assignedById,
         role: "Assigned By",
         label: "AB",
