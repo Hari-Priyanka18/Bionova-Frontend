@@ -275,7 +275,9 @@ const getActionButton = (task, currentUserEmpId, isExternal = false) => {
   // Calculate priority
   let calculatedPriority = "Normal";
   const endDt = rawTask.endDt || rawTask.dueDate;
-  if (progress === "REASSIGN" || progress === "REWORK") {
+  if (progress === "COMPLETED" || progress === "CLOSED" || progress === "DONE") {
+    calculatedPriority = "";
+  } else if (progress === "REASSIGN" || progress === "REWORK") {
     calculatedPriority = progress;
   } else if (endDt) {
     try {
@@ -967,16 +969,30 @@ const MyTasks = ({ userRole, onLogout }) => {
       let mappedInd = filteredIndTasks.map(t => mapIndividualTask(t, employeesData || []));
       mapped = [...mapped, ...mappedInd];
 
-      // Final strict deduplication by unique database primary ID
+      // Final strict deduplication by unique task code, database primary ID, and composite keys
       const uniqueMapped = [];
-      const seenKeys = new Set();
+      const seenTaskCodes = new Set();
+      const seenPrimaryKeys = new Set();
+
       mapped.forEach(t => {
-        const idVal = t.taskId || t.id || t.empTaskId;
-        const idKey = `${t.isIndividual ? 'IND' : 'LIVE'}_${idVal}`;
-        if (idVal && !seenKeys.has(idKey)) {
-          seenKeys.add(idKey);
-          uniqueMapped.push(t);
+        const rawCode = String(t.taskCode || t.id || t.rawTask?.taskCd || t.rawTask?.taskCode || t.code || "").toUpperCase().trim();
+        const rawId = String(t.taskId || t.empTaskId || t.rawTask?.empTaskId || t.rawTask?.taskId || t.rawTask?.id || "").trim();
+        const typePrefix = t.isIndividual ? 'IND' : 'LIVE';
+        const primaryKey = rawId ? `${typePrefix}_${rawId}` : null;
+
+        // Skip if task code already seen (e.g. "INDTSK-004")
+        if (rawCode && seenTaskCodes.has(rawCode)) {
+          return;
         }
+
+        // Skip if database primary ID already seen
+        if (primaryKey && seenPrimaryKeys.has(primaryKey)) {
+          return;
+        }
+
+        if (rawCode) seenTaskCodes.add(rawCode);
+        if (primaryKey) seenPrimaryKeys.add(primaryKey);
+        uniqueMapped.push(t);
       });
       mapped = uniqueMapped;
 
@@ -1159,7 +1175,9 @@ const MyTasks = ({ userRole, onLogout }) => {
 
     let calculatedPriority = "Normal";
     const endDt = t.endDt || t.dueDate || t.endDate;
-    if (taskSts === "REASSIGN" || taskSts === "REWORK") {
+    if (taskSts === "COMPLETED" || taskSts === "CLOSED" || taskSts === "DONE") {
+      calculatedPriority = "";
+    } else if (taskSts === "REASSIGN" || taskSts === "REWORK") {
       calculatedPriority = taskSts;
     } else if (endDt) {
       try {
@@ -1172,7 +1190,7 @@ const MyTasks = ({ userRole, onLogout }) => {
         compareDateObj.setHours(0, 0, 0, 0);
 
         const actCmpDt = t.actCmpDt || t.actualCompletionDate || t.completedDate;
-        if (taskSts === "COMPLETED" || taskSts === "CLOSED" || taskSts === "UNDER_REVIEW") {
+        if (taskSts === "UNDER_REVIEW") {
           if (actCmpDt) {
             const cmpDateStr = actCmpDt.split('T')[0];
             const [cYear, cMonth, cDay] = cmpDateStr.split('-');
@@ -1250,7 +1268,9 @@ const MyTasks = ({ userRole, onLogout }) => {
 
     let calculatedPriority = "Normal";
     const endDt = t.endDt || t.dueDate || t.endDate;
-    if (taskSts === "REASSIGN" || taskSts === "REWORK") {
+    if (taskSts === "COMPLETED" || taskSts === "CLOSED" || taskSts === "DONE") {
+      calculatedPriority = "";
+    } else if (taskSts === "REASSIGN" || taskSts === "REWORK") {
       calculatedPriority = taskSts;
     } else if (endDt) {
       try {
@@ -2112,43 +2132,6 @@ const MyTasks = ({ userRole, onLogout }) => {
       // Uncheck all checklists in local state
       setUpdateChecklist(prev => prev.map(c => ({ ...c, completed: false })));
 
-      // If a Target Deliverable / Task was selected for Rework (e.g. TSK-001 in Milestone 1), append remark to target task as well
-      const realTargetId = denyData.targetTaskId || (targetTaskObj ? (targetTaskObj.taskId || targetTaskObj.id) : null);
-      if (realTargetId && String(realTargetId) !== String(taskId)) {
-        const targetRaw = targetTaskObj ? (targetTaskObj.rawTask || targetTaskObj) : null;
-        const isTargetInd = targetTaskObj ? (targetTaskObj.isIndividual || targetRaw?.taskSource === "INDIVIDUAL") : false;
-        const senderName = sessionStorage.getItem("userName") || (isApprover ? "Approver" : "Reviewer");
-        const targetRemHeader = `[Rework - ${senderName}]: ${finalRemarks}`;
-
-        // Save to target task's DB record (addlRem/remarks)
-        try {
-          const existingTargetRem = targetRaw ? (isTargetInd ? targetRaw.remarks : targetRaw.addlRem) : "";
-          const newTargetRem = existingTargetRem ? `${existingTargetRem}\n---\n${targetRemHeader}` : targetRemHeader;
-          const targetUpdatePath = isTargetInd ? `/api/assignments/${realTargetId}` : `/api/task-live/${realTargetId}`;
-          const targetPayload = targetRaw ? {
-            ...targetRaw,
-            taskSts: "WIP",
-            prcsYesActn: "NONE",
-            [isTargetInd ? "remarks" : "addlRem"]: newTargetRem
-          } : null;
-          if (targetPayload) {
-            await apiPut(`${targetUpdatePath}?_t=${Date.now()}`, targetPayload);
-          }
-        } catch (errTargetRem) {
-          console.error("Failed to update target task remarks in DB", errTargetRem);
-        }
-
-        // Log progress entry to ProcessMaster for target task so it shows in Process History
-        try {
-          await apiPost(`/api/process/task/${realTargetId}/update-progress`, {
-            remarks: targetRemHeader,
-            isIndividual: isTargetInd
-          });
-        } catch (errProcessMaster) {
-          console.error("Failed to log progress to ProcessMaster for target task", errProcessMaster);
-        }
-      }
-
       if (newStatus === "REASSIGN") {
         const executorId = targetEmpIdVal || originalTask.empId || originalTask.assignedTo;
         if (executorId) {
@@ -2325,36 +2308,42 @@ const MyTasks = ({ userRole, onLogout }) => {
 
   const isTaskOverdue = (task) => {
     const rawTask = task.rawTask || task;
-    if (!rawTask.endDt) return false;
-    const rawSts = rawTask.taskSts || rawTask.status || task.status;
+    const rawSts = rawTask.taskSts || rawTask.status || task.rawStatus || task.status;
     const stsStr = typeof rawSts === 'object' && rawSts !== null
       ? (rawSts.statusNm || rawSts.status_nm || "OPEN")
       : (rawSts || "OPEN");
     const sts = String(stsStr).toUpperCase();
-    if (sts === "COMPLETED" || sts === "CLOSED") return false;
+    if (['COMPLETED', 'CLOSED', 'DONE', 'COMPLETE'].includes(sts)) return false;
+    if (task.isCompleted || isCompletedTab(task) || task.progress === 100) return false;
+
+    const endDt = rawTask.endDt || task.dueDate || rawTask.dueDate;
+    if (!endDt) return false;
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const dueDate = new Date(rawTask.endDt);
+    const dueDate = new Date(endDt);
     dueDate.setHours(0, 0, 0, 0);
 
     return today > dueDate;
   };
 
   const filteredTasks = tasks.filter(task => {
-    // 1. Basic filters
+    // 1. Search filter: only task code or task title
     if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      if (!task.title?.toLowerCase().includes(q) &&
-        !task.id?.toLowerCase().includes(q) &&
-        !task.taskCode?.toLowerCase().includes(q)) {
+      const q = searchQuery.toLowerCase().trim();
+      const code = String(task.taskCode || task.id || task.code || task.rawTask?.taskCd || task.rawTask?.taskCode || "").toLowerCase().trim();
+      const title = String(task.title || task.name || task.taskNm || task.rawTask?.taskNm || "").toLowerCase().trim();
+      if (!code.includes(q) && !title.includes(q)) {
         return false;
       }
     }
 
     if (selectedProject !== "All Projects" && task.project !== selectedProject) return false;
     if (selectedMilestone !== "All Milestones" && task.milestone !== selectedMilestone) return false;
-    if (selectedPriority !== "All Priorities" && task.priority !== selectedPriority) return false;
+    if (selectedPriority !== "All Priorities") {
+      const isClosed = isCompletedTab(task);
+      if (isClosed || task.priority !== selectedPriority) return false;
+    }
 
     if (taskFilter !== "All" && selectedStatus !== "Completed") {
       const statusFilter = getTaskStatusFilter(task);
@@ -2502,45 +2491,7 @@ const MyTasks = ({ userRole, onLogout }) => {
     try {
       const taskId = task.taskId || task.id;
       const historyData = await apiGet(`/api/process/task/${taskId}?isIndividual=${task.isIndividual === true}`);
-      let procList = Array.isArray(historyData) ? historyData : [];
-
-      // Failsafe for cross-task rework: search project tasks process history for events mentioning this task code or title
-      const taskCodeStr = String(task.taskCode || task.id || "").toLowerCase();
-      const taskTitleStr = String(task.title || task.taskNm || "").toLowerCase();
-
-      const allTasksSource = (tasks && tasks.length > 0) ? tasks : allProjectTasks;
-      if (allTasksSource && allTasksSource.length > 0) {
-        const otherProjectTasks = allTasksSource.filter(t => {
-          const r = t.rawTask || t;
-          const id = String(t.id || t.taskId || r.taskId || r.id || "");
-          return id && id !== String(taskId);
-        });
-
-        const extraResults = await Promise.allSettled(
-          otherProjectTasks.slice(0, 10).map(t => {
-            const r = t.rawTask || t;
-            const id = r.taskId || r.id || t.taskId || t.id;
-            return apiGet(`/api/process/task/${id}?isIndividual=${t.isIndividual === true}`);
-          })
-        );
-
-        extraResults.forEach(res => {
-          if (res.status === 'fulfilled' && Array.isArray(res.value)) {
-            res.value.forEach(evt => {
-              const remText = String(evt.remarks || "").toLowerCase();
-              if (remText.includes("target milestone") || remText.includes("target task")) {
-                if (remText.includes(taskCodeStr) || (taskTitleStr && (remText.includes(taskTitleStr) || (taskTitleStr.includes("m1") && remText.includes("m1"))))) {
-                  if (!procList.some(p => p.prId === evt.prId || (p.remarks === evt.remarks && p.empId === evt.empId))) {
-                    procList.push(evt);
-                  }
-                }
-              }
-            });
-          }
-        });
-      }
-
-      setProcessHistory(procList);
+      setProcessHistory(Array.isArray(historyData) ? historyData : []);
     } catch (err) {
       console.error("Failed to load process history:", err);
       setProcessHistory([]);
@@ -2746,6 +2697,15 @@ const MyTasks = ({ userRole, onLogout }) => {
         else if (exeName && exeName === name) role = "EXECUTOR";
       }
 
+      if (role === "TEAM" || !role) {
+        const remLower = (event.remarks || "").toLowerCase();
+        if (remLower.includes("approver") || event.rId === 2) {
+          role = "APPROVER";
+        } else if (remLower.includes("reviewer") || event.rId === 1 || event.prcsSts === "NO") {
+          role = "REVIEWER";
+        }
+      }
+
       let action = "Remark";
       let actionColor = "#D97706";
       let actionBg = "#FEF3C7";
@@ -2754,15 +2714,13 @@ const MyTasks = ({ userRole, onLogout }) => {
         actionColor = "#059669";
         actionBg = "#D1FAE5";
       }
-      else if (event.prcsSts === "NO") {
-        action = (task && task.isIndividual) ? "Reassign" : "Rework / Reassign";
-        if (task && !task.isIndividual && (task.rawTask?.addlRem || task.rawTask?.remarks)) {
-          const rawStr = task.rawTask.addlRem || task.rawTask.remarks;
-          if (rawStr.includes("[Rejected") && rawStr.includes(event.remarks || "")) {
-            action = "Rework";
-          } else if (rawStr.includes("[Reassigned") && rawStr.includes(event.remarks || "")) {
-            action = "Reassign";
-          }
+      else if (event.prcsSts === "NO" || event.prcsSts === "REWORK" || event.prcsSts === "REASSIGN") {
+        const remLower = (event.remarks || "").toLowerCase();
+        const rawStr = (task?.rawTask?.addlRem || task?.rawTask?.remarks || "").toLowerCase();
+        if (event.prcsSts === "REASSIGN" || remLower.includes("reassign") || rawStr.includes("[reassigned")) {
+          action = "Reassign";
+        } else {
+          action = "Rework";
         }
         actionColor = action === "Reassign" ? "#4F46E5" : "#F97316";
         actionBg = action === "Reassign" ? "#EEF2FF" : "#FFF7ED";
@@ -2992,17 +2950,20 @@ const MyTasks = ({ userRole, onLogout }) => {
     // Get dynamic action based on current state
     const action = getActionButton(rawTask, currentUserEmpId, isExternalMode);
 
+    const isCompleted = ['COMPLETED', 'CLOSED', 'DONE', 'COMPLETE'].includes(
+      String(rawTask?.taskSts || rawTask?.status || task.rawStatus || task.status || '').toUpperCase()
+    ) || (task.progress === 100) || (task.status === 'COMPLETED');
+
     const isOverdue = (() => {
-      if (!rawTask?.endDt) return false;
-      if (rawTask?.taskSts === "COMPLETED" || rawTask?.taskSts === "CLOSED") return false;
+      if (isCompleted) return false;
+      const endDt = rawTask?.endDt || task.dueDate || rawTask?.dueDate;
+      if (!endDt) return false;
       const today = new Date();
       today.setHours(0, 0, 0, 0);
-      const dueDate = new Date(rawTask.endDt);
+      const dueDate = new Date(endDt);
       dueDate.setHours(0, 0, 0, 0);
       return today > dueDate;
     })();
-
-    const isCompleted = task.rawStatus === "COMPLETED" || task.rawStatus === "CLOSED";
     const isTeamMember = taskTeamMembers.some(tm => String(tm.empId) === String(currentUserEmpId)) || (Array.isArray(rawTask?.teamMembers) && rawTask.teamMembers.some(tm => String(tm.empId) === String(currentUserEmpId)));
     const isDoer = isExternalMode || String(rawTask.empId || rawTask.assignedTo) === String(currentUserEmpId) || isTeamMember;
     const isReviewer = !isExternalMode && String(rawTask.reviewerId || rawTask.reviewer) === String(currentUserEmpId);
@@ -3458,22 +3419,24 @@ const MyTasks = ({ userRole, onLogout }) => {
               padding: "24px",
               marginBottom: "24px"
             }}>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
-                <div>
-                  <div style={{ fontSize: "12px", fontWeight: "600", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "4px" }}>
-                    <Flag size={14} style={{ display: "inline", marginRight: "4px" }} /> Priority
+              <div style={{ display: "grid", gridTemplateColumns: isCompleted ? "repeat(3, 1fr)" : "1fr 1fr", gap: "16px" }}>
+                {!isCompleted && (
+                  <div>
+                    <div style={{ fontSize: "12px", fontWeight: "600", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "4px" }}>
+                      <Flag size={14} style={{ display: "inline", marginRight: "4px" }} /> Priority
+                    </div>
+                    <span className="cc-status-badge" style={{
+                      backgroundColor: priorityBadge.bg,
+                      color: priorityBadge.color,
+                      padding: "2px 10px",
+                      borderRadius: "12px",
+                      fontSize: "13px",
+                      fontWeight: "600"
+                    }}>
+                      {task.priority || "Normal"}
+                    </span>
                   </div>
-                  <span className="cc-status-badge" style={{
-                    backgroundColor: priorityBadge.bg,
-                    color: priorityBadge.color,
-                    padding: "2px 10px",
-                    borderRadius: "12px",
-                    fontSize: "13px",
-                    fontWeight: "600"
-                  }}>
-                    {task.priority || "Normal"}
-                  </span>
-                </div>
+                )}
                 <div>
                   <div style={{ fontSize: "12px", fontWeight: "600", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "4px" }}>
                     <Calendar size={14} style={{ display: "inline", marginRight: "4px" }} /> Due Date
@@ -4360,12 +4323,14 @@ const MyTasks = ({ userRole, onLogout }) => {
                     </span>
                   </div>
                 )}
-                <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid #f1f5f9" }}>
-                  <span style={{ fontSize: "13px", color: "#64748b" }}>Priority</span>
-                  <span style={{ fontSize: "13px", fontWeight: "600", color: "#0f172a" }}>
-                    {task.priority || "Normal"}
-                  </span>
-                </div>
+                {!isCompleted && (
+                  <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid #f1f5f9" }}>
+                    <span style={{ fontSize: "13px", color: "#64748b" }}>Priority</span>
+                    <span style={{ fontSize: "13px", fontWeight: "600", color: "#0f172a" }}>
+                      {task.priority || "Normal"}
+                    </span>
+                  </div>
+                )}
                 <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: isExternalMode ? "1px solid #f1f5f9" : "none" }}>
                   <span style={{ fontSize: "13px", color: "#64748b" }}>Assigned To</span>
                   <span style={{ fontSize: "13px", fontWeight: "500", color: "#0f172a" }}>
@@ -5377,8 +5342,8 @@ const MyTasks = ({ userRole, onLogout }) => {
               </div>
 
               {/* Search and Filters */}
-              {showTaskFilters && (
-                <div className="myt-tabs-container" style={{ marginBottom: "20px", borderBottom: "none", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px" }}>
+              <div className="myt-tabs-container" style={{ marginBottom: "20px", borderBottom: "none", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px" }}>
+                {showTaskFilters ? (
                   <div className="myt-tabs-left" style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
                     <button
                       className={`myt-filter-btn ${taskFilter === "All" ? "active" : ""}`}
@@ -5483,24 +5448,28 @@ const MyTasks = ({ userRole, onLogout }) => {
                       Overdue
                     </button>
                   </div>
-                  <div className="myt-tabs-right" style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                    <div className="myt-search-box" style={{ position: "relative" }}>
-                      <Search size={15} className="myt-search-icon" style={{ position: "absolute", left: "10px", top: "50%", transform: "translateY(-50%)", color: "#94a3b8" }} />
-                      <input
-                        type="text"
-                        placeholder="Search task..."
-                        value={searchInput}
-                        onChange={(e) => { setSearchInput(e.target.value); setSearchQuery(e.target.value); }}
-                        style={{ padding: "8px 12px 8px 32px", border: "1px solid #e2e8f0", borderRadius: "6px", outline: "none", fontSize: "13px", width: "220px" }}
-                        onKeyDown={handleSearchKeyDown}
-                      />
-                    </div>
+                ) : (
+                  <div className="myt-tabs-left" />
+                )}
+                <div className="myt-tabs-right" style={{ display: "flex", gap: "8px", alignItems: "center", marginLeft: showTaskFilters ? "0" : "auto" }}>
+                  <div className="myt-search-box" style={{ position: "relative" }}>
+                    <Search size={15} className="myt-search-icon" style={{ position: "absolute", left: "10px", top: "50%", transform: "translateY(-50%)", color: "#94a3b8" }} />
+                    <input
+                      type="text"
+                      placeholder="Search task code or title..."
+                      value={searchInput}
+                      onChange={(e) => { setSearchInput(e.target.value); setSearchQuery(e.target.value); }}
+                      style={{ padding: "8px 12px 8px 32px", border: "1px solid #e2e8f0", borderRadius: "6px", outline: "none", fontSize: "13px", width: "240px" }}
+                      onKeyDown={handleSearchKeyDown}
+                    />
+                  </div>
+                  {(searchInput || searchQuery) && (
                     <button onClick={handleResetFilters} style={{ padding: "6px 12px", border: "1px solid #e2e8f0", borderRadius: "6px", backgroundColor: "white", cursor: "pointer", fontSize: "12px", color: "#64748b" }}>
                       Clear
                     </button>
-                  </div>
+                  )}
                 </div>
-              )}
+              </div>
 
               {/* Table */}
               <div className="cc-table-panel" style={{ border: "none", boxShadow: "none", padding: 0 }}>

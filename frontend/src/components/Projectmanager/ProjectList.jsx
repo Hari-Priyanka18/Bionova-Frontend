@@ -8,6 +8,7 @@ import {
 import Sidebar from '../Sidebar.jsx';
 import Header from '../Header.jsx';
 import '../../styles/projectList.css';
+import { calculateDynamicPriority } from '../../utils/priority';
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL;
 const getAuthHeaders = () => ({
@@ -80,21 +81,25 @@ export default function ProjectList({ userRole, onLogout }) {
         createdBy: getLoggedInUser()
       }));
 
-      const mappedLive = (live || []).map(l => ({
-        id: l.prjId,
-        _type: 'live',
-        projectCode: l.prjCd || '',
-        projectName: l.prjNm || '',
-        companyName: coyData.find(c => c.coyId === l.coyId)?.coyNm || '',
-        plantName: pltData.find(p => p.pltId === l.pltId)?.pltNm || '',
-        department: deptData.find(dep => dep.deptId === l.deptId)?.deptNm || '',
-        priority: l.prjPrty || 'MEDIUM',
-        status: l.prjSts || 'LIVE',
-        startDate: l.stDt || '',
-        endDate: l.endDt || '',
-        totalProjectDays: l.noOfDays || '',
-        createdBy: getLoggedInUser()
-      }));
+      const mappedLive = (live || []).map(l => {
+        const dynamicPrio = calculateDynamicPriority(l.prjPrty || 'LOW', l.stDt, l.endDt, l.noOfDays);
+        return {
+          id: l.prjId,
+          _type: 'live',
+          projectCode: l.prjCd || '',
+          projectName: l.prjNm || '',
+          companyName: coyData.find(c => c.coyId === l.coyId)?.coyNm || '',
+          plantName: pltData.find(p => p.pltId === l.pltId)?.pltNm || '',
+          department: deptData.find(dep => dep.deptId === l.deptId)?.deptNm || '',
+          priority: dynamicPrio.priority,
+          priorityMeta: dynamicPrio,
+          status: l.prjSts || 'LIVE',
+          startDate: l.stDt || '',
+          endDate: l.endDt || '',
+          totalProjectDays: l.noOfDays || '',
+          createdBy: getLoggedInUser()
+        };
+      });
 
       setProjects([...mappedLive]);
     } catch (err) {
@@ -143,9 +148,13 @@ export default function ProjectList({ userRole, onLogout }) {
   const currentItems = filteredProjects.slice(indexOfFirst, indexOfFirst + itemsPerPage);
 
   const getPriorityClass = (priority) => {
-    switch(priority) {
+    switch(priority?.toUpperCase()) {
+      case 'ATMOST CRITICAL':
+      case 'ATMOST_CRITICAL': return 'atmost-critical';
+      case 'CRITICAL': return 'critical';
       case 'HIGH': return 'high';
       case 'MEDIUM': return 'medium';
+      case 'NORMAL': return 'normal';
       case 'LOW': return 'low';
       default: return '';
     }

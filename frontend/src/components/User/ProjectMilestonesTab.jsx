@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Flag, ListTodo, CheckSquare, RefreshCcw, HelpCircle, Clock, Plus, Filter, Search, Eye, Edit2, Trash2, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { Flag, ListTodo, CheckSquare, RefreshCcw, HelpCircle, Clock, Plus, Filter, Search, Eye, Edit2, Trash2, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, X, Loader2 } from 'lucide-react';
 import '../../styles/project-milestones-tab.css';
 import ProjectGanttChart from './ProjectGanttChart.jsx';
+import ExtendExternalLinkModal from '../ExtendExternalLinkModal.jsx';
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL) + "/api";
 const getAuthToken = () => sessionStorage.getItem("authToken") || "";
@@ -16,11 +17,13 @@ const ProjectMilestonesTab = ({ project, userRole }) => {
   const [collapseAll, setCollapseAll] = useState(false);
   const [tasks, setTasks] = useState([]);
   const [employees, setEmployees] = useState([]);
+  const [externalEmployees, setExternalEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedMilestone, setSelectedMilestone] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [viewTaskModal, setViewTaskModal] = useState(null);
   const [editTaskModal, setEditTaskModal] = useState(null);
+  const [extendModalTask, setExtendModalTask] = useState(null);
 
   const isDraftProject = project?.status === 'DRAFT' || project?.status === 'Draft';
 
@@ -41,8 +44,8 @@ const ProjectMilestonesTab = ({ project, userRole }) => {
 
   useEffect(() => {
     const fetchData = async () => {
-      setLoading(true);
       try {
+        setLoading(true);
         const isDraft = project?.status === "DRAFT" || project?.status === "Draft";
         const mlUrl = isDraft
           ? `${API_BASE}/milestone-drafts/by-project/${project.id}`
@@ -51,17 +54,19 @@ const ProjectMilestonesTab = ({ project, userRole }) => {
           ? `${API_BASE}/task-drafts`
           : `${API_BASE}/task-live`;
 
-        const [mlRes, taskRes, profileRes, empRes] = await Promise.all([
+        const [mlRes, taskRes, profileRes, empRes, extEmpRes] = await Promise.all([
           fetch(mlUrl, { headers: authHeaders() }),
           fetch(taskUrl, { headers: authHeaders() }),
           fetch(`${API_BASE}/profile`, { headers: authHeaders() }),
-          fetch(`${API_BASE}/employees`, { headers: authHeaders() })
+          fetch(`${API_BASE}/employees`, { headers: authHeaders() }),
+          fetch(`${API_BASE}/external-employees`, { headers: authHeaders() })
         ]);
 
         const mlData = mlRes.ok ? await mlRes.json() : [];
         const taskDataRaw = taskRes.ok ? await taskRes.json() : [];
         const profile = profileRes.ok ? await profileRes.json() : null;
         const empData = empRes.ok ? await empRes.json() : [];
+        const extEmpData = extEmpRes.ok ? await extEmpRes.json() : [];
 
         const taskData = await Promise.all((taskDataRaw || []).map(async task => {
            try {
@@ -82,6 +87,7 @@ const ProjectMilestonesTab = ({ project, userRole }) => {
         }));
 
         setEmployees(empData);
+        setExternalEmployees(extEmpData);
 
         // Filter milestones by project id
         const projectId = project?.id;
@@ -108,7 +114,7 @@ const ProjectMilestonesTab = ({ project, userRole }) => {
         }
 
       } catch (err) {
-        console.error("Error fetching milestones:", err);
+        console.error("Error fetching data:", err);
       } finally {
         setLoading(false);
       }
@@ -120,7 +126,8 @@ const ProjectMilestonesTab = ({ project, userRole }) => {
     return tasks.filter(t => String(getTaskMilestoneId(t)) === String(milestoneId));
   };
 
-  const getStatusClass = (status) => {
+  const getStatusClass = (status, isTaskOverdue = false) => {
+    if (isTaskOverdue) return 'st-overdue';
     if (!status) return 'st-default';
     const s = status.toUpperCase().replace(/_/g, ' ');
     switch (s) {
@@ -130,6 +137,8 @@ const ProjectMilestonesTab = ({ project, userRole }) => {
       case 'WIP': return 'st-in-progress';
       case 'NOT STARTED':
       case 'OPEN': return 'st-not-started';
+      case 'HOLD':
+      case 'ON HOLD': return 'st-hold';
       case 'OVERDUE': return 'st-overdue';
       case 'DRAFT': return 'st-default';
       default: return 'st-default';
@@ -187,16 +196,30 @@ const ProjectMilestonesTab = ({ project, userRole }) => {
     }
   };
 
-  const getAssigneeInfo = (empId) => {
+  const getAssigneeInfo = (empId, extEmpId = null, taskAsgnTo = null) => {
+    const isExt = String(taskAsgnTo || '').toUpperCase() === 'EXTERNAL' || extEmpId != null;
+    if (isExt) {
+      const targetId = extEmpId || empId;
+      const ext = (externalEmployees || []).find(e => 
+        String(e.extEmpId || e.ext_emp_id || e.id) === String(targetId)
+      );
+      if (ext) {
+        return {
+          name: ext.extEmpNm || ext.ext_emp_nm || ext.companyNm || ext.company_nm || 'External Employee',
+          role: ext.companyNm || ext.company_nm || 'External'
+        };
+      }
+      return { name: 'External Employee', role: 'External' };
+    }
     if (!empId) return { name: 'Unassigned', role: '' };
-    const emp = employees.find(e => String(e.empId) === String(empId));
+    const emp = employees.find(e => String(e.empId || e.id) === String(empId));
     if (emp) {
       return {
-        name: `${emp.fstNm || ''} ${emp.lstNm || ''}`.trim(),
-        role: emp.jobTtl || 'Employee'
+        name: `${emp.fstNm || emp.firstName || ''} ${emp.lstNm || emp.lastName || ''}`.trim() || 'Employee',
+        role: emp.jobTtl || emp.designation || 'Employee'
       };
     }
-    return { name: 'Unknown', role: '' };
+    return { name: 'Unassigned', role: '' };
   };
 
   const getTaskStatusStr = (t) => {
@@ -259,9 +282,17 @@ const ProjectMilestonesTab = ({ project, userRole }) => {
 
   if (loading) {
     return (
-      <div style={{ padding: '60px 20px', textAlign: 'center', color: '#64748b' }}>
-        <div style={{ display: 'inline-block', width: '36px', height: '36px', border: '3px solid #e2e8f0', borderTop: '3px solid #2563eb', borderRadius: '50%', animation: 'spin 1s linear infinite', marginBottom: '12px' }} />
-        <p style={{ margin: 0, fontSize: '15px', fontWeight: '500', color: '#475569' }}>Loading milestones & tasks...</p>
+      <div style={{
+        padding: '80px 20px',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '12px',
+        color: '#64748b'
+      }}>
+        <Loader2 size={32} style={{ animation: 'spin 1s linear infinite', color: '#2563eb' }} />
+        <span style={{ fontSize: '14px', fontWeight: '500' }}>Loading milestones & tasks...</span>
       </div>
     );
   }
@@ -513,11 +544,16 @@ const ProjectMilestonesTab = ({ project, userRole }) => {
                       const tId = t.drftTaskId || t.drft_task_id || t.taskId || t.id;
                       const sDt = formatDate(t.tentStDt || t.tent_st_dt || t.stDt || t.st_dt);
                       const eDt = formatDate(t.tentEndDt || t.tent_end_dt || t.endDt || t.end_dt);
-                      const st = t.taskSts || t.task_sts || 'DRAFT';
-                      const executor = getAssigneeInfo(t.empId);
+                      const rawSt = t.taskSts || t.task_sts || 'DRAFT';
+                      const executor = getAssigneeInfo(t.empId, t.extEmpId || t.ext_emp_id, t.taskAsgnTo || t.task_asgn_to);
                       const approver = getAssigneeInfo(t.approverId || t.approver_id);
                       const reviewer = getAssigneeInfo(t.reviewerId || t.reviewer_id);
                       const prog = calculateTaskProgress(t);
+
+                      const endDtRaw = t.tentEndDt || t.tent_end_dt || t.endDt || t.end_dt;
+                      const isDone = ['COMPLETED', 'CLOSED', 'DONE', 'COMPLETE'].includes(getTaskStatusStr(t));
+                      const isTaskOverdue = !isDone && endDtRaw && new Date(endDtRaw) < today;
+                      const displayStatus = isTaskOverdue ? (rawSt === 'WIP' || rawSt === 'IN PROGRESS' ? 'OVERDUE' : `${rawSt} (OVERDUE)`) : rawSt;
 
                       return (
                         <tr key={tId}>
@@ -563,17 +599,17 @@ const ProjectMilestonesTab = ({ project, userRole }) => {
                             </div>
                           </td>
                           <td>{sDt}</td>
-                          <td>{eDt}</td>
+                          <td style={{ color: isTaskOverdue ? '#dc2626' : 'inherit', fontWeight: isTaskOverdue ? '600' : 'normal' }}>{eDt}</td>
                           <td style={{ textAlign: 'center' }}>{t.noOfDays || t.no_of_days || '-'}</td>
                           <td style={{ textAlign: 'center' }}>{t.depTaskId || t.dep_task_id ? `TSK-${t.depTaskId || t.dep_task_id}` : '-'}</td>
                           <td>
-                            <span className={`mt-status-badge ${getStatusClass(st)}`}>{st}</span>
+                            <span className={`mt-status-badge ${getStatusClass(rawSt, isTaskOverdue)}`}>{displayStatus}</span>
                           </td>
                           <td>
                             <div className="mt-progress-cell">
-                              <span className="mt-prog-text">{prog}%</span>
+                              <span className="mt-prog-text" style={{ color: isTaskOverdue ? '#dc2626' : 'inherit', fontWeight: isTaskOverdue ? '600' : 'normal' }}>{prog}%</span>
                               <div className="mt-progress-bar">
-                                <div className="mt-progress-fill" style={{ width: `${prog}%`, background: prog === 100 ? '#10b981' : '#3b82f6' }}></div>
+                                <div className="mt-progress-fill" style={{ width: `${prog}%`, background: prog === 100 ? '#10b981' : isTaskOverdue ? '#ef4444' : '#3b82f6' }}></div>
                               </div>
                             </div>
                           </td>
@@ -643,14 +679,26 @@ const ProjectMilestonesTab = ({ project, userRole }) => {
               </div>
               <div className="mt-view-row">
                 <span className="mt-view-label">Assignee</span>
-                <span className="mt-view-value">{getAssigneeInfo(viewTaskModal.empId).name}</span>
+                <span className="mt-view-value">{getAssigneeInfo(viewTaskModal.empId, viewTaskModal.extEmpId || viewTaskModal.ext_emp_id, viewTaskModal.taskAsgnTo || viewTaskModal.task_asgn_to).name}</span>
               </div>
               <div className="mt-view-row">
                 <span className="mt-view-label">Description</span>
                 <span className="mt-view-value">{viewTaskModal.taskDesc || viewTaskModal.task_desc || '-'}</span>
               </div>
             </div>
-            <div className="mt-modal-footer">
+            <div className="mt-modal-footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              {(!isDraftProject && (viewTaskModal.taskAsgnTo === 'EXTERNAL' || viewTaskModal.extEmpId)) ? (
+                <button
+                  type="button"
+                  className="mt-btn mt-btn-primary"
+                  style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px' }}
+                  onClick={() => setExtendModalTask(viewTaskModal)}
+                >
+                  <Clock size={14} /> Manage External Link / Extend Expiry
+                </button>
+              ) : (
+                <div></div>
+              )}
               <button className="mt-btn mt-btn-secondary" onClick={() => setViewTaskModal(null)}>Close</button>
             </div>
           </div>
@@ -747,6 +795,14 @@ const ProjectMilestonesTab = ({ project, userRole }) => {
           </form>
         </div>
       )}
+
+      {/* EXTEND EXTERNAL LINK MODAL */}
+      <ExtendExternalLinkModal
+        isOpen={!!extendModalTask}
+        onClose={() => setExtendModalTask(null)}
+        taskId={extendModalTask ? (extendModalTask.taskId || extendModalTask.task_id || extendModalTask.id) : null}
+        taskName={extendModalTask ? (extendModalTask.taskNm || extendModalTask.task_nm || extendModalTask.title) : ''}
+      />
 
     </div>
   );

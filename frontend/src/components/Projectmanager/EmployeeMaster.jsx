@@ -1410,7 +1410,18 @@ const EmployeeCreation = ({ userRole, onLogout }) => {
   };
 
   const handleExtChange = (e) => {
-    const { name, value } = e.target;
+    let { name, value } = e.target;
+    if (name === "extEmpNm") {
+      value = value.replace(/[^a-zA-Z\s]/g, "");
+    } else if (name === "mobNum") {
+      value = value.replace(/\D/g, "");
+      if (value.length === 1 && !/^[6-9]$/.test(value)) {
+        value = "";
+      } else if (value.length > 1 && !/^[6-9]/.test(value)) {
+        value = value.replace(/^[^6-9]+/, "");
+      }
+      value = value.slice(0, 10);
+    }
     setExtForm(prev => ({ ...prev, [name]: value }));
     const fieldNameForValidation = name === "mobNum" ? "mobile" : name;
     const error = validateField(fieldNameForValidation, value, extForm);

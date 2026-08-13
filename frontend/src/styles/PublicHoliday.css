@@ -307,51 +307,26 @@ body.sidebar-collapsed .ph-shell {
 
 .ph-pag-controls {
   display: flex;
-  align-items: center;
-  gap: 6px;
+  gap: 4px;
 }
 
-.ph-pag-controls button,
-.ph-pag-btn {
+.ph-pag-controls button {
   width: 32px;
   height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid #cbd5e1;
-  background: #ffffff;
-  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  border-radius: 4px;
   cursor: pointer;
-  color: #475569;
-  transition: all 0.15s ease;
+  color: #64748b;
 }
 
-.ph-pag-controls button:hover:not(:disabled),
-.ph-pag-btn:hover:not(:disabled) {
-  background: #f1f5f9;
-  border-color: #94a3b8;
-  color: #0f172a;
-}
-
-.ph-pag-controls button:disabled,
-.ph-pag-btn:disabled {
-  opacity: 0.45;
-  cursor: not-allowed !important;
-  background: #f8fafc !important;
-  border-color: #e2e8f0 !important;
-  color: #94a3b8 !important;
-}
-
-.ph-pag-num {
-  min-width: 28px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 13px;
-  font-weight: 600;
-  color: #1e293b;
-  padding: 0 4px;
+.ph-pag-controls button.active {
+  background: #1d4ed8;
+  color: #fff;
+  border-color: #1d4ed8;
 }
 
 .ph-note {

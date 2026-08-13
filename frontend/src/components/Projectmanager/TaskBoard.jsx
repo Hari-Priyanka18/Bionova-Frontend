@@ -25,10 +25,12 @@ import {
   ChevronRight,
   Hand,
   Menu,
-  ChevronDown
+  ChevronDown,
+  Clock
 } from "lucide-react";
 import "../../styles/TaskBoard.css";
 import plantImage from "../../assets/cbg_plant_construction.png";
+import ExtendExternalLinkModal from "../ExtendExternalLinkModal.jsx";
 
 // ─── Searchable Select Component ──────────────────────────────────────────
 const SearchableSelect = ({ options, value, onChange, placeholder, name, style, disabled, showSearch = true }) => {
@@ -211,12 +213,32 @@ const getPriorityBadgeInfo = (priorityStr) => {
   return { label: priorityStr || 'Medium', bg: '#fff7ed', color: '#f97316', border: '#ffedd5' };
 };
 
-const mapBackendTask = (t, projects, milestones, employees) => {
+const mapBackendTask = (t, projects, milestones, employees, externalEmployees = []) => {
   const tMId = String(t.mId || t.mid || t.milestoneId || t.drftMId || t.drft_m_id);
   const milestone = (milestones || []).find(m => (m.mId || m.mid || m.id) && String(m.mId || m.mid || m.id) === tMId);
   const pId = t.prjId || t.prjid || t.projectId || milestone?.prjId || milestone?.prjid || milestone?.project?.prjId || milestone?.projectId || t.project?.prjId || t.project?.id;
   const project = pId ? (projects || []).find(p => (p.prjId || p.id || p.prjid) && String(p.prjId || p.id || p.prjid) === String(pId)) : null;
+
+  const isExternal = (t.taskAsgnTo || t.taskasgnto) === "EXTERNAL" || t.extEmpId != null || t.ext_emp_id != null;
   const employee = (employees || []).find(e => (e.empId || e.id) && String(e.empId || e.id) === String(t.empId));
+  const extEmployee = isExternal
+    ? (externalEmployees || []).find(e => String(e.extEmpId || e.ext_emp_id || e.id) === String(t.extEmpId || t.ext_emp_id || t.empId || t.empid))
+    : null;
+
+  let assigneeName = "Unassigned";
+  if (isExternal) {
+    if (extEmployee) {
+      assigneeName = extEmployee.extEmpNm || extEmployee.ext_emp_nm || extEmployee.companyNm || extEmployee.company_nm || "External Assignee";
+    } else if (t.extEmpNm || t.ext_emp_nm) {
+      assigneeName = t.extEmpNm || t.ext_emp_nm;
+    } else if (employee) {
+      assigneeName = `${employee.fstNm || employee.firstName || ""} ${employee.lstNm || employee.lastName || ""}`.trim() || "External Assignee";
+    } else {
+      assigneeName = "External Assignee";
+    }
+  } else if (employee) {
+    assigneeName = `${employee.fstNm || employee.firstName || ""} ${employee.lstNm || employee.lastName || ""}`.trim() || "Unassigned";
+  }
 
   let status = "Not Started";
   const rawSts = (t.taskSts || t.tasksts || t.status || "").toString().toUpperCase().trim();
@@ -258,8 +280,6 @@ const mapBackendTask = (t, projects, milestones, employees) => {
     progress = 0;
   }
 
-  const assigneeName = employee ? `${employee.fstNm || employee.firstName || ""} ${employee.lstNm || employee.lastName || ""}`.trim() || "Unassigned" : "Unassigned";
-
   return {
     id: t.taskCd || t.taskcd || `TSK-${t.taskId || t.taskid}`,
     taskId: t.taskId || t.taskid,
@@ -270,13 +290,15 @@ const mapBackendTask = (t, projects, milestones, employees) => {
     milestoneId: t.mId || t.mid || t.milestoneId || t.drftMId || t.drft_m_id,
     assignee: assigneeName,
     empId: t.empId || t.empid,
+    extEmpId: t.extEmpId || t.ext_emp_id,
+    extEmployee: extEmployee,
     progress: progress,
     dueDate: t.endDt || t.enddt || "",
     startDate: t.stDt || t.stdt || "",
     subtasksCount: t.wrkDays || t.wrkdays || 3,
     subtasksCompleted: (status === "Closed" || status === "Completed") ? (t.wrkDays || t.wrkdays || 3) : 0,
     priority: mapPriorityFromApi(t.taskPrty || t.taskprty || t.priority || t.prty || t.task_prty || project?.prjPrty || project?.prjprty || "Medium"),
-    taskType: (t.taskAsgnTo || t.taskasgnto) === "EXTERNAL" ? "External" : "Internal",
+    taskType: isExternal ? "External" : "Internal",
     status: status,
     description: t.taskDesc || t.taskdesc || "",
     rawTask: t
@@ -290,6 +312,7 @@ const TaskBoard = ({ userRole, onLogout }) => {
   const [allTasks, setAllTasks] = useState([]);
   const [apiLoaded, setApiLoaded] = useState(false);
   const [employeesList, setEmployeesList] = useState([]);
+  const [externalEmployeesList, setExternalEmployeesList] = useState([]);
   const [milestonesRaw, setMilestonesRaw] = useState([]);
   const [projectsRaw, setProjectsRaw] = useState([]);
   const [companiesList, setCompaniesList] = useState([]);
@@ -300,11 +323,12 @@ const TaskBoard = ({ userRole, onLogout }) => {
 
   const fetchLiveTasks = async () => {
     try {
-      const [liveProjects, liveMilestones, liveTasks, liveEmployees, profileRes, companies, plants, departments, designations] = await Promise.all([
+      const [liveProjects, liveMilestones, liveTasks, liveEmployees, liveExtEmployees, profileRes, companies, plants, departments, designations] = await Promise.all([
         safeFetch("/api/project-live", []),
         safeFetch("/api/milestone-live", []),
         safeFetch("/api/task-live", []),
         safeFetch("/api/employees", []),
+        safeFetch("/api/external-employees", []),
         safeFetch("/api/profile"),
         safeFetch("/api/companies", []),
         safeFetch("/api/plants", []),
@@ -315,6 +339,7 @@ const TaskBoard = ({ userRole, onLogout }) => {
       setProjectsRaw(liveProjects);
       setMilestonesRaw(liveMilestones);
       setEmployeesList(liveEmployees);
+      setExternalEmployeesList(liveExtEmployees);
       setCompaniesList(companies);
       setPlantsList(plants);
       setDepartmentsList(departments);
@@ -322,10 +347,10 @@ const TaskBoard = ({ userRole, onLogout }) => {
 
       const userTasks = liveTasks || [];
 
-      const allMapped = (liveTasks || []).map(t => mapBackendTask(t, liveProjects, liveMilestones, liveEmployees));
+      const allMapped = (liveTasks || []).map(t => mapBackendTask(t, liveProjects, liveMilestones, liveEmployees, liveExtEmployees));
       setAllTasks(allMapped);
 
-      const mapped = userTasks.map(t => mapBackendTask(t, liveProjects, liveMilestones, liveEmployees));
+      const mapped = userTasks.map(t => mapBackendTask(t, liveProjects, liveMilestones, liveEmployees, liveExtEmployees));
       setTasks(mapped);
       setApiLoaded(true);
     } catch (err) {
@@ -349,6 +374,7 @@ const TaskBoard = ({ userRole, onLogout }) => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedTask, setSelectedTask] = useState(null);
+  const [extendModalTask, setExtendModalTask] = useState(null);
 
   // ─── Add task form state ──────────────────────────────────────────────
   const [newTitle, setNewTitle] = useState("");
@@ -434,18 +460,25 @@ const TaskBoard = ({ userRole, onLogout }) => {
     return `${name} – ${desig} – ${orgName}`;
   };
 
-  const assigneeOptions = employeesList.map(emp => ({
-    value: emp.empId,
-    label: getAssigneeLabel(emp)
-  }));
+  const assigneeOptions = [
+    ...employeesList.map(emp => ({
+      value: `${emp.fstNm || emp.firstName || ""} ${emp.lstNm || emp.lastName || ""}`.trim(),
+      label: getAssigneeLabel(emp)
+    })),
+    ...externalEmployeesList.map(ext => ({
+      value: ext.extEmpNm || ext.ext_emp_nm || `EXT-${ext.extEmpId}`,
+      label: `${ext.extEmpNm || ext.ext_emp_nm || 'External'} (External - ${ext.companyNm || ext.company_nm || 'Vendor'})`
+    }))
+  ];
 
   // ─── Filter and sorting ──────────────────────────────────────────────
   const baseFilteredTasks = tasks.filter((task) => {
+    const isClosed = task.status === "Closed" || task.status === "Completed";
     const matchProject = selectedProjectId === "All" || String(task.projectId) === String(selectedProjectId);
     const matchMilestone = selectedMilestone === "All Milestones" || task.milestone === selectedMilestone;
     const matchAssignee = selectedAssignee === "All Employees" || task.assignee === selectedAssignee;
     const matchTaskType = selectedTaskType === "All" || task.taskType === selectedTaskType;
-    const matchPriority = selectedPriority === "All" || task.priority === selectedPriority;
+    const matchPriority = selectedPriority === "All" || (!isClosed && task.priority === selectedPriority);
     const matchSearch =
       task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       task.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -458,8 +491,8 @@ const TaskBoard = ({ userRole, onLogout }) => {
     return selectedStatus === "All Statuses" || task.status === selectedStatus;
   });
 
-  const projectsToDisplay = selectedProjectId === "All" 
-    ? projectsRaw 
+  const projectsToDisplay = selectedProjectId === "All"
+    ? projectsRaw
     : projectsRaw.filter(p => String(p.prjId || p.prjid || p.id) === String(selectedProjectId));
 
   // ─── Drag & drop handlers ────────────────────────────────────────────
@@ -707,7 +740,7 @@ const TaskBoard = ({ userRole, onLogout }) => {
               </div>
             </div>
 
-            
+
           </div>
 
           {/* Project Summary Cards */}
@@ -716,7 +749,7 @@ const TaskBoard = ({ userRole, onLogout }) => {
               {projectsToDisplay.map((proj) => {
                 const activePlant = plantsList.find(pl => pl.pltId === proj.pltId)?.pltNm || "N/A";
                 const activeDept = departmentsList.find(d => d.deptId === proj.deptId)?.deptNm || "Projects";
-                
+
                 const pTasks = allTasks.filter(t => String(t.projectId) === String(proj.prjId || proj.prjid || proj.id));
                 const totalTasksCount = pTasks.length;
                 const notStartedCount = pTasks.filter(t => t.status === "Not Started").length;
@@ -839,7 +872,7 @@ const TaskBoard = ({ userRole, onLogout }) => {
               <div
                 ref={colRefs["Not Started"]}
                 className={`tb-col not-started`}
-                
+
               >
                 <div className="tb-col-header">
                   <div className="tb-col-title-wrap">
@@ -848,15 +881,31 @@ const TaskBoard = ({ userRole, onLogout }) => {
                   </div>
                 </div>
                 <div className="tb-cards-container">
-                  {getTasksByStatus("Not Started").map(task => (
+                  {getTasksByStatus("Not Started").map((task, idx) => (
                     <div
-                      key={task.id}
+                      key={task.taskId ? `tb-ns-${task.taskId}` : `tb-ns-${task.id}-${idx}`}
                       className="tb-card"
-                      
+
                       onClick={() => handleCardClick(task)}
                     >
                       <div className="tb-card-header">
                         <span className="tb-card-id">{task.id}</span>
+                        {task.taskType === "External" && (
+                          <span
+                            style={{
+                              background: "#eff6ff",
+                              color: "#2563eb",
+                              border: "1px solid #bfdbfe",
+                              borderRadius: "4px",
+                              padding: "1px 6px",
+                              fontSize: "10px",
+                              fontWeight: "700",
+                            }}
+                            title="External Task (Click to manage access link)"
+                          >
+                            🔗 External
+                          </span>
+                        )}
                         <span className={`tb-card-prio ${task.priority.toLowerCase()}`}>{task.priority}</span>
                       </div>
                       <h4 className="tb-card-title">{task.title}</h4>
@@ -897,7 +946,7 @@ const TaskBoard = ({ userRole, onLogout }) => {
               <div
                 ref={colRefs["In Progress"]}
                 className={`tb-col in-progress`}
-                
+
               >
                 <div className="tb-col-header">
                   <div className="tb-col-title-wrap">
@@ -906,15 +955,31 @@ const TaskBoard = ({ userRole, onLogout }) => {
                   </div>
                 </div>
                 <div className="tb-cards-container">
-                  {getTasksByStatus("In Progress").map(task => (
+                  {getTasksByStatus("In Progress").map((task, idx) => (
                     <div
-                      key={task.id}
+                      key={task.taskId ? `tb-ip-${task.taskId}` : `tb-ip-${task.id}-${idx}`}
                       className="tb-card"
-                      
+
                       onClick={() => handleCardClick(task)}
                     >
                       <div className="tb-card-header">
                         <span className="tb-card-id">{task.id}</span>
+                        {task.taskType === "External" && (
+                          <span
+                            style={{
+                              background: "#eff6ff",
+                              color: "#2563eb",
+                              border: "1px solid #bfdbfe",
+                              borderRadius: "4px",
+                              padding: "1px 6px",
+                              fontSize: "10px",
+                              fontWeight: "700",
+                            }}
+                            title="External Task (Click to manage access link)"
+                          >
+                            🔗 External
+                          </span>
+                        )}
                         <span className={`tb-card-prio ${task.priority.toLowerCase()}`}>{task.priority}</span>
                       </div>
                       <h4 className="tb-card-title">{task.title}</h4>
@@ -966,7 +1031,7 @@ const TaskBoard = ({ userRole, onLogout }) => {
               <div
                 ref={colRefs["Under Review"]}
                 className={`tb-col under-review`}
-                
+
               >
                 <div className="tb-col-header">
                   <div className="tb-col-title-wrap">
@@ -975,15 +1040,31 @@ const TaskBoard = ({ userRole, onLogout }) => {
                   </div>
                 </div>
                 <div className="tb-cards-container">
-                  {getTasksByStatus("Under Review").map(task => (
+                  {getTasksByStatus("Under Review").map((task, idx) => (
                     <div
-                      key={task.id}
+                      key={task.taskId ? `tb-ur-${task.taskId}` : `tb-ur-${task.id}-${idx}`}
                       className="tb-card"
-                      
+
                       onClick={() => handleCardClick(task)}
                     >
                       <div className="tb-card-header">
                         <span className="tb-card-id">{task.id}</span>
+                        {task.taskType === "External" && (
+                          <span
+                            style={{
+                              background: "#eff6ff",
+                              color: "#2563eb",
+                              border: "1px solid #bfdbfe",
+                              borderRadius: "4px",
+                              padding: "1px 6px",
+                              fontSize: "10px",
+                              fontWeight: "700",
+                            }}
+                            title="External Task (Click to manage access link)"
+                          >
+                            🔗 External
+                          </span>
+                        )}
                         <span className={`tb-card-prio ${task.priority.toLowerCase()}`}>{task.priority}</span>
                       </div>
                       <h4 className="tb-card-title">{task.title}</h4>
@@ -1035,7 +1116,7 @@ const TaskBoard = ({ userRole, onLogout }) => {
               <div
                 ref={colRefs["Closed"] || colRefs["Completed"]}
                 className={`tb-col completed`}
-                
+
               >
                 <div className="tb-col-header">
                   <div className="tb-col-title-wrap">
@@ -1044,15 +1125,31 @@ const TaskBoard = ({ userRole, onLogout }) => {
                   </div>
                 </div>
                 <div className="tb-cards-container">
-                  {[...getTasksByStatus("Closed"), ...getTasksByStatus("Completed")].map(task => (
+                  {[...getTasksByStatus("Closed"), ...getTasksByStatus("Completed")].map((task, idx) => (
                     <div
-                      key={task.id}
+                      key={task.taskId ? `tb-cl-${task.taskId}` : `tb-cl-${task.id}-${idx}`}
                       className="tb-card"
-                      
+
                       onClick={() => handleCardClick(task)}
                     >
                       <div className="tb-card-header">
                         <span className="tb-card-id completed">{task.id}</span>
+                        {task.taskType === "External" && (
+                          <span
+                            style={{
+                              background: "#eff6ff",
+                              color: "#2563eb",
+                              border: "1px solid #bfdbfe",
+                              borderRadius: "4px",
+                              padding: "1px 6px",
+                              fontSize: "10px",
+                              fontWeight: "700",
+                            }}
+                            title="External Task (Click to manage access link)"
+                          >
+                            🔗 External
+                          </span>
+                        )}
                         {(() => {
                           const info = getScheduleStatusInfo(task);
                           return (
@@ -1120,7 +1217,7 @@ const TaskBoard = ({ userRole, onLogout }) => {
               <div
                 ref={colRefs["Overdue"]}
                 className={`tb-col overdue`}
-                
+
               >
                 <div className="tb-col-header">
                   <div className="tb-col-title-wrap">
@@ -1129,15 +1226,31 @@ const TaskBoard = ({ userRole, onLogout }) => {
                   </div>
                 </div>
                 <div className="tb-cards-container">
-                  {getTasksByStatus("Overdue").map(task => (
+                  {getTasksByStatus("Overdue").map((task, idx) => (
                     <div
-                      key={task.id}
+                      key={task.taskId ? `tb-od-${task.taskId}` : `tb-od-${task.id}-${idx}`}
                       className="tb-card"
-                      
+
                       onClick={() => handleCardClick(task)}
                     >
                       <div className="tb-card-header">
                         <span className="tb-card-id overdue">{task.id}</span>
+                        {task.taskType === "External" && (
+                          <span
+                            style={{
+                              background: "#eff6ff",
+                              color: "#2563eb",
+                              border: "1px solid #bfdbfe",
+                              borderRadius: "4px",
+                              padding: "1px 6px",
+                              fontSize: "10px",
+                              fontWeight: "700",
+                            }}
+                            title="External Task (Click to manage access link)"
+                          >
+                            🔗 External
+                          </span>
+                        )}
                         <span className="tb-card-prio overdue">OVERDUE</span>
                       </div>
                       <h4 className="tb-card-title">{task.title}</h4>
@@ -1245,7 +1358,14 @@ const TaskBoard = ({ userRole, onLogout }) => {
               <div className="tb-form-row">
                 <div className="tb-modal-detail-row">
                   <span className="tb-modal-detail-label">Executor</span>
-                  <span className="tb-modal-detail-value">{selectedTask.assignee}</span>
+                  <span className="tb-modal-detail-value">
+                    {selectedTask.assignee}
+                    {selectedTask.taskType === "External" && (selectedTask.extEmployee?.companyNm || selectedTask.rawTask?.companyNm) && (
+                      <span style={{ fontSize: "12px", color: "#64748b", fontWeight: "normal", marginLeft: "6px" }}>
+                        ({selectedTask.extEmployee?.companyNm || selectedTask.rawTask?.companyNm})
+                      </span>
+                    )}
+                  </span>
                 </div>
                 <div className="tb-modal-detail-row">
                   <span className="tb-modal-detail-label">Status</span>
@@ -1282,7 +1402,9 @@ const TaskBoard = ({ userRole, onLogout }) => {
                 ) : (
                   <div className="tb-modal-detail-row">
                     <span className="tb-modal-detail-label">Priority</span>
-                    {(() => {
+                    {['COMPLETED', 'CLOSED', 'DONE', 'COMPLETE'].includes(String(selectedTask.status || '').toUpperCase()) ? (
+                      <span className="tb-modal-detail-value" style={{ color: '#94a3b8' }}>—</span>
+                    ) : (() => {
                       const prioInfo = getPriorityBadgeInfo(selectedTask.priority);
                       return (
                         <span className="tb-modal-detail-value" style={{
@@ -1322,14 +1444,46 @@ const TaskBoard = ({ userRole, onLogout }) => {
                 </div>
               )}
 
-              
+
             </div>
-            <div className="tb-modal-footer" style={{ justifyContent: "flex-end" }}>
+            <div className="tb-modal-footer" style={{ justifyContent: "space-between", alignItems: "center" }}>
+              {selectedTask.taskType === "External" ? (
+                <button
+                  type="button"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    backgroundColor: "#eff6ff",
+                    color: "#2563eb",
+                    border: "1px solid #bfdbfe",
+                    fontWeight: 600,
+                    fontSize: "13px",
+                    padding: "7px 12px",
+                    borderRadius: "6px",
+                    cursor: "pointer",
+                  }}
+                  onClick={() => setExtendModalTask(selectedTask)}
+                >
+                  <Clock size={14} /> Manage External Link / Extend Expiry
+                </button>
+              ) : (
+                <div></div>
+              )}
               <button className="tb-btn-primary" onClick={() => setShowDetailModal(false)}>Close</button>
             </div>
           </div>
         </div>
       )}
+
+      {/* ====== EXTEND EXTERNAL LINK MODAL ====== */}
+      <ExtendExternalLinkModal
+        isOpen={!!extendModalTask}
+        onClose={() => setExtendModalTask(null)}
+        taskId={extendModalTask?.taskId || extendModalTask?.id}
+        taskName={extendModalTask?.title || extendModalTask?.taskNm}
+        onSuccess={fetchLiveTasks}
+      />
     </div>
   );
 };

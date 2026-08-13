@@ -8,6 +8,7 @@ import Sidebar from '../Sidebar.jsx';
 import Header from '../Header.jsx';
 import { apiGet } from '../../utils/api';
 import { getScreenPermission } from '../../utils/permissions';
+import { calculateDynamicPriority } from '../../utils/priority';
 import '../../styles/user-task-board.css';
 
 // Helper for auth headers (used if apiGet doesn't already handle auth)
@@ -218,20 +219,10 @@ const UserTaskBoard = ({ userRole, onLogout }) => {
         const status = getTaskDisplayStatus(t);
         const rawSts = (t.taskSts || t.tasksts || "DRAFT").toUpperCase().trim();
 
-        // Compute priority based on due date
-        let priority = t.priority || "Medium";
         const endDt = t.endDt || t.enddt;
-        if (endDt) {
-          const [year, month, day] = endDt.split('-');
-          const endDtObj = new Date(year, month - 1, day);
-          endDtObj.setHours(0, 0, 0, 0);
-          const todayObj = new Date();
-          todayObj.setHours(0, 0, 0, 0);
-          const diffDays = Math.floor((todayObj.getTime() - endDtObj.getTime()) / (1000 * 60 * 60 * 24));
-          if (diffDays === 0) priority = "High";
-          else if (diffDays === 1) priority = "Critical";
-          else if (diffDays >= 2) priority = "Atmost Critical";
-        }
+        const stDt = t.stDt || t.stdt || t.startDate;
+        const dynamicPrio = calculateDynamicPriority(t.priority || "LOW", stDt, endDt, t.durationDays || t.duration_days);
+        const priority = dynamicPrio.priority;
 
         // Find project and milestone
         const project = (projectsData || []).find(p =>
@@ -255,6 +246,7 @@ const UserTaskBoard = ({ userRole, onLogout }) => {
           project: project ? (project.prjNm || project.prjnm) : "Unknown Project",
           milestone: milestone ? (milestone.mlstnTtl || milestone.mlstnttl) : "Unknown Milestone",
           priority: priority,
+          priorityMeta: dynamicPrio,
           due: endDt || "",
           submittedOn: t.sbmtDt || t.sbmtdt || "",
           completedOn: t.actCmpDt || t.actcmpdt || "",
@@ -273,19 +265,10 @@ const UserTaskBoard = ({ userRole, onLogout }) => {
         const status = getTaskDisplayStatus(t);
         const rawSts = (t.taskSts || t.tasksts || "DRAFT").toUpperCase().trim();
 
-        let priority = t.priority || "Medium";
         const endDt = t.endDt || t.enddt;
-        if (endDt) {
-          const [year, month, day] = endDt.split('-');
-          const endDtObj = new Date(year, month - 1, day);
-          endDtObj.setHours(0, 0, 0, 0);
-          const todayObj = new Date();
-          todayObj.setHours(0, 0, 0, 0);
-          const diffDays = Math.floor((todayObj.getTime() - endDtObj.getTime()) / (1000 * 60 * 60 * 24));
-          if (diffDays === 0) priority = "High";
-          else if (diffDays === 1) priority = "Critical";
-          else if (diffDays >= 2) priority = "Atmost Critical";
-        }
+        const stDt = t.stDt || t.stdt || t.startDate;
+        const dynamicPrio = calculateDynamicPriority(t.priority || "LOW", stDt, endDt, t.durationDays || t.duration_days);
+        const priority = dynamicPrio.priority;
 
         const assigneeEmp = employeesData?.find(e => String(e.empId) === String(t.empId));
         const assigneeName = assigneeEmp ? `${assigneeEmp.fstNm || ''} ${assigneeEmp.lstNm || ''}`.trim() : "Unassigned";
@@ -314,7 +297,16 @@ const UserTaskBoard = ({ userRole, onLogout }) => {
       // Map all tasks
       const mappedProjectTasks = userTasks.map(mapProjectTask);
       const mappedIndTasks = userIndTasks.map(mapIndividualTask);
-      const allMapped = [...mappedProjectTasks, ...mappedIndTasks];
+      const allMappedRaw = [...mappedProjectTasks, ...mappedIndTasks];
+      const seenTaskCodes = new Set();
+      const allMapped = [];
+      allMappedRaw.forEach(t => {
+        const code = String(t.id || t.taskId || t.title).toUpperCase().trim();
+        if (!seenTaskCodes.has(code)) {
+          seenTaskCodes.add(code);
+          allMapped.push(t);
+        }
+      });
 
       // Group by status
       const today = new Date().toISOString().split("T")[0];

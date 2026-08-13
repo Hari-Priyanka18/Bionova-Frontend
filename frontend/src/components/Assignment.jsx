@@ -1,5 +1,5 @@
-// Assignment.jsx
 import React, { useState, useRef, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import Sidebar from './Sidebar.jsx';
 import Header from './Header.jsx';
 import {
@@ -32,14 +32,21 @@ const formatListDate = (dateString) => {
 // ============================================================
 // SearchableSelect component
 // ============================================================
-const SearchableSelect = ({ options, value, onChange, placeholder, name, style, disabled, forceOpen, isMulti }) => {
+const SearchableSelect = ({ options, value, onChange, placeholder, name, style, disabled, forceOpen, isMulti, tabIndex }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const [isFocused, setIsFocused] = useState(false);
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
   const wrapperRef = React.useRef(null);
+  const searchInputRef = React.useRef(null);
+  const triggerRef = React.useRef(null);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
-      if (wrapperRef.current && !wrapperRef.current.contains(e.target)) setIsOpen(false);
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target)) {
+        setIsOpen(false);
+        setIsFocused(false);
+      }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
@@ -50,6 +57,17 @@ const SearchableSelect = ({ options, value, onChange, placeholder, name, style, 
       setIsOpen(true);
     }
   }, [forceOpen]);
+
+  useEffect(() => {
+    if (isOpen) {
+      setTimeout(() => {
+        searchInputRef.current?.focus();
+      }, 50);
+    } else {
+      setSearch("");
+      setHighlightedIndex(-1);
+    }
+  }, [isOpen]);
 
   const filtered = options.filter(o => 
     o.label.toLowerCase().includes(search.toLowerCase()) && 
@@ -67,13 +85,54 @@ const SearchableSelect = ({ options, value, onChange, placeholder, name, style, 
     }
   };
 
+  const handleTriggerKeyDown = (e) => {
+    if (disabled) return;
+    if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      setIsOpen(true);
+    }
+  };
+
+  const handleSearchKeyDown = (e) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      setIsOpen(false);
+      triggerRef.current?.focus();
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setHighlightedIndex(prev => (prev + 1 < filtered.length ? prev + 1 : 0));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setHighlightedIndex(prev => (prev - 1 >= 0 ? prev - 1 : filtered.length - 1));
+    } else if (e.key === 'Enter' && highlightedIndex >= 0 && highlightedIndex < filtered.length) {
+      e.preventDefault();
+      const opt = filtered[highlightedIndex];
+      if (isMulti) {
+        const currentVals = value || [];
+        onChange({ target: { name, value: [...currentVals, String(opt.value)] } });
+      } else {
+        onChange({ target: { name, value: String(opt.value) } });
+      }
+      setIsOpen(false);
+      triggerRef.current?.focus();
+    }
+  };
+
   return (
     <div ref={wrapperRef} style={{ position: 'relative', width: '100%', margin: 0 }}>
       <div
+        ref={triggerRef}
+        role="combobox"
+        aria-expanded={isOpen}
+        tabIndex={disabled ? -1 : (tabIndex !== undefined ? tabIndex : 0)}
         onClick={() => !disabled && setIsOpen(!isOpen)}
+        onFocus={() => !disabled && setIsFocused(true)}
+        onBlur={() => setIsFocused(false)}
+        onKeyDown={handleTriggerKeyDown}
         style={{
           padding: '6px 12px',
-          border: '1px solid #cbd5e1',
+          border: `1px solid ${isFocused ? '#3b82f6' : '#cbd5e1'}`,
+          boxShadow: isFocused ? '0 0 0 2px rgba(59, 130, 246, 0.2)' : 'none',
           borderRadius: '6px',
           backgroundColor: disabled ? '#f1f5f9' : 'white',
           cursor: disabled ? 'not-allowed' : 'pointer',
@@ -84,6 +143,8 @@ const SearchableSelect = ({ options, value, onChange, placeholder, name, style, 
           minHeight: '42px',
           flexWrap: 'wrap',
           gap: '4px',
+          outline: 'none',
+          transition: 'border-color 0.15s, box-shadow 0.15s',
           ...style
         }}
       >
@@ -121,7 +182,14 @@ const SearchableSelect = ({ options, value, onChange, placeholder, name, style, 
         }}>
           <div style={{ padding: '8px' }}>
             <input
-              type="text" value={search} onChange={(e) => setSearch(e.target.value)}
+              ref={searchInputRef}
+              type="text"
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setHighlightedIndex(0);
+              }}
+              onKeyDown={handleSearchKeyDown}
               placeholder="Search..."
               style={{ width: '100%', padding: '8px', border: '1px solid #e2e8f0', borderRadius: '4px', outline: 'none', fontSize: '14px', boxSizing: 'border-box' }}
               onClick={(e) => e.stopPropagation()}
@@ -129,23 +197,31 @@ const SearchableSelect = ({ options, value, onChange, placeholder, name, style, 
           </div>
           <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
             {filtered.length > 0 ? (
-              filtered.map(opt => (
+              filtered.map((opt, idx) => (
                 <div
                   key={opt.value}
                   onClick={() => {
                     if (isMulti) {
                       const currentVals = value || [];
                       onChange({ target: { name, value: [...currentVals, String(opt.value)] } });
-                      setIsOpen(false);
                     } else {
                       onChange({ target: { name, value: String(opt.value) } });
-                      setIsOpen(false);
                     }
-                    setSearch("");
+                    setIsOpen(false);
+                    triggerRef.current?.focus();
                   }}
-                  style={{ padding: '10px 12px', cursor: 'pointer', backgroundColor: (isMulti ? (value || []).includes(String(opt.value)) : String(value) === String(opt.value)) ? '#f1f5f9' : 'transparent', fontSize: '14px', color: '#0f172a' }}
-                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8fafc'}
-                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = (isMulti ? (value || []).includes(String(opt.value)) : String(value) === String(opt.value)) ? '#f1f5f9' : 'transparent'}
+                  style={{
+                    padding: '10px 12px',
+                    cursor: 'pointer',
+                    backgroundColor: idx === highlightedIndex
+                      ? '#e2e8f0'
+                      : (isMulti ? (value || []).includes(String(opt.value)) : String(value) === String(opt.value))
+                        ? '#f1f5f9'
+                        : 'transparent',
+                    fontSize: '14px',
+                    color: '#0f172a'
+                  }}
+                  onMouseEnter={() => setHighlightedIndex(idx)}
                 >
                   {opt.label}
                 </div>
@@ -163,9 +239,10 @@ const SearchableSelect = ({ options, value, onChange, placeholder, name, style, 
 // ============================================================
 // DateInputWithFormat component
 // ============================================================
-const DateInputWithFormat = ({ value, onChange, min, error, placeholder }) => {
+const DateInputWithFormat = ({ value, onChange, min, error, placeholder, tabIndex }) => {
   const [displayVal, setDisplayVal] = useState("");
   const [localError, setLocalError] = useState("");
+  const [isFocused, setIsFocused] = useState(false);
   const dateRef = useRef(null);
 
   useEffect(() => {
@@ -227,16 +304,29 @@ const DateInputWithFormat = ({ value, onChange, min, error, placeholder }) => {
   const finalError = localError || error;
 
   return (
-    <div style={{ position: 'relative', display: 'flex', alignItems: 'center', border: '1px solid ' + (finalError ? '#ef4444' : '#cbd5e1'), borderRadius: '6px', backgroundColor: 'white' }}>
+    <div style={{
+      position: 'relative',
+      display: 'flex',
+      alignItems: 'center',
+      border: '1px solid ' + (finalError ? '#ef4444' : isFocused ? '#3b82f6' : '#cbd5e1'),
+      boxShadow: isFocused ? '0 0 0 2px rgba(59, 130, 246, 0.2)' : 'none',
+      borderRadius: '6px',
+      backgroundColor: 'white',
+      transition: 'border-color 0.15s, box-shadow 0.15s'
+    }}>
       <input 
         type="text" 
         value={displayVal} 
         onChange={handleChange} 
+        onFocus={() => setIsFocused(true)}
+        onBlur={() => setIsFocused(false)}
         placeholder={placeholder || "DD/MM/YYYY"}
         maxLength={10}
+        tabIndex={tabIndex !== undefined ? tabIndex : 0}
         style={{ flex: 1, padding: '8px 12px', border: 'none', outline: 'none', borderRadius: '6px', fontSize: '14px', width: '100%', boxSizing: 'border-box' }}
       />
       <div 
+        tabIndex={-1}
         style={{ padding: '0 8px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
         onClick={() => {
           if (dateRef.current && typeof dateRef.current.showPicker === 'function') {
@@ -250,6 +340,8 @@ const DateInputWithFormat = ({ value, onChange, min, error, placeholder }) => {
         type="date"
         ref={dateRef}
         min={min}
+        tabIndex={-1}
+        aria-hidden="true"
         value={(value && /^\d{4}-\d{2}-\d{2}$/.test(value)) ? value : ""}
         onChange={(e) => {
           if(e.target.value) {
@@ -303,6 +395,7 @@ const calcEndDate = (startStr, workingDays, skipSat, skipSun, publicHolidayDates
 // ============================================================
 const Assignment = ({ userRole, onLogout }) => {
   const screenPerm = getScreenPermission('INDIVIDUAL_TASK');
+  const location = useLocation();
   // --- Form state ---
   const [taskCode, setTaskCode] = useState("");
   const [taskTitle, setTaskTitle] = useState("");
@@ -326,13 +419,31 @@ const Assignment = ({ userRole, onLogout }) => {
   const [currentUser, setCurrentUser] = useState(null);
   const [tasks, setTasks] = useState([]);
   const [tasksLoading, setTasksLoading] = useState(true);
-  const [view, setView] = useState("list");
+  const [view, setView] = useState(() => (location?.state?.openForm || location?.state?.create || location?.state?.view === "form") ? "form" : "list");
   const [previewSource, setPreviewSource] = useState("list");
   const [editId, setEditId] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState("checklist");
   const [goLiveTask, setGoLiveTask] = useState(null);
   const [assignmentView, setAssignmentView] = useState("my");
+
+  // Auto-open form if navigated with openForm state
+  useEffect(() => {
+    if (location.state && (location.state.openForm || location.state.create || location.state.view === "form")) {
+      handleResetForm().then(() => {
+        setView("form");
+      });
+    }
+  }, [location.state]);
+
+  // Scroll to top when view switches (especially to 'form')
+  useEffect(() => {
+    window.scrollTo(0, 0);
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+    const containers = document.querySelectorAll('.cc-shell, .cc-main, .cit-container, .cit-card, .cc-content');
+    containers.forEach(c => { if (c) c.scrollTop = 0; });
+  }, [view]);
 
   // --- Alert state ---
   const [alertConfig, setAlertConfig] = useState({ isOpen: false, type: 'info', title: '', message: '', onConfirm: null, confirmText: '', cancelText: '' });
@@ -1209,19 +1320,14 @@ const Assignment = ({ userRole, onLogout }) => {
 
     const q = searchQuery.toLowerCase();
     return baseTasks.filter(task => {
-      const emp = employees.find(e => String(e.empId || e.id) === String(task.empId));
-      const empName = emp ? `${emp.fstNm || emp.firstName} ${emp.lstNm || emp.lastName}` : "N/A";
-      
-      const assignedByEmp = employees.find(e => String(e.empId || e.id) === String(task.assignedBy));
-      const assignedByName = assignedByEmp ? `${assignedByEmp.fstNm || assignedByEmp.firstName} ${assignedByEmp.lstNm || assignedByEmp.lastName}` : "N/A";
-
-      const displayName = assignmentView === "my" ? assignedByName : empName;
+      const taskCodeStr = (task.taskCd || task.task_cd || "").toLowerCase();
+      const formattedCodeStr = formatTaskCode(task.taskCd || task.task_cd || "").toLowerCase();
+      const taskTitleStr = (task.taskNm || task.task_nm || "").toLowerCase();
 
       return (
-        (task.taskCd || "").toLowerCase().includes(q) ||
-        (task.taskNm || "").toLowerCase().includes(q) ||
-        displayName.toLowerCase().includes(q) ||
-        (task.taskSts || "").toLowerCase().includes(q)
+        taskCodeStr.includes(q) ||
+        formattedCodeStr.includes(q) ||
+        taskTitleStr.includes(q)
       );
     });
   };
@@ -1419,14 +1525,26 @@ const Assignment = ({ userRole, onLogout }) => {
                           Task Details
                         </h3>
 
+                        {/* Row 1: Task Code, Task Title, Assigned To, Priority */}
                         <div className="cc-form-layout-row columns-4">
                           <label className="cc-field-item">
                             <span>Task Code <b style={{ color: '#ef4444' }}>*</b></span>
-                            <input type="text" value={taskCode} onChange={(e) => setTaskCode(e.target.value)} maxLength={10} placeholder="Enter task code" />
+                            <input 
+                              type="text" 
+                              value={taskCode} 
+                              onChange={(e) => setTaskCode(e.target.value)} 
+                              maxLength={10} 
+                              placeholder="Enter task code" 
+                            />
                           </label>
                           <label className="cc-field-item">
                             <span>Task Title <b style={{ color: '#ef4444' }}>*</b></span>
-                            <input type="text" value={taskTitle} onChange={(e) => setTaskTitle(e.target.value)} placeholder="Enter task title" />
+                            <input 
+                              type="text" 
+                              value={taskTitle} 
+                              onChange={(e) => setTaskTitle(e.target.value)} 
+                              placeholder="Enter task title" 
+                            />
                           </label>
                           <label className="cc-field-item">
                             <span>Assigned To <b style={{ color: '#ef4444' }}>*</b></span>
@@ -1448,18 +1566,13 @@ const Assignment = ({ userRole, onLogout }) => {
                             />
                           </label>
                           <label className="cc-field-item">
-                            <span>Assigned By</span>
-                            <input 
-                              type="text" 
-                              value={sessionStorage.getItem("userName") || "Admin"} 
-                              disabled 
-                              style={{ backgroundColor: '#f1f5f9', color: '#64748b', cursor: 'not-allowed' }}
-                            />
-                          </label>
-                          <label className="cc-field-item">
                             <span>Priority <b style={{ color: '#ef4444' }}>*</b></span>
                             <div className="cit-input-wrapper" style={{ margin: 0 }}>
-                              <select value={priority} onChange={(e) => setPriority(e.target.value)} style={{ color: priority === 'High' || priority === 'Critical' ? '#ef4444' : priority === 'Medium' ? '#eab308' : priority === 'Normal' ? '#3b82f6' : '#22c55e', fontWeight: 600 }}>
+                              <select 
+                                value={priority} 
+                                onChange={(e) => setPriority(e.target.value)} 
+                                style={{ color: priority === 'High' || priority === 'Critical' ? '#ef4444' : priority === 'Medium' ? '#eab308' : priority === 'Normal' ? '#3b82f6' : '#22c55e', fontWeight: 600 }}
+                              >
                                 <option value="High" style={{ color: '#ef4444' }}>High</option>
                                 <option value="Medium" style={{ color: '#eab308' }}>Medium</option>
                                 <option value="Normal" style={{ color: '#3b82f6' }}>Normal</option>
@@ -1470,25 +1583,57 @@ const Assignment = ({ userRole, onLogout }) => {
                           </label>
                         </div>
 
-                        <div className="cc-form-layout-row columns-3" style={{ marginTop: '20px' }}>
+                        {/* Row 2: Duration, Start Date, Due Date, Assigned By */}
+                        <div className="cc-form-layout-row columns-4" style={{ marginTop: '20px' }}>
                           <label className="cc-field-item">
                             <span>Duration (Days) <b style={{ color: '#ef4444' }}>*</b></span>
-                            <input type="text" value={duration} onChange={handleDurationChange} pattern="\d*" placeholder="Enter days" />
+                            <input 
+                              type="text" 
+                              value={duration} 
+                              onChange={handleDurationChange} 
+                              pattern="\d*" 
+                              placeholder="Enter days" 
+                            />
                           </label>
                           <label className="cc-field-item">
                             <span>Start Date <b style={{ color: '#ef4444' }}>*</b></span>
-                            <DateInputWithFormat value={startDate} onChange={handleStartDateChange} min={formatLocal(new Date())} />
+                            <DateInputWithFormat 
+                              value={startDate} 
+                              onChange={handleStartDateChange} 
+                              min={formatLocal(new Date())} 
+                            />
                           </label>
                           <label className="cc-field-item" style={{ position: 'relative' }}>
                             <span>Due Date <b style={{ color: '#ef4444' }}>*</b></span>
-                            <DateInputWithFormat value={dueDate} onChange={handleDueDateChange} min={startDate || formatLocal(new Date())} error={dateError} />
+                            <DateInputWithFormat 
+                              value={dueDate} 
+                              onChange={handleDueDateChange} 
+                              min={startDate || formatLocal(new Date())} 
+                              error={dateError} 
+                            />
+                          </label>
+                          <label className="cc-field-item">
+                            <span>Assigned By</span>
+                            <input 
+                              type="text" 
+                              tabIndex={-1}
+                              value={sessionStorage.getItem("userName") || "Admin"} 
+                              disabled 
+                              style={{ backgroundColor: '#f1f5f9', color: '#64748b', cursor: 'not-allowed' }}
+                            />
                           </label>
                         </div>
 
+                        {/* Row 3: Description */}
                         <div className="cc-form-layout-row columns-1" style={{ marginTop: '20px' }}>
                           <label className="cc-field-item">
                             <span>Description <b style={{ color: '#ef4444' }}>*</b></span>
-                            <textarea rows={3} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Enter task description"></textarea>
+                            <textarea 
+                              rows={3} 
+                              value={description} 
+                              onChange={(e) => setDescription(e.target.value)} 
+                              placeholder="Enter task description"
+                            ></textarea>
                           </label>
                         </div>
                       </section>
@@ -1502,9 +1647,19 @@ const Assignment = ({ userRole, onLogout }) => {
 
                           <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                             <span style={{ fontSize: "14px", fontWeight: "600", color: "#475569" }}>Enable Workflow:</span>
-                            <label style={{ position: "relative", display: "inline-block", width: "46px", height: "26px", margin: 0 }}>
+                            <label 
+                              tabIndex={0}
+                              onKeyDown={(e) => {
+                                if (e.key === ' ' || e.key === 'Enter') {
+                                  e.preventDefault();
+                                  setEnableWorkflow(!enableWorkflow);
+                                }
+                              }}
+                              style={{ position: "relative", display: "inline-block", width: "46px", height: "26px", margin: 0, outline: 'none', cursor: 'pointer', borderRadius: '34px' }}
+                            >
                               <input
                                 type="checkbox"
+                                tabIndex={-1}
                                 checked={enableWorkflow}
                                 onChange={() => setEnableWorkflow(!enableWorkflow)}
                                 style={{ opacity: 0, width: 0, height: 0 }}
@@ -1536,12 +1691,13 @@ const Assignment = ({ userRole, onLogout }) => {
                             <div className="cc-field-item">
                               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                                 <span>Reviewer <b style={{ color: '#ef4444' }}>*</b></span>
-                                <span 
+                                <button 
+                                  type="button"
                                   onClick={() => setReviewer([...reviewer, ''])}
-                                  style={{ color: '#2563eb', fontSize: '12px', cursor: 'pointer', fontWeight: '600' }}
+                                  style={{ background: 'transparent', border: 'none', color: '#2563eb', fontSize: '12px', cursor: 'pointer', fontWeight: '600', padding: 0 }}
                                 >
                                   + Add
-                                </span>
+                                </button>
                               </div>
                               {(reviewer.length > 0 ? reviewer : ['']).map((revId, index) => (
                                 <div key={index} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', width: '100%' }}>
@@ -1589,12 +1745,13 @@ const Assignment = ({ userRole, onLogout }) => {
                             <div className="cc-field-item">
                               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                                 <span>Approver <b style={{ color: '#ef4444' }}>*</b></span>
-                                <span 
+                                <button 
+                                  type="button"
                                   onClick={() => setApprover([...approver, ''])}
-                                  style={{ color: '#2563eb', fontSize: '12px', cursor: 'pointer', fontWeight: '600' }}
+                                  style={{ background: 'transparent', border: 'none', color: '#2563eb', fontSize: '12px', cursor: 'pointer', fontWeight: '600', padding: 0 }}
                                 >
                                   + Add
-                                </span>
+                                </button>
                               </div>
                               {(approver.length > 0 ? approver : ['']).map((appId, index) => (
                                 <div key={index} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', width: '100%' }}>
@@ -1702,12 +1859,13 @@ const Assignment = ({ userRole, onLogout }) => {
                               <input
                                 type="file"
                                 ref={fileInputRef}
+                                tabIndex={-1}
                                 onChange={handleFileInput}
                                 accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.txt,.jpg,.jpeg,.png,.gif,.webp"
                                 style={{ display: "none" }}
                                 multiple
                               />
-                              <button className="cit-upload-btn" onClick={() => fileInputRef.current.click()}>Browse Files</button>
+                              <button type="button" className="cit-upload-btn" onClick={() => fileInputRef.current.click()}>Browse Files</button>
                               <div className="cit-upload-info">Max file size: 10 MB (Documents & Images only. ZIP, Audio & Video files are NOT allowed.)</div>
                             </div>
                             {(existingAttachments.length > 0 || attachments.length > 0) && (
@@ -1733,7 +1891,7 @@ const Assignment = ({ userRole, onLogout }) => {
                           <section className="cc-panel" style={{ backgroundColor: 'white', padding: 0, border: 'none' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                               <div></div>
-                              <button className="cit-add-btn" onClick={addChecklistItem} style={{ margin: 0 }}>
+                              <button type="button" className="cit-add-btn" onClick={addChecklistItem} style={{ margin: 0 }}>
                                 <Plus size={14} /> Add Checklist Item
                               </button>
                             </div>
@@ -1769,11 +1927,11 @@ const Assignment = ({ userRole, onLogout }) => {
                                         </td>
                                         <td>
                                           {editingItemId === item.id ? (
-                                            <button className="cit-action-btn edit" onClick={() => saveChecklistEdit(item.id)}><Check size={14} /></button>
+                                            <button type="button" className="cit-action-btn edit" onClick={() => saveChecklistEdit(item.id)}><Check size={14} /></button>
                                           ) : (
-                                            <button className="cit-action-btn edit" onClick={() => startEditingChecklist(item)}><Edit3 size={14} /></button>
+                                            <button type="button" className="cit-action-btn edit" onClick={() => startEditingChecklist(item)}><Edit3 size={14} /></button>
                                           )}
-                                          <button className="cit-action-btn delete" onClick={() => deleteChecklistItem(item.id)}><Trash2 size={14} /></button>
+                                          <button type="button" className="cit-action-btn delete" onClick={() => deleteChecklistItem(item.id)}><Trash2 size={14} /></button>
                                         </td>
                                       </tr>
                                     ))}
@@ -1793,8 +1951,8 @@ const Assignment = ({ userRole, onLogout }) => {
                                           />
                                         </td>
                                         <td>
-                                          <button className="cit-action-btn edit" onClick={saveNewChecklist}><Check size={14} /></button>
-                                          <button className="cit-action-btn delete" onClick={() => { setIsAddingChecklist(false); setNewChecklistName(""); }}><Trash2 size={14} /></button>
+                                          <button type="button" className="cit-action-btn edit" onClick={saveNewChecklist}><Check size={14} /></button>
+                                          <button type="button" className="cit-action-btn delete" onClick={() => { setIsAddingChecklist(false); setNewChecklistName(""); }}><Trash2 size={14} /></button>
                                         </td>
                                       </tr>
                                     )}

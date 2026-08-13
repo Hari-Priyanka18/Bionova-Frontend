@@ -56,6 +56,7 @@ const CircularProgress = ({ pct, color = "#10b981", size = 44, strokeWidth = 4 }
 };
 
 import { safeFetch } from "../../utils/api";
+import { calculateDynamicPriority, getPriorityMetadata } from "../../utils/priority";
 
 const getLoggedInUser = () => {
   const storedName = sessionStorage.getItem("userName");
@@ -86,7 +87,7 @@ const MyProjects = ({ userRole, onLogout }) => {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const projectsPerPage = 5;
+  const projectsPerPage = 6;
 
   useEffect(() => {
     const fetchData = async () => {
@@ -254,10 +255,10 @@ const MyProjects = ({ userRole, onLogout }) => {
               const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
 
               if (diffDays > 0) {
-                userLeadLagLabel = `LEAD (-${diffDays} DAYS)`;
+                userLeadLagLabel = `LEAD (${diffDays} DAYS)`;
                 userLeadLagColor = "#10b981";
               } else if (diffDays < 0) {
-                userLeadLagLabel = `LAG (+${Math.abs(diffDays)} DAYS)`;
+                userLeadLagLabel = `LAG (${Math.abs(diffDays)} DAYS)`;
                 userLeadLagColor = "#ef4444";
               } else {
                 userLeadLagLabel = "ON TIME";
@@ -269,13 +270,22 @@ const MyProjects = ({ userRole, onLogout }) => {
             }
           }
 
+          const rawBasePriority = typeof proj.prjPrty === 'string' ? proj.prjPrty : (proj.prjPrty?.priorityNm || proj.prjprty || "LOW");
+          const dynamicPrio = calculateDynamicPriority(
+            rawBasePriority,
+            rawStart,
+            rawEnd,
+            proj.totalProjectDays || proj.total_project_days
+          );
+
           return {
             id: dashId,
             prjId: dashId,
             name: dashP.projectName || proj.prjNm || proj.prjnm || dashP.name || `Project ${dashId}`,
             company: companyName,
             plant: plantName,
-            priority: typeof proj.prjPrty === 'string' ? proj.prjPrty : (proj.prjPrty?.priorityNm || proj.prjprty || "NORMAL"),
+            priority: dynamicPrio.priority,
+            priorityMeta: dynamicPrio,
             role: profRes?.firstName ? `${profRes.firstName} ${profRes.lastName || ''}` : "Team Member",
             tasksAssigned: totalTasksCount > 0 ? totalTasksCount : (dashP.tasksAssigned || 0),
             openTasks: openTasksCount,
@@ -355,8 +365,10 @@ const MyProjects = ({ userRole, onLogout }) => {
   
   const priorityColor = (p) => {
     switch (p?.toUpperCase()) {
-      case "HIGH": return "#ef4444";
-      case "CRITICAL": return "#991b1b";
+      case "ATMOST CRITICAL":
+      case "ATMOST_CRITICAL": return "#7f1d1d";
+      case "CRITICAL": return "#dc2626";
+      case "HIGH": return "#ea580c";
       case "MEDIUM": return "#f59e0b";
       case "NORMAL": return "#3b82f6";
       case "LOW": return "#10b981";

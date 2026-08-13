@@ -1,8 +1,20 @@
 import React, { useState, useEffect } from "react";
-import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import "bootstrap/dist/css/bootstrap.min.css";
 import "./styles/colors.css";
 import "./styles/mobile-responsive.css"; // Added global mobile responsive styles
+
+const ScrollToTop = () => {
+  const { pathname, search, state } = useLocation();
+  useEffect(() => {
+    window.scrollTo(0, 0);
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+    const scrollContainers = document.querySelectorAll('.cc-shell, .cc-main, .proj-shell, .proj-main, .main-content, .ud-main, .cit-container, .cit-card');
+    scrollContainers.forEach(el => { if (el) el.scrollTop = 0; });
+  }, [pathname, search, state]);
+  return null;
+};
 
 import Login from "./components/Login";
 import AdminDashboard from "./components/Projectmanager/AdminDashboard";
@@ -129,6 +141,11 @@ const AppContent = () => {
 };
 
 function App() {
-  return <BrowserRouter><AppContent /></BrowserRouter>;
+  return (
+    <BrowserRouter>
+      <ScrollToTop />
+      <AppContent />
+    </BrowserRouter>
+  );
 }
 export default App;

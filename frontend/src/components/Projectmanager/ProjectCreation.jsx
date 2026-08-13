@@ -24,6 +24,7 @@ import Sidebar from "../Sidebar.jsx";
 import Header from "../Header.jsx";
 import AlertModal from "../AlertModal.jsx";
 import { getScreenPermission } from "../../utils/permissions";
+import { calculateDynamicPriority } from "../../utils/priority";
 import GoLiveCalendar from "./GoLiveCalendar.jsx";
 import "../../styles/projectCreation.css";
 
@@ -142,7 +143,7 @@ const SearchableSelect = ({ options, value, onChange, placeholder, name, style, 
 };
 
 // ========== Custom DatePicker (with calendar icon) ==========
-const DatePicker = ({ value, onChange, placeholder, name }) => {
+const DatePicker = ({ value, onChange, placeholder, name, minDate }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [displayValue, setDisplayValue] = useState('');
   const [viewDate, setViewDate] = useState(new Date());
@@ -171,7 +172,107 @@ const DatePicker = ({ value, onChange, placeholder, name }) => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  const isBeforeMin = (date) => {
+    if (!minDate || !date) return false;
+    const parts = minDate.split('-');
+    if (parts.length !== 3) return false;
+    const minYear = parseInt(parts[0], 10);
+    const minMonth = parseInt(parts[1], 10) - 1;
+    const minDay = parseInt(parts[2], 10);
+
+    const min = new Date(minYear, minMonth, minDay);
+    min.setHours(0, 0, 0, 0);
+
+    const current = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    current.setHours(0, 0, 0, 0);
+
+    return current < min;
+  };
+
+  const parseTypedDate = (str) => {
+    if (!str) return null;
+    const trimmed = str.trim();
+    const match = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (match) {
+      const day = parseInt(match[1], 10);
+      const month = parseInt(match[2], 10);
+      const year = parseInt(match[3], 10);
+      if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+        const d = new Date(year, month - 1, day);
+        if (d.getFullYear() === year && d.getMonth() === month - 1 && d.getDate() === day) {
+          return d;
+        }
+      }
+    }
+    return null;
+  };
+
+  const handleInputChange = (e) => {
+    let raw = e.target.value;
+    let clean = raw.replace(/[^0-9/]/g, '');
+
+    const digitsOnly = clean.replace(/\D/g, '');
+    const isDeleting = e.nativeEvent && e.nativeEvent.inputType === 'deleteContentBackward';
+
+    let formatted = clean;
+    if (digitsOnly.length > 0) {
+      if (!clean.includes('/')) {
+        if (digitsOnly.length >= 5) {
+          formatted = `${digitsOnly.slice(0, 2)}/${digitsOnly.slice(2, 4)}/${digitsOnly.slice(4, 8)}`;
+        } else if (digitsOnly.length >= 3) {
+          formatted = `${digitsOnly.slice(0, 2)}/${digitsOnly.slice(2)}`;
+        } else if (digitsOnly.length === 2 && !isDeleting) {
+          formatted = `${digitsOnly}/`;
+        }
+      } else {
+        const parts = clean.split('/');
+        let dayPart = parts[0] || '';
+        let monthPart = parts[1] !== undefined ? parts[1] : null;
+
+        if (monthPart && monthPart.length === 2 && parts.length === 2 && !isDeleting) {
+          formatted = `${dayPart}/${monthPart}/`;
+        }
+      }
+    }
+
+    formatted = formatted.slice(0, 10);
+    setDisplayValue(formatted);
+
+    if (!formatted.trim()) {
+      onChange({ target: { name, value: '' } });
+      return;
+    }
+
+    const parsed = parseTypedDate(formatted);
+    if (parsed) {
+      if (isBeforeMin(parsed)) {
+        onChange({ target: { name, value: '' } });
+      } else {
+        const year = parsed.getFullYear();
+        const month = String(parsed.getMonth() + 1).padStart(2, '0');
+        const day = String(parsed.getDate()).padStart(2, '0');
+        const dbFormatted = `${year}-${month}-${day}`;
+        onChange({ target: { name, value: dbFormatted } });
+        setViewDate(parsed);
+      }
+    } else {
+      onChange({ target: { name, value: '' } });
+    }
+  };
+
+  const handleInputBlur = () => {
+    if (value) {
+      const parts = value.split('-');
+      if (parts.length === 3) {
+        setDisplayValue(`${parts[2]}/${parts[1]}/${parts[0]}`);
+      }
+    } else {
+      setDisplayValue('');
+    }
+  };
+
   const handleDateSelect = (date) => {
+    if (isBeforeMin(date)) return;
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
@@ -248,8 +349,9 @@ const DatePicker = ({ value, onChange, placeholder, name }) => {
         />
         <input
           type="text"
-          readOnly
           value={displayValue}
+          onChange={handleInputChange}
+          onBlur={handleInputBlur}
           placeholder={placeholder || "dd/mm/yyyy"}
           onFocus={() => setIsOpen(true)}
           style={{
@@ -260,8 +362,8 @@ const DatePicker = ({ value, onChange, placeholder, name }) => {
             fontSize: '14px',
             outline: 'none',
             boxSizing: 'border-box',
-            backgroundColor: '#f9fafb',
-            cursor: 'pointer'
+            backgroundColor: '#ffffff',
+            cursor: 'text'
           }}
         />
         {value && (
@@ -305,29 +407,35 @@ const DatePicker = ({ value, onChange, placeholder, name }) => {
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '4px', textAlign: 'center' }}>
             {['Su','Mo','Tu','We','Th','Fr','Sa'].map(d => <div key={d} style={{ fontSize: '12px', fontWeight: '600', color: '#64748b' }}>{d}</div>)}
-            {generateCalendar().map((date, idx) => (
-              <div key={idx} style={{ padding: '4px', fontSize: '14px' }}>
-                {date ? (
-                  <button
-                    type="button"
-                    onClick={() => handleDateSelect(date)}
-                    style={{
-                      background: isSelected(date) ? '#2563eb' : 'transparent',
-                      color: isSelected(date) ? 'white' : '#0f172a',
-                      border: 'none',
-                      borderRadius: '4px',
-                      cursor: 'pointer',
-                      width: '100%',
-                      padding: '4px 0'
-                    }}
-                    onMouseEnter={(e) => { if (!isSelected(date)) e.currentTarget.style.backgroundColor = '#f1f5f9'; }}
-                    onMouseLeave={(e) => { if (!isSelected(date)) e.currentTarget.style.backgroundColor = 'transparent'; }}
-                  >
-                    {date.getDate()}
-                  </button>
-                ) : <span></span>}
-              </div>
-            ))}
+            {generateCalendar().map((date, idx) => {
+              const disabled = date ? isBeforeMin(date) : false;
+              const selected = date ? isSelected(date) : false;
+              return (
+                <div key={idx} style={{ padding: '4px', fontSize: '14px' }}>
+                  {date ? (
+                    <button
+                      type="button"
+                      disabled={disabled}
+                      onClick={() => !disabled && handleDateSelect(date)}
+                      style={{
+                        background: selected ? '#2563eb' : 'transparent',
+                        color: disabled ? '#cbd5e1' : (selected ? 'white' : '#0f172a'),
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: disabled ? 'not-allowed' : 'pointer',
+                        width: '100%',
+                        padding: '4px 0',
+                        opacity: disabled ? 0.5 : 1
+                      }}
+                      onMouseEnter={(e) => { if (!disabled && !selected) e.currentTarget.style.backgroundColor = '#f1f5f9'; }}
+                      onMouseLeave={(e) => { if (!disabled && !selected) e.currentTarget.style.backgroundColor = 'transparent'; }}
+                    >
+                      {date.getDate()}
+                    </button>
+                  ) : <span></span>}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
@@ -364,7 +472,9 @@ const ProjectCreation = ({ userRole, onLogout }) => {
       setCompanies(coyData);
       setPlants(pltData);
       setDepartments(deptData);
-      const mappedDrafts = drafts.map(d => ({
+      const mappedDrafts = drafts.map(d => {
+        const dynamicPrio = calculateDynamicPriority(d.prjPrty || "LOW", d.tentStDt, d.tentEndDt, d.noOfDays);
+        return {
           id: d.drftPrjId,
           _type: "draft",
           projectCode: d.prjCd || "",
@@ -372,7 +482,9 @@ const ProjectCreation = ({ userRole, onLogout }) => {
           projectDescription: d.prjDesc || "",
           projectObjective: d.prjObjtv || "",
           expectedDeliverables: d.expDlvbls || "",
-          priority: d.prjPrty || "MEDIUM",
+          priority: dynamicPrio.priority,
+          priorityMeta: dynamicPrio,
+          rawPriority: d.prjPrty || "MEDIUM",
           status: "DRAFT",
           startDate: d.tentStDt || "",
           endDate: d.tentEndDt || "",
@@ -386,7 +498,8 @@ const ProjectCreation = ({ userRole, onLogout }) => {
           remarks: d.addlRem || "",
           logo: d.logo || null,
           createdBy: getLoggedInUser()
-        }));
+        };
+      });
       const statusOverrides = JSON.parse(localStorage.getItem("project_status_overrides") || "{}");
       const mappedLive = live.map(l => {
         const backendSts = l.prjSts || "LIVE";
@@ -394,6 +507,7 @@ const ProjectCreation = ({ userRole, onLogout }) => {
         if (displaySts === "IN_PROGRESS" && backendSts !== "LIVE") {
           displaySts = backendSts;
         }
+        const dynamicPrio = calculateDynamicPriority(l.prjPrty || "LOW", l.stDt, l.endDt, l.noOfDays);
         return {
           id: l.prjId,
           _type: "live",
@@ -402,7 +516,9 @@ const ProjectCreation = ({ userRole, onLogout }) => {
           projectDescription: l.prjDesc || "",
           projectObjective: l.prjObjtv || "",
           expectedDeliverables: l.expDlvbls || "",
-          priority: l.prjPrty || "MEDIUM",
+          priority: dynamicPrio.priority,
+          priorityMeta: dynamicPrio,
+          rawPriority: l.prjPrty || "MEDIUM",
           status: displaySts,
           startDate: l.stDt || "",
           endDate: l.endDt || "",
@@ -545,33 +661,46 @@ const ProjectCreation = ({ userRole, onLogout }) => {
     setForm((prev) => {
       const nextForm = { ...prev, [name]: newValue };
 
-      if ((name === 'startDate' || name === 'totalProjectDays') && nextForm.startDate && nextForm.totalProjectDays) {
-        const parts = nextForm.startDate.split('-');
-        if (parts.length === 3) {
-          const start = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+      if (name === 'startDate' || name === 'totalProjectDays') {
+        if (nextForm.startDate && nextForm.totalProjectDays) {
+          const parts = nextForm.startDate.split('-');
           const days = parseInt(nextForm.totalProjectDays, 10);
-          if (!isNaN(days) && days > 0) {
+          if (parts.length === 3 && !isNaN(days) && days > 0) {
+            const start = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
             start.setDate(start.getDate() + days - 1);
             const ey = start.getFullYear();
             const em = String(start.getMonth() + 1).padStart(2, '0');
             const ed = String(start.getDate()).padStart(2, '0');
             nextForm.endDate = `${ey}-${em}-${ed}`;
           }
+        } else if (!nextForm.totalProjectDays && nextForm.startDate && nextForm.endDate) {
+          const startParts = nextForm.startDate.split('-');
+          const endParts = nextForm.endDate.split('-');
+          if (startParts.length === 3 && endParts.length === 3) {
+            const start = new Date(parseInt(startParts[0], 10), parseInt(startParts[1], 10) - 1, parseInt(startParts[2], 10));
+            const end = new Date(parseInt(endParts[0], 10), parseInt(endParts[1], 10) - 1, parseInt(endParts[2], 10));
+            const diffTime = end - start;
+            if (diffTime >= 0) {
+              const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24)) + 1;
+              nextForm.totalProjectDays = String(diffDays);
+            }
+          }
         }
-      }
-
-      if ((name === 'startDate' || name === 'endDate') && nextForm.startDate && nextForm.endDate && name !== 'totalProjectDays') {
-        const startParts = nextForm.startDate.split('-');
-        const endParts = nextForm.endDate.split('-');
-        if (startParts.length === 3 && endParts.length === 3) {
-          const start = new Date(parseInt(startParts[0], 10), parseInt(startParts[1], 10) - 1, parseInt(startParts[2], 10));
-          const end = new Date(parseInt(endParts[0], 10), parseInt(endParts[1], 10) - 1, parseInt(endParts[2], 10));
-          const diffTime = end - start;
-          if (diffTime >= 0) {
-            const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24)) + 1;
-            nextForm.totalProjectDays = diffDays >= 0 ? String(diffDays) : "0";
-          } else {
-            nextForm.totalProjectDays = "0";
+      } else if (name === 'endDate') {
+        if (nextForm.startDate && nextForm.endDate) {
+          const startParts = nextForm.startDate.split('-');
+          const endParts = nextForm.endDate.split('-');
+          if (startParts.length === 3 && endParts.length === 3) {
+            const start = new Date(parseInt(startParts[0], 10), parseInt(startParts[1], 10) - 1, parseInt(startParts[2], 10));
+            const end = new Date(parseInt(endParts[0], 10), parseInt(endParts[1], 10) - 1, parseInt(endParts[2], 10));
+            const diffTime = end - start;
+            if (diffTime >= 0) {
+              const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24)) + 1;
+              nextForm.totalProjectDays = diffDays >= 0 ? String(diffDays) : "0";
+            } else {
+              nextForm.endDate = "";
+              nextForm.totalProjectDays = "0";
+            }
           }
         }
       }
@@ -716,6 +845,19 @@ const ProjectCreation = ({ userRole, onLogout }) => {
     ) {
       triggerAlert("error", "Validation Error", "Please fill in all required fields marked with *");
       return;
+    }
+
+    if (form.startDate && form.endDate) {
+      const startParts = form.startDate.split('-');
+      const endParts = form.endDate.split('-');
+      if (startParts.length === 3 && endParts.length === 3) {
+        const start = new Date(parseInt(startParts[0], 10), parseInt(startParts[1], 10) - 1, parseInt(startParts[2], 10));
+        const end = new Date(parseInt(endParts[0], 10), parseInt(endParts[1], 10) - 1, parseInt(endParts[2], 10));
+        if (end < start) {
+          triggerAlert("error", "Validation Error", "Tentative End Date cannot be earlier than Tentative Start Date.");
+          return;
+        }
+      }
     }
     setLoading(true);
     try {
@@ -1403,7 +1545,9 @@ const ProjectCreation = ({ userRole, onLogout }) => {
                             value={form.endDate}
                             onChange={handleChange}
                             placeholder="dd/mm/yyyy"
+                            minDate={form.startDate}
                           />
+                          <small style={{ color: '#64748b', fontSize: '12px', marginTop: '4px' }}>(End Date Will Auto Calculate)</small>
                         </label>
                       </div>
                     </section>
@@ -1728,14 +1872,29 @@ const ProjectCreation = ({ userRole, onLogout }) => {
                                   padding: '4px 10px',
                                   borderRadius: '4px',
                                   fontSize: '12px',
-                                  fontWeight: '600',
+                                  fontWeight: '700',
                                   display: 'inline-block',
-                                  backgroundColor: project.priority === 'HIGH' ? '#fef2f2' :
-                                    project.priority === 'NORMAL' ? '#eff6ff' :
-                                      project.priority === 'MEDIUM' ? '#fefce8' : '#f0fdf4',
-                                  color: project.priority === 'HIGH' ? '#dc2626' :
-                                    project.priority === 'NORMAL' ? '#2563eb' :
-                                      project.priority === 'MEDIUM' ? '#ca8a04' : '#16a34a'
+                                  backgroundColor: project.priorityMeta?.bgColor || (
+                                    project.priority === 'ATMOST CRITICAL' ? '#ffe4e6' :
+                                      project.priority === 'CRITICAL' ? '#fee2e2' :
+                                        project.priority === 'HIGH' ? '#ffedd5' :
+                                          project.priority === 'NORMAL' ? '#dbeafe' :
+                                            project.priority === 'MEDIUM' ? '#fef3c7' : '#dcfce7'
+                                  ),
+                                  color: project.priorityMeta?.color || (
+                                    project.priority === 'ATMOST CRITICAL' ? '#7f1d1d' :
+                                      project.priority === 'CRITICAL' ? '#dc2626' :
+                                        project.priority === 'HIGH' ? '#ea580c' :
+                                          project.priority === 'NORMAL' ? '#3b82f6' :
+                                            project.priority === 'MEDIUM' ? '#d97706' : '#16a34a'
+                                  ),
+                                  border: `1px solid ${project.priorityMeta?.borderColor || (
+                                    project.priority === 'ATMOST CRITICAL' ? '#fda4af' :
+                                      project.priority === 'CRITICAL' ? '#fca5a5' :
+                                        project.priority === 'HIGH' ? '#fed7aa' :
+                                          project.priority === 'NORMAL' ? '#bfdbfe' :
+                                            project.priority === 'MEDIUM' ? '#fde68a' : '#bbf7d0'
+                                  )}`
                                 }}>
                                   {project.priority}
                                 </span>
@@ -1826,64 +1985,83 @@ const ProjectCreation = ({ userRole, onLogout }) => {
                                   <MoreVertical size={18} />
                                 </button>
 
-                                {activeDropdown === `${project._type}-${project.id}` && (
-                                  <>
-                                    <div
-                                      className="proj-actions-dropdown-backdrop"
-                                      onClick={() => setActiveDropdown(null)}
-                                      style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9 }}
-                                    />
-                                    <div className="proj-actions-dropdown-menu" style={{ position: 'absolute', right: '30px', top: '8px', backgroundColor: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', zIndex: 10, display: 'flex', flexDirection: 'column', padding: '4px 0', minWidth: '170px' }}>
-                                      <button
-                                        type="button"
-                                        style={{ padding: '10px 16px', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', color: '#334155', borderRadius: '4px', margin: '2px 4px' }}
-                                        onClick={() => {
-                                          if (project._type === 'live') {
-                                            navigate(`/project-details/${project.id}`, { state: { viewMode: 'live' } });
-                                          } else {
-                                            navigate(`/project-details/${project.id}`, { state: { viewMode: 'milestones_only' } });
-                                          }
-                                          setActiveDropdown(null);
+                                {activeDropdown === `${project._type}-${project.id}` && (() => {
+                                  const isNearBottom = currentItems.length > 1 && index >= Math.max(1, currentItems.length - 3);
+                                  return (
+                                    <>
+                                      <div
+                                        className="proj-actions-dropdown-backdrop"
+                                        onClick={() => setActiveDropdown(null)}
+                                        style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9 }}
+                                      />
+                                      <div
+                                        className="proj-actions-dropdown-menu"
+                                        style={{
+                                          position: 'absolute',
+                                          right: '30px',
+                                          ...(isNearBottom ? { bottom: '8px', top: 'auto' } : { top: '8px', bottom: 'auto' }),
+                                          backgroundColor: 'white',
+                                          border: '1px solid #e2e8f0',
+                                          borderRadius: '8px',
+                                          boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                                          zIndex: 10,
+                                          display: 'flex',
+                                          flexDirection: 'column',
+                                          padding: '4px 0',
+                                          minWidth: '170px'
                                         }}
-                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f1f5f9'}
-                                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                                       >
-                                        <Eye size={15} /> View
-                                      </button>
-                                      {project._type !== 'live' && (
-                                        <>
-                                          <button
-                                            type="button"
-                                            style={{ padding: '10px 16px', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', color: '#2563eb', borderRadius: '4px', margin: '2px 4px' }}
-                                            onClick={() => handleDuplicate(project)}
-                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#eff6ff'}
-                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                                          >
-                                            <Copy size={15} /> Duplicate (Template)
-                                          </button>
-                                          <button
-                                            type="button"
-                                            style={{ padding: '10px 16px', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', color: '#334155', borderRadius: '4px', margin: '2px 4px' }}
-                                            onClick={() => handleEdit(project)}
-                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f1f5f9'}
-                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                                          >
-                                            <Edit size={15} /> Edit
-                                          </button>
-                                          <button
-                                            type="button"
-                                            style={{ padding: '10px 16px', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', color: '#ef4444', borderRadius: '4px', margin: '2px 4px' }}
-                                            onClick={() => handleDelete(project.id)}
-                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#fef2f2'}
-                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                                          >
-                                            <Trash2 size={15} /> Delete
-                                          </button>
-                                        </>
-                                      )}
-                                    </div>
-                                  </>
-                                )}
+                                        <button
+                                          type="button"
+                                          style={{ padding: '10px 16px', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', color: '#334155', borderRadius: '4px', margin: '2px 4px' }}
+                                          onClick={() => {
+                                            if (project._type === 'live') {
+                                              navigate(`/project-details/${project.id}`, { state: { viewMode: 'live' } });
+                                            } else {
+                                              navigate(`/project-details/${project.id}`, { state: { viewMode: 'milestones_only' } });
+                                            }
+                                            setActiveDropdown(null);
+                                          }}
+                                          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f1f5f9'}
+                                          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                                        >
+                                          <Eye size={15} /> View
+                                        </button>
+                                        {project._type !== 'live' && (
+                                          <>
+                                            <button
+                                              type="button"
+                                              style={{ padding: '10px 16px', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', color: '#2563eb', borderRadius: '4px', margin: '2px 4px' }}
+                                              onClick={() => handleDuplicate(project)}
+                                              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#eff6ff'}
+                                              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                                            >
+                                              <Copy size={15} /> Duplicate (Template)
+                                            </button>
+                                            <button
+                                              type="button"
+                                              style={{ padding: '10px 16px', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', color: '#334155', borderRadius: '4px', margin: '2px 4px' }}
+                                              onClick={() => handleEdit(project)}
+                                              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f1f5f9'}
+                                              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                                            >
+                                              <Edit size={15} /> Edit
+                                            </button>
+                                            <button
+                                              type="button"
+                                              style={{ padding: '10px 16px', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', color: '#ef4444', borderRadius: '4px', margin: '2px 4px' }}
+                                              onClick={() => handleDelete(project.id)}
+                                              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#fef2f2'}
+                                              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                                            >
+                                              <Trash2 size={15} /> Delete
+                                            </button>
+                                          </>
+                                        )}
+                                      </div>
+                                    </>
+                                  );
+                                })()}
                               </td>
                             </tr>
                           ))

@@ -210,22 +210,7 @@ const Header = ({ title, subtitle, showSearch = false, statusBadge, progressPerc
       });
       if (res.ok) {
         const data = await res.json();
-        const loggedUserKey = sessionStorage.getItem("userEmail") || sessionStorage.getItem("userName") || "user";
-        const clearedIds = new Set(JSON.parse(localStorage.getItem(`cleared_notifications_${loggedUserKey}`) || "[]"));
-        const clearedAt = parseInt(localStorage.getItem(`notifications_cleared_at_${loggedUserKey}`) || "0", 10);
-
-        const filteredData = (Array.isArray(data) ? data : []).filter(n => {
-          const id = n.id || n._id || n.notificationId;
-          if (id && clearedIds.has(String(id))) return false;
-          if (clearedAt && (n.createdAt || n.created_at || n.date)) {
-            const dateVal = n.createdAt || n.created_at || n.date;
-            const createdTime = new Date(dateVal).getTime();
-            if (!isNaN(createdTime) && createdTime <= clearedAt) return false;
-          }
-          return true;
-        });
-
-        setNotifications(filteredData);
+        setNotifications(data);
       }
     } catch (err) {
       console.error("Failed to fetch notifications", err);
@@ -250,27 +235,11 @@ const Header = ({ title, subtitle, showSearch = false, statusBadge, progressPerc
         method: "DELETE",
         headers: authHeaders()
       }).catch(() => {});
-      await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/notifications`, {
-        method: "DELETE",
-        headers: authHeaders()
-      }).catch(() => {});
+      setNotifications([]);
     } catch (err) {
       console.error("Failed to clear notifications", err);
+      setNotifications([]);
     }
-
-    const loggedUserKey = sessionStorage.getItem("userEmail") || sessionStorage.getItem("userName") || "user";
-    const clearedIds = notifications.map(n => String(n.id || n._id || n.notificationId)).filter(Boolean);
-
-    try {
-      const existingCleared = JSON.parse(localStorage.getItem(`cleared_notifications_${loggedUserKey}`) || "[]");
-      const updatedCleared = Array.from(new Set([...existingCleared, ...clearedIds]));
-      localStorage.setItem(`cleared_notifications_${loggedUserKey}`, JSON.stringify(updatedCleared));
-      localStorage.setItem(`notifications_cleared_at_${loggedUserKey}`, String(Date.now()));
-    } catch (e) {
-      console.error(e);
-    }
-
-    setNotifications([]);
   };
 
   const markOneAsRead = async (id) => {

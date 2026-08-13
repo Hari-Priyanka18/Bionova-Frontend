@@ -332,6 +332,24 @@
   flex-shrink: 0;
 }
 
+.pac-search-clear {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  border-radius: 4px;
+}
+
+.pac-search-clear:hover {
+  color: #1e293b;
+  background: #e2e8f0;
+}
+
 .pac-view-toggle {
   display: flex;
   gap: 4px;
