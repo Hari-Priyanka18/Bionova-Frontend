@@ -1,5 +1,6 @@
 // src/pages/ProjectAccess.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Search, Folder, Users, Plus, X, Eye, Edit, Shield,
   UserPlus, UserMinus, ChevronDown, ChevronRight, FileText,
@@ -87,8 +88,9 @@ const getStatusColor = (status) => {
 };
 
 const getInitials = (name) => {
-  if (!name) return '??';
-  return name.split(' ').filter(Boolean).map(n => n[0]).join('').toUpperCase().slice(0, 2);
+  if (!name || name === 'Unassigned' || name === '—') return '??';
+  const cleanName = name.replace(/\([^)]*\)/g, '').trim();
+  return cleanName.split(' ').filter(Boolean).map(n => n[0]).join('').toUpperCase().slice(0, 2) || '??';
 };
 
 const getAvatarColor = (name) => {
@@ -208,6 +210,187 @@ const getPriorityIcon = (priority) => {
   }
 };
 
+// ── Searchable Role Select Component ──
+const SearchableRoleSelect = ({ options, value, onChange, placeholder = "-- Unassigned --" }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [coords, setCoords] = useState({ top: 0, left: 0, width: 220, openUp: false });
+  const buttonRef = useRef(null);
+  const dropdownRef = useRef(null);
+
+  const updatePosition = () => {
+    if (buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      const dropdownHeight = 230;
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const openUp = spaceBelow < dropdownHeight && rect.top > dropdownHeight;
+
+      setCoords({
+        top: openUp ? rect.top : (rect.bottom + 4),
+        left: rect.left,
+        width: Math.max(rect.width, 220),
+        openUp: openUp
+      });
+    }
+  };
+
+  const handleToggle = () => {
+    if (!isOpen) {
+      updatePosition();
+      setIsOpen(true);
+      setSearchTerm("");
+    } else {
+      setIsOpen(false);
+      setSearchTerm("");
+    }
+  };
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (
+        buttonRef.current && !buttonRef.current.contains(e.target) &&
+        dropdownRef.current && !dropdownRef.current.contains(e.target)
+      ) {
+        setIsOpen(false);
+        setSearchTerm("");
+      }
+    };
+
+    const handleScrollOrResize = () => {
+      if (isOpen) {
+        updatePosition();
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+      window.addEventListener("scroll", handleScrollOrResize, true);
+      window.addEventListener("resize", handleScrollOrResize);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      window.removeEventListener("scroll", handleScrollOrResize, true);
+      window.removeEventListener("resize", handleScrollOrResize);
+    };
+  }, [isOpen]);
+
+  const selectedOption = options.find(o => String(o.value) === String(value));
+
+  const filteredOptions = options.filter(o => {
+    if (!searchTerm) return true;
+    const s = searchTerm.toLowerCase().trim();
+    return (
+      o.label?.toLowerCase().includes(s) ||
+      (o.name && o.name.toLowerCase().includes(s)) ||
+      (o.code && o.code.toLowerCase().includes(s)) ||
+      (o.dept && o.dept.toLowerCase().includes(s))
+    );
+  });
+
+  return (
+    <div className="pac-searchable-select-wrap">
+      <button
+        ref={buttonRef}
+        type="button"
+        className={`pac-searchable-select-btn ${isOpen ? 'open' : ''} ${selectedOption ? 'has-value' : ''}`}
+        onClick={handleToggle}
+        title={selectedOption ? selectedOption.label : placeholder}
+      >
+        <span className="pac-searchable-select-text">
+          {selectedOption ? selectedOption.label : placeholder}
+        </span>
+        <ChevronDown size={13} className={`pac-select-chevron ${isOpen ? 'rotated' : ''}`} />
+      </button>
+
+      {isOpen && createPortal(
+        <div
+          ref={dropdownRef}
+          className={`pac-searchable-select-dropdown pac-portal-dropdown ${coords.openUp ? 'open-up' : 'open-down'}`}
+          style={{
+            position: 'fixed',
+            top: coords.openUp ? 'auto' : `${coords.top}px`,
+            bottom: coords.openUp ? `${window.innerHeight - coords.top + 4}px` : 'auto',
+            left: `${coords.left}px`,
+            width: `${coords.width}px`,
+            zIndex: 9999999
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="pac-searchable-select-search-box">
+            <Search size={13} className="pac-searchable-select-icon" />
+            <input
+              type="text"
+              placeholder="Search..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pac-searchable-select-input"
+              autoFocus
+              onClick={(e) => e.stopPropagation()}
+            />
+            {searchTerm && (
+              <button
+                type="button"
+                className="pac-searchable-select-clear"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSearchTerm("");
+                }}
+              >
+                <X size={12} />
+              </button>
+            )}
+          </div>
+
+          <div className="pac-searchable-select-list">
+            <div
+              className={`pac-searchable-select-item unassigned-opt ${!value ? 'selected' : ''}`}
+              onClick={() => {
+                onChange("");
+                setIsOpen(false);
+                setSearchTerm("");
+              }}
+            >
+              <span>-- Unassigned --</span>
+              {!value && <Check size={13} />}
+            </div>
+
+            {filteredOptions.length === 0 ? (
+              <div className="pac-searchable-select-no-results">
+                No matching results
+              </div>
+            ) : (
+              filteredOptions.map((opt) => {
+                const isSelected = String(opt.value) === String(value);
+                return (
+                  <div
+                    key={opt.value}
+                    className={`pac-searchable-select-item ${isSelected ? 'selected' : ''}`}
+                    onClick={() => {
+                      onChange(opt.value);
+                      setIsOpen(false);
+                      setSearchTerm("");
+                    }}
+                  >
+                    <div className="pac-searchable-item-content">
+                      <span className="pac-searchable-item-name">{opt.name || opt.label}</span>
+                      <div className="pac-searchable-item-sub">
+                        {opt.code && <span className="pac-searchable-item-code">({opt.code})</span>}
+                        {opt.dept && <span className="pac-searchable-item-dept">{opt.dept}</span>}
+                      </div>
+                    </div>
+                    {isSelected && <Check size={13} className="pac-searchable-item-check" />}
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>,
+        document.body
+      )}
+    </div>
+  );
+};
+
 // ── Main Component ──
 const ProjectAccess = ({ userRole, onLogout }) => {
   // ── State ──
@@ -217,6 +400,7 @@ const ProjectAccess = ({ userRole, onLogout }) => {
   const [projectSearchTerm, setProjectSearchTerm] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [showEditPermissions, setShowEditPermissions] = useState(false);
+  const [taskRoleCategories, setTaskRoleCategories] = useState({});
   const [expandedMilestones, setExpandedMilestones] = useState(new Set(['M-001']));
   const [expandedGroups, setExpandedGroups] = useState({});
   const [expandedProjectGroups, setExpandedProjectGroups] = useState({});
@@ -243,6 +427,7 @@ const ProjectAccess = ({ userRole, onLogout }) => {
   // ── Data ──
   const [projects, setProjects] = useState([]);
   const [employees, setEmployees] = useState([]);
+  const [externalEmployees, setExternalEmployees] = useState([]);
   const [milestones, setMilestones] = useState([]);
   const [allEmployeesPermissions, setAllEmployeesPermissions] = useState([]);
   const [loadingProjects, setLoadingProjects] = useState(true);
@@ -292,16 +477,34 @@ const ProjectAccess = ({ userRole, onLogout }) => {
 
   const fetchEmployees = async () => {
     try {
-      const data = await apiGet('/api/employees');
-      const mappedEmployees = (data || []).map(emp => ({
+      const [empData, extData] = await Promise.all([
+        apiGet('/api/employees').catch(() => []),
+        apiGet('/api/external-employees').catch(() => [])
+      ]);
+      const mappedEmployees = (empData || []).map(emp => ({
         ...emp,
         id: emp.empId,
+        rawId: emp.empId,
+        empCode: emp.empCode,
         name: `${emp.fstNm || emp.firstName || ''} ${emp.lstNm || emp.lastName || ''}`.trim(),
         photoUrl: emp.photoUrl || emp.photo_url || null,
         designation: emp.designation || 'Employee',
-        department: emp.deptNm || 'Operations'
+        department: emp.deptNm || 'Operations',
+        isExternal: false
+      }));
+      const mappedExtEmployees = (extData || []).map(ext => ({
+        ...ext,
+        id: `EXT_${ext.extEmpId}`,
+        rawId: ext.extEmpId,
+        empCode: ext.extEmpCode || `EXT-${ext.extEmpId}`,
+        name: ext.extEmpNm || ext.ext_emp_nm || 'External Employee',
+        photoUrl: ext.photoPath || null,
+        designation: ext.companyNm ? `External (${ext.companyNm})` : 'External Employee',
+        department: ext.companyNm || 'External Vendor',
+        isExternal: true
       }));
       setEmployees(mappedEmployees);
+      setExternalEmployees(mappedExtEmployees);
     } catch (err) {
       console.error("Error fetching employees:", err);
       showAlert('error', 'Error', 'Failed to load employees.');
@@ -793,19 +996,20 @@ const ProjectAccess = ({ userRole, onLogout }) => {
   
   // Get Employee Tasks
   const getEmployeeTasks = (empId) => {
-    const emp = employees.find(e => String(e.id) === String(empId));
+    const emp = employees.find(e => String(e.id) === String(empId)) ||
+                externalEmployees.find(e => String(e.id) === String(empId) || String(e.rawId) === String(empId));
     if (!emp) return [];
     
     const assignedTasks = [];
     milestones.forEach(milestone => {
       if (!milestone.tasks) return;
       milestone.tasks.forEach(task => {
-        const matchCode = emp.empCode ? `(${emp.empCode})` : `(${emp.id})`;
+        const matchCode = emp.empCode ? `(${emp.empCode})` : `(${emp.rawId || emp.id})`;
         const matchName = emp.name;
         
-        const isAssignee = (task.assignee && (task.assignee.includes(matchCode) || task.assignee.includes(matchName)));
-        const isReviewer = (task.reviewer && (task.reviewer.includes(matchCode) || task.reviewer.includes(matchName)));
-        const isApprover = (task.approver && (task.approver.includes(matchCode) || task.approver.includes(matchName)));
+        const isAssignee = (task.assignee && (task.assignee.includes(matchCode) || (emp.empCode && task.assignee.includes(emp.empCode)) || (matchName && task.assignee.includes(matchName))));
+        const isReviewer = (task.reviewer && (task.reviewer.includes(matchCode) || (emp.empCode && task.reviewer.includes(emp.empCode)) || (matchName && task.reviewer.includes(matchName))));
+        const isApprover = (task.approver && (task.approver.includes(matchCode) || (emp.empCode && task.approver.includes(emp.empCode)) || (matchName && task.approver.includes(matchName))));
 
         if (isAssignee) {
           assignedTasks.push({
@@ -892,19 +1096,20 @@ const ProjectAccess = ({ userRole, onLogout }) => {
 
   // Get Employee Task Count
   const getEmployeeTaskCount = (empId) => {
-    const emp = employees.find(e => String(e.id) === String(empId));
+    const emp = employees.find(e => String(e.id) === String(empId)) ||
+                externalEmployees.find(e => String(e.id) === String(empId) || String(e.rawId) === String(empId));
     if (!emp) return 0;
     
     let count = 0;
-    const matchCode = emp.empCode ? `(${emp.empCode})` : `(${emp.id})`;
+    const matchCode = emp.empCode ? `(${emp.empCode})` : `(${emp.rawId || emp.id})`;
     const matchName = emp.name;
 
     milestones.forEach(milestone => {
       if (!milestone.tasks) return;
       milestone.tasks.forEach(task => {
-        const isAssignee = (task.assignee && (task.assignee.includes(matchCode) || task.assignee.includes(matchName)));
-        const isReviewer = (task.reviewer && (task.reviewer.includes(matchCode) || task.reviewer.includes(matchName)));
-        const isApprover = (task.approver && (task.approver.includes(matchCode) || task.approver.includes(matchName)));
+        const isAssignee = (task.assignee && (task.assignee.includes(matchCode) || (emp.empCode && task.assignee.includes(emp.empCode)) || (matchName && task.assignee.includes(matchName))));
+        const isReviewer = (task.reviewer && (task.reviewer.includes(matchCode) || (emp.empCode && task.reviewer.includes(emp.empCode)) || (matchName && task.reviewer.includes(matchName))));
+        const isApprover = (task.approver && (task.approver.includes(matchCode) || (emp.empCode && task.approver.includes(emp.empCode)) || (matchName && task.approver.includes(matchName))));
         
         if (isAssignee) count++;
         if (isReviewer) count++;
@@ -942,23 +1147,24 @@ const ProjectAccess = ({ userRole, onLogout }) => {
       await apiDelete(`/api/projects/${selectedProject.id}/access/${empId}`);
 
       if (employeeTasks.length > 0) {
-        const emp = employees.find(e => String(e.id) === String(empId));
-        const matchCode = emp ? (emp.empCode ? `(${emp.empCode})` : `(${emp.id})`) : `(${empId})`;
+        const emp = employees.find(e => String(e.id) === String(empId)) ||
+                    externalEmployees.find(e => String(e.id) === String(empId) || String(e.rawId) === String(empId));
+        const matchCode = emp ? (emp.empCode ? `(${emp.empCode})` : `(${emp.rawId || emp.id})`) : `(${empId})`;
         const matchName = emp ? emp.name : '';
 
         for (const t of employeeTasks) {
-          const isAssignee = t.assignee && (t.assignee.includes(matchCode) || (matchName && t.assignee.includes(matchName)));
-          const isReviewer = t.reviewer && (t.reviewer.includes(matchCode) || (matchName && t.reviewer.includes(matchName)));
-          const isApprover = t.approver && (t.approver.includes(matchCode) || (matchName && t.approver.includes(matchName)));
+          const isAssignee = t.assignee && (t.assignee.includes(matchCode) || (emp?.empCode && t.assignee.includes(emp.empCode)) || (matchName && t.assignee.includes(matchName)));
+          const isReviewer = t.reviewer && (t.reviewer.includes(matchCode) || (emp?.empCode && t.reviewer.includes(emp.empCode)) || (matchName && t.reviewer.includes(matchName)));
+          const isApprover = t.approver && (t.approver.includes(matchCode) || (emp?.empCode && t.approver.includes(emp.empCode)) || (matchName && t.approver.includes(matchName)));
 
           if (isAssignee) {
-            await apiPost(`/api/projects/tasks/${t.id}/assign-role`, { roleType: 'assignee', empId: null });
+            await apiPost(`/api/projects/tasks/${t.id}/assign-role`, { roleType: 'assignee', empId: null, extEmpId: null });
           }
           if (isReviewer) {
-            await apiPost(`/api/projects/tasks/${t.id}/assign-role`, { roleType: 'reviewer', empId: null });
+            await apiPost(`/api/projects/tasks/${t.id}/assign-role`, { roleType: 'reviewer', empId: null, extEmpId: null });
           }
           if (isApprover) {
-            await apiPost(`/api/projects/tasks/${t.id}/assign-role`, { roleType: 'approver', empId: null });
+            await apiPost(`/api/projects/tasks/${t.id}/assign-role`, { roleType: 'approver', empId: null, extEmpId: null });
           }
         }
       }
@@ -981,8 +1187,9 @@ const ProjectAccess = ({ userRole, onLogout }) => {
   const handleAddEmployee = async (empId) => {
     if (!selectedEmployees.includes(empId)) {
       try {
+        const rawId = typeof empId === 'string' && empId.startsWith('EXT_') ? Number(empId.replace('EXT_', '')) : Number(empId);
         await apiPost(`/api/projects/${selectedProject.id}/access`, {
-          empId: empId,
+          empId: rawId,
           accessType: 'EDITOR',
           performedBy: 'System',
           remarks: 'Added via Project Access UI'
@@ -1001,11 +1208,13 @@ const ProjectAccess = ({ userRole, onLogout }) => {
     }
   };
 
-  const handleAssignRole = async (taskId, roleType, empId) => {
+  const handleAssignRole = async (taskId, roleType, id, isExternal = false) => {
     try {
       await apiPost(`/api/projects/tasks/${taskId}/assign-role`, {
         roleType,
-        empId: empId ? Number(empId) : null
+        empId: !isExternal ? (id ? Number(id) : null) : null,
+        extEmpId: isExternal ? (id ? Number(id) : null) : null,
+        isExternal: Boolean(isExternal)
       });
       
       const milestonesData = await apiGet(`/api/projects/${selectedProject.id}/milestones-with-tasks`);
@@ -1033,9 +1242,12 @@ const ProjectAccess = ({ userRole, onLogout }) => {
   // ── Get Available Employees ──
   const getAvailableEmployees = () => {
     const selectedIds = new Set(selectedEmployees.map(id => String(id)));
-    const available = employees.filter(emp => !selectedIds.has(String(emp.id)));
+    const allAvailable = [
+      ...employees.map(e => ({ ...e, isExternal: false })),
+      ...externalEmployees.map(e => ({ ...e, isExternal: true }))
+    ].filter(emp => !selectedIds.has(String(emp.id)) && !selectedIds.has(String(emp.rawId)));
     
-    return [...available].sort((a, b) => {
+    return [...allAvailable].sort((a, b) => {
       const aSelected = selectedEmployees.map(id => String(id)).includes(String(a.id));
       const bSelected = selectedEmployees.map(id => String(id)).includes(String(b.id));
       if (aSelected && !bSelected) return -1;
@@ -1052,6 +1264,7 @@ const ProjectAccess = ({ userRole, onLogout }) => {
     return available.filter(emp =>
       emp.name?.toLowerCase().includes(search) ||
       String(emp.id)?.toLowerCase().includes(search) ||
+      String(emp.rawId)?.toLowerCase().includes(search) ||
       (emp.empCode && emp.empCode.toLowerCase().includes(search)) ||
       (emp.designation && emp.designation.toLowerCase().includes(search)) ||
       (emp.department && emp.department.toLowerCase().includes(search))
@@ -1462,34 +1675,89 @@ const ProjectAccess = ({ userRole, onLogout }) => {
 
     const getInitials = (name) => {
       if (!name || name === 'Unassigned' || name === '—') return '—';
-      return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+      const cleanName = name.replace(/\([^)]*\)/g, '').trim();
+      return cleanName.split(' ').filter(Boolean).map(n => n[0]).join('').toUpperCase().slice(0, 2) || '—';
     };
 
     const renderTaskPerson = (name, type, taskId) => {
       const isUnassigned = !name || name === 'Unassigned' || name === '—';
       
       if (showEditPermissions) {
+        const cellKey = `${taskId}_${type}`;
+
+        // Search internal employees
         const matchedEmp = employees.find(e => {
+          if (!name || isUnassigned) return false;
           const codeStr = e.empCode ? `(${e.empCode})` : `(${e.id})`;
-          return name && (name.includes(codeStr) || name.includes(e.name));
+          return name.includes(codeStr) || (e.empCode && name.includes(e.empCode)) || (e.name && name.includes(e.name));
         });
-        const currentVal = matchedEmp ? String(matchedEmp.id) : "";
+
+        // Search external employees
+        const matchedExt = !matchedEmp ? externalEmployees.find(ext => {
+          if (!name || isUnassigned) return false;
+          const codeStr = ext.empCode ? `(${ext.empCode})` : `(${ext.rawId || ext.id})`;
+          return name.includes(codeStr) || (ext.empCode && name.includes(ext.empCode)) || (ext.name && name.includes(ext.name));
+        }) : null;
+
+        // Active category: user override OR inferred from assigned employee (default to INTERNAL)
+        const currentCategory = taskRoleCategories[cellKey] || (matchedExt ? 'EXTERNAL' : 'INTERNAL');
+
+        const currentVal = currentCategory === 'INTERNAL'
+          ? (matchedEmp ? String(matchedEmp.id) : '')
+          : (matchedExt ? String(matchedExt.rawId || matchedExt.id) : '');
+
+        const currentOptions = currentCategory === 'INTERNAL'
+          ? employees.map(emp => ({
+              value: String(emp.id),
+              name: emp.name,
+              code: emp.empCode || '',
+              label: `${emp.name} ${emp.empCode ? `(${emp.empCode})` : ''}`,
+              dept: emp.department
+            }))
+          : externalEmployees.map(ext => ({
+              value: String(ext.rawId || ext.id),
+              name: ext.name,
+              code: ext.empCode || `EXT-${ext.rawId || ext.id}`,
+              label: `${ext.name} (${ext.empCode || `EXT-${ext.rawId || ext.id}`})`,
+              dept: ext.department || ext.designation
+            }));
 
         return (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <select
-              className="pac-assign-select"
+          <div className="pac-role-cell-edit">
+            <div className="pac-role-type-radios">
+              <label className={`pac-radio-label ${currentCategory === 'INTERNAL' ? 'active' : ''}`}>
+                <input
+                  type="radio"
+                  name={`role_cat_${cellKey}`}
+                  value="INTERNAL"
+                  checked={currentCategory === 'INTERNAL'}
+                  onChange={() => setTaskRoleCategories(prev => ({ ...prev, [cellKey]: 'INTERNAL' }))}
+                />
+                <span>Internal</span>
+              </label>
+              <label className={`pac-radio-label ${currentCategory === 'EXTERNAL' ? 'active' : ''}`}>
+                <input
+                  type="radio"
+                  name={`role_cat_${cellKey}`}
+                  value="EXTERNAL"
+                  checked={currentCategory === 'EXTERNAL'}
+                  onChange={() => setTaskRoleCategories(prev => ({ ...prev, [cellKey]: 'EXTERNAL' }))}
+                />
+                <span>External</span>
+              </label>
+            </div>
+            <SearchableRoleSelect
+              options={currentOptions}
               value={currentVal}
-              onChange={(e) => {
-                const val = e.target.value ? Number(e.target.value) : null;
-                handleAssignRole(taskId, type, val);
+              placeholder="-- Unassigned --"
+              onChange={(val) => {
+                if (!val) {
+                  handleAssignRole(taskId, type, null, currentCategory === 'EXTERNAL');
+                } else {
+                  handleAssignRole(taskId, type, Number(val), currentCategory === 'EXTERNAL');
+                }
               }}
-            >
-              <option value="">-- Unassigned --</option>
-              {employees.map(emp => (
-                <option key={emp.id} value={emp.id}>{emp.name} {emp.empCode ? `(${emp.empCode})` : ''}</option>
-              ))}
-            </select>
+            />
           </div>
         );
       } else {
@@ -1531,16 +1799,16 @@ const ProjectAccess = ({ userRole, onLogout }) => {
           <table className="pac-table">
             <thead>
               <tr>
-                <th style={{ width: '120px' }}>Task Code</th>
-                <th style={{ width: '180px' }}>Task / Activity Name</th>
-                <th style={{ width: '150px' }}>Executor</th>
-                <th style={{ width: '150px' }}>Reviewer</th>
-                <th style={{ width: '150px' }}>Approver</th>
-                <th style={{ width: '100px' }}>Status</th>
-                <th style={{ width: '60px', textAlign: 'center' }}>View</th>
-                <th style={{ width: '60px', textAlign: 'center' }}>Create</th>
-                <th style={{ width: '60px', textAlign: 'center' }}>Edit</th>
-                <th style={{ width: '60px', textAlign: 'center' }}>Delete</th>
+                <th style={{ width: '110px' }}>Task Code</th>
+                <th style={{ width: '160px' }}>Task / Activity Name</th>
+                <th style={{ width: showEditPermissions ? '180px' : '150px' }}>Executor</th>
+                <th style={{ width: showEditPermissions ? '180px' : '150px' }}>Reviewer</th>
+                <th style={{ width: showEditPermissions ? '180px' : '150px' }}>Approver</th>
+                <th style={{ width: '90px' }}>Status</th>
+                <th style={{ width: '50px', textAlign: 'center' }}>View</th>
+                <th style={{ width: '50px', textAlign: 'center' }}>Create</th>
+                <th style={{ width: '50px', textAlign: 'center' }}>Edit</th>
+                <th style={{ width: '50px', textAlign: 'center' }}>Delete</th>
               </tr>
             </thead>
             <tbody>
@@ -2271,9 +2539,23 @@ const ProjectAccess = ({ userRole, onLogout }) => {
                             {initials}
                           </div>
                           <div className="pac-popup-item-info">
-                            <div className="pac-popup-item-name">{emp.name}</div>
+                            <div className="pac-popup-item-name" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <span>{emp.name}</span>
+                              {emp.isExternal && (
+                                <span style={{
+                                  fontSize: '10px',
+                                  padding: '1px 6px',
+                                  background: '#f3e8ff',
+                                  color: '#7c3aed',
+                                  borderRadius: '4px',
+                                  fontWeight: '600'
+                                }}>
+                                  External
+                                </span>
+                              )}
+                            </div>
                             <div className="pac-popup-item-details">
-                              <span className="pac-popup-item-id">{emp.id}</span>
+                              <span className="pac-popup-item-id">{emp.empCode || emp.id}</span>
                               <span className="pac-popup-item-role">{emp.designation}</span>
                               <span className="pac-popup-item-dept">{emp.department}</span>
                             </div>

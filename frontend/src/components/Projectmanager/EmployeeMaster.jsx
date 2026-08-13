@@ -1410,18 +1410,7 @@ const EmployeeCreation = ({ userRole, onLogout }) => {
   };
 
   const handleExtChange = (e) => {
-    let { name, value } = e.target;
-    if (name === "extEmpNm") {
-      value = value.replace(/[^a-zA-Z\s]/g, "");
-    } else if (name === "mobNum") {
-      value = value.replace(/\D/g, "");
-      if (value.length === 1 && !/^[6-9]$/.test(value)) {
-        value = "";
-      } else if (value.length > 1 && !/^[6-9]/.test(value)) {
-        value = value.replace(/^[^6-9]+/, "");
-      }
-      value = value.slice(0, 10);
-    }
+    const { name, value } = e.target;
     setExtForm(prev => ({ ...prev, [name]: value }));
     const fieldNameForValidation = name === "mobNum" ? "mobile" : name;
     const error = validateField(fieldNameForValidation, value, extForm);
@@ -1520,6 +1509,31 @@ const EmployeeCreation = ({ userRole, onLogout }) => {
     setActiveActionsMenu((prev) => (prev === id ? null : id));
   };
 
+  const handleExtPhotoUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+    try {
+      const formDataUpload = new FormData();
+      formDataUpload.append("file", file);
+      const response = await fetch(`${apiBaseUrl}/api/storage/upload/employee-photo`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${sessionStorage.getItem("authToken") || ""}` },
+        body: formDataUpload
+      });
+      if (!response.ok) throw new Error("Photo upload failed");
+      const data = await response.json();
+      setExtForm((prev) => ({ ...prev, photoPath: data.url }));
+    } catch (err) {
+      console.error("External employee photo upload error:", err);
+    }
+  };
+
+  const handleDeleteExtPhoto = () => {
+    setExtForm((prev) => ({ ...prev, photoPath: "" }));
+    const fileInput = document.getElementById("extPhotoUpload");
+    if (fileInput) fileInput.value = "";
+  };
+
   const saveExternalEmployee = async () => {
     const emailError = validateField("email", extForm.email, extForm);
     const mobileError = validateField("mobile", extForm.mobNum, extForm);
@@ -1533,7 +1547,7 @@ const EmployeeCreation = ({ userRole, onLogout }) => {
       return;
     }
 
-    if (!extForm.extEmpNm || !extForm.email || !extForm.mobNum || !extForm.companyNm) {
+    if (!extForm.extEmpNm || !extForm.email || !extForm.mobNum || !extForm.companyNm || !extForm.repEmpId) {
       triggerAlert("error", "Validation Error", "Please fill all required fields");
       return;
     }
@@ -2215,8 +2229,8 @@ const EmployeeCreation = ({ userRole, onLogout }) => {
           ) : view === "extForm" ? (
             /* ================= VIEW: ADD NEW EXTERNAL EMPLOYEE FORM ================= */
             <div className="emp-content" style={{ paddingBottom: '80px', maxWidth: '1280px', margin: '0 auto' }}>
-              <div className="emp-form-card" style={{ backgroundColor: 'white', borderRadius: '8px', border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', borderBottom: '1px solid #e2e8f0', backgroundColor: '#fafbfc' }}>
+              <div className="emp-form-card" style={{ backgroundColor: 'white', borderRadius: '8px', border: '1px solid #e2e8f0', overflow: 'visible', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', borderBottom: '1px solid #e2e8f0', backgroundColor: '#fafbfc', borderTopLeftRadius: '8px', borderTopRightRadius: '8px' }}>
                   <div>
                     <h2 style={{ fontSize: '20px', fontWeight: '700', color: '#0f172a', margin: 0 }}>
                       {isExtViewing ? "View External Employee" : isExtEditing ? "Edit External Employee" : "Add New External Employee"}
@@ -2231,30 +2245,96 @@ const EmployeeCreation = ({ userRole, onLogout }) => {
                     <ArrowLeft size={15} /> Back to Employee List
                   </button>
                 </div>
-                <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
-                  <div className="emp-form-row-3">
-                    <div className="emp-form-item">
-                      <label>Employee Code</label>
-                      <div className="emp-input-icon-wrap">
-                        <span className="emp-input-prefix-icon"><User size={16} /></span>
-                        <input type="text" name="extEmpCode" value={extForm.extEmpCode || generateExtEmployeeCode()} readOnly style={{ backgroundColor: '#f1f5f9', cursor: 'not-allowed', color: '#64748b' }} placeholder="Auto-generated" />
+                {isExtViewing ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', padding: '24px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '24px', marginBottom: '32px' }}>
+                      <div style={{ width: '80px', height: '80px', borderRadius: '50%', backgroundColor: '#f1f5f9', overflow: 'hidden', border: '1px solid #cbd5e1', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        {extForm.photoPath ? (
+                          <img src={extForm.photoPath} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        ) : (
+                          <User size={32} style={{ color: '#94a3b8' }} />
+                        )}
+                      </div>
+                      <div>
+                        <h2 style={{ margin: '0 0 4px 0', fontSize: '24px', color: '#0f172a', fontWeight: '700' }}>{extForm.extEmpNm}</h2>
+                        <span style={{ padding: '2px 10px', borderRadius: '12px', fontSize: '12px', fontWeight: '600', backgroundColor: extForm.sts ? '#dcfce7' : '#fee2e2', color: extForm.sts ? '#166534' : '#991b1b' }}>{extForm.sts ? 'Active' : 'Inactive'}</span>
                       </div>
                     </div>
-                    <div className="emp-form-item">
-                      <label>Employee Name <span className="emp-req-star">*</span></label>
-                      <div className="emp-input-icon-wrap">
-                        <span className="emp-input-prefix-icon"><User size={16} /></span>
-                        <input type="text" name="extEmpNm" value={extForm.extEmpNm} onChange={handleExtChange} placeholder="Enter name" required disabled={isExtViewing} />
+
+                    <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#1e293b', marginBottom: '16px', paddingBottom: '8px', borderBottom: '1px solid #e2e8f0' }}>External Employee Details</h3>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', columnGap: '40px', rowGap: '16px', marginBottom: '32px' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        <span style={{ fontSize: '13px', fontWeight: '600', color: '#64748b', marginBottom: '4px' }}>Employee Code</span>
+                        <span style={{ fontSize: '14px', color: '#0f172a', fontWeight: '500' }}>{extForm.extEmpCode || '-'}</span>
                       </div>
-                    </div>
-                    <div className="emp-form-item">
-                      <label>Company Name <span className="emp-req-star">*</span></label>
-                      <div className="emp-input-icon-wrap">
-                        <span className="emp-input-prefix-icon"><Building size={16} /></span>
-                        <input type="text" name="companyNm" value={extForm.companyNm} onChange={handleExtChange} placeholder="Enter company name" required disabled={isExtViewing} />
+                      <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        <span style={{ fontSize: '13px', fontWeight: '600', color: '#64748b', marginBottom: '4px' }}>Company Name</span>
+                        <span style={{ fontSize: '14px', color: '#0f172a', fontWeight: '500' }}>{extForm.companyNm || '-'}</span>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        <span style={{ fontSize: '13px', fontWeight: '600', color: '#64748b', marginBottom: '4px' }}>Email</span>
+                        <span style={{ fontSize: '14px', color: '#0f172a', fontWeight: '500' }}>{extForm.email || '-'}</span>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        <span style={{ fontSize: '13px', fontWeight: '600', color: '#64748b', marginBottom: '4px' }}>Mobile Number</span>
+                        <span style={{ fontSize: '14px', color: '#0f172a', fontWeight: '500' }}>{extForm.mobNum || '-'}</span>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        <span style={{ fontSize: '13px', fontWeight: '600', color: '#64748b', marginBottom: '4px' }}>Reporting To</span>
+                        <span style={{ fontSize: '14px', color: '#0f172a', fontWeight: '500' }}>{employees.find(e => String(e.id) === String(extForm.repEmpId))?.employeeName || '-'}</span>
                       </div>
                     </div>
                   </div>
+                ) : (
+                  <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                    <div className="emp-form-row-3" style={{ gridColumn: 'span 3', display: 'block' }}>
+                      <div className="emp-form-item" style={{ gridColumn: 'span 2' }}>
+                        <label>Employee Photo</label>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                          <div style={{ width: '64px', height: '64px', borderRadius: '50%', backgroundColor: '#f1f5f9', border: '1px solid #cbd5e1', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                            {extForm.photoPath ? (
+                              <img src={extForm.photoPath} alt="External Employee" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            ) : (
+                              <Image size={24} style={{ color: '#94a3b8' }} />
+                            )}
+                          </div>
+                          <div style={{ display: 'flex', gap: '8px' }}>
+                            <label className="emp-btn secondary" style={{ cursor: 'pointer', padding: '6px 12px', fontSize: '13px' }}>
+                              <Upload size={14} /> Upload Photo
+                              <input type="file" id="extPhotoUpload" style={{ display: 'none' }} accept="image/*" onChange={handleExtPhotoUpload} />
+                            </label>
+                            {extForm.photoPath && (
+                              <button type="button" className="emp-btn-danger-outline" style={{ padding: '6px 12px', fontSize: '13px' }} onClick={handleDeleteExtPhoto}>
+                                <Trash2 size={14} /> Remove
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="emp-form-row-3">
+                      <div className="emp-form-item">
+                        <label>Employee Code</label>
+                        <div className="emp-input-icon-wrap">
+                          <span className="emp-input-prefix-icon"><User size={16} /></span>
+                          <input type="text" name="extEmpCode" value={extForm.extEmpCode || generateExtEmployeeCode()} readOnly style={{ backgroundColor: '#f1f5f9', cursor: 'not-allowed', color: '#64748b' }} placeholder="Auto-generated" />
+                        </div>
+                      </div>
+                      <div className="emp-form-item">
+                        <label>Employee Name <span className="emp-req-star">*</span></label>
+                        <div className="emp-input-icon-wrap">
+                          <span className="emp-input-prefix-icon"><User size={16} /></span>
+                          <input type="text" name="extEmpNm" value={extForm.extEmpNm} onChange={handleExtChange} placeholder="Enter name" required disabled={isExtViewing} />
+                        </div>
+                      </div>
+                      <div className="emp-form-item">
+                        <label>Company Name <span className="emp-req-star">*</span></label>
+                        <div className="emp-input-icon-wrap">
+                          <span className="emp-input-prefix-icon"><Building size={16} /></span>
+                          <input type="text" name="companyNm" value={extForm.companyNm} onChange={handleExtChange} placeholder="Enter company name" required disabled={isExtViewing} />
+                        </div>
+                      </div>
+                    </div>
                   <div className="emp-form-row-3">
                     <div className="emp-form-item">
                       <label>Email <span className="emp-req-star">*</span></label>
@@ -2281,18 +2361,42 @@ const EmployeeCreation = ({ userRole, onLogout }) => {
                       )}
                     </div>
                     <div className="emp-form-item">
-                      <label>Reporting To</label>
-                      <SearchableSelect
-                        options={employees.map(e => ({ value: e.id, label: e.employeeName }))}
-                        value={extForm.repEmpId}
-                        onChange={(e) => handleExtChange({ target: { name: 'repEmpId', value: e.target.value } })}
-                        placeholder="Select Manager"
-                        disabled={isExtViewing}
-                      />
+                      <label>Reporting To <span className="emp-req-star">*</span></label>
+                      <div className="emp-input-icon-wrap">
+                        <span className="emp-input-prefix-icon"><User size={16} /></span>
+                        <SearchableSelect
+                          name="repEmpId"
+                          value={extForm.repEmpId}
+                          onChange={(e) => handleExtChange({ target: { name: e.target.name, value: e.target.value } })}
+                          placeholder="Select Manager"
+                          options={employees.map(e => ({ value: e.id, label: e.employeeName }))}
+                          disabled={isExtViewing}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  {/* STATUS */}
+                  <div className="emp-form-section">
+                    <h3 className="emp-form-section-title" style={{ fontSize: '16px', fontWeight: '700', color: '#1e293b', marginBottom: '20px', borderBottom: '1px solid #e2e8f0', paddingBottom: '12px' }}>
+                      Status
+                    </h3>
+                    <div className="emp-form-row-4">
+                      <div className="emp-form-item">
+                        <label>Employee Status <span className="emp-req-star">*</span></label>
+                        <div className="emp-input-icon-wrap">
+                          <span className="emp-input-prefix-icon"><CheckCircle2 size={16} /></span>
+                          <select name="sts" value={extForm.sts ? "Active" : "Inactive"} onChange={(e) => handleExtChange({ target: { name: 'sts', value: e.target.value === 'Active' } })} required disabled={isExtViewing}>
+                            <option value="" disabled hidden>Select status</option>
+                            <option value="Active">Active</option>
+                            <option value="Inactive">Inactive</option>
+                          </select>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
-                <div className="emp-form-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', padding: '16px 24px', backgroundColor: '#fafbfc', borderTop: '1px solid #e2e8f0' }}>
+                )}
+                <div className="emp-form-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', padding: '16px 24px', backgroundColor: '#fafbfc', borderTop: '1px solid #e2e8f0', borderBottomLeftRadius: '8px', borderBottomRightRadius: '8px' }}>
                   {!isExtViewing && (
                     <button type="button" className="emp-btn primary" onClick={saveExternalEmployee}>
                       <Save size={14} /> {isExtEditing ? "Update Employee" : "Save Employee"}
