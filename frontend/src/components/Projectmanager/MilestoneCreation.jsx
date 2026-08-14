@@ -354,7 +354,7 @@ const MilestoneCreation = ({ onLogout, userRole }) => {
   const [milestoneToDelete, setMilestoneToDelete] = useState(null);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-  const [filterType, setFilterType] = useState("ALL"); // ALL, DRAFT, LIVE
+  const [filterType, setFilterType] = useState("ALL"); // ALL, DRAFT, LIVE, CLOSED, HOLD
 
   const [currentStep, setCurrentStep] = useState(1);
   const [completedSteps, setCompletedSteps] = useState(new Set());
@@ -3148,9 +3148,31 @@ const MilestoneCreation = ({ onLogout, userRole }) => {
   };
 
   const renderListView = () => {
+    const isClosedStatus = (m) => {
+      const s = String(m.status || m.mlstnSts || m.mlstm_sts || m.original?.status || m.original?.mlstnSts || m.original?.mlstmSts || "").toUpperCase();
+      return s === "CLOSED" || s === "COMPLETED" || s === "DONE";
+    };
+
+    const isHoldStatus = (m) => {
+      const s = String(m.status || m.mlstnSts || m.mlstm_sts || m.original?.status || m.original?.mlstnSts || m.original?.mlstmSts || "").toUpperCase();
+      return s === "HOLD" || s === "ON_HOLD" || s === "ON HOLD" || s === "HOLDING" || s === "PAUSED";
+    };
+
     const filtered = milestoneList.filter(m => {
       if (filterType === "ALL") return true;
-      return m.type === filterType.toLowerCase();
+      if (filterType === "CLOSED") {
+        return isClosedStatus(m);
+      }
+      if (filterType === "HOLD") {
+        return isHoldStatus(m);
+      }
+      if (filterType === "DRAFT") {
+        return m.type === 'draft' && !isClosedStatus(m) && !isHoldStatus(m);
+      }
+      if (filterType === "LIVE") {
+        return m.type === 'live' && !isClosedStatus(m) && !isHoldStatus(m);
+      }
+      return true;
     });
     const searched = filtered.filter(m =>
       m.code?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -3170,6 +3192,8 @@ const MilestoneCreation = ({ onLogout, userRole }) => {
               <button className={`mc-filter-btn ${filterType === "ALL" ? "active" : ""}`} onClick={() => setFilterType("ALL")}>All</button>
               <button className={`mc-filter-btn ${filterType === "DRAFT" ? "active" : ""}`} onClick={() => setFilterType("DRAFT")}>Draft</button>
               <button className={`mc-filter-btn ${filterType === "LIVE" ? "active" : ""}`} onClick={() => setFilterType("LIVE")}>Live</button>
+              <button className={`mc-filter-btn ${filterType === "CLOSED" ? "active" : ""}`} onClick={() => setFilterType("CLOSED")}>Closed</button>
+              <button className={`mc-filter-btn ${filterType === "HOLD" ? "active" : ""}`} onClick={() => setFilterType("HOLD")}>Hold</button>
             </div>
             <div className="mc-search-box"><Search size={14} /><input type="text" placeholder="Search milestones..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></div>
           </div>
@@ -3181,6 +3205,8 @@ const MilestoneCreation = ({ onLogout, userRole }) => {
                   searched.map((m, index) => {
                     const project = projects.find(p => p.prj_id === m.projectId);
                     const isDraft = m.type === 'draft';
+                    const statusUpper = String(m.status || "").toUpperCase();
+                    const statusClass = (statusUpper === "CLOSED" || statusUpper === "COMPLETED" || statusUpper === "DONE") ? "closed" : (statusUpper === "HOLD" || statusUpper === "ON_HOLD" || statusUpper === "ON HOLD" || statusUpper === "HOLDING" || statusUpper === "PAUSED") ? "hold" : statusUpper === "DRAFT" ? "draft" : statusUpper === "SUBMITTED" ? "submitted" : "live";
                     return (
                       <tr key={`${m.type}-${m.id}`}>
                         <td>{index + 1}</td>
@@ -3191,7 +3217,7 @@ const MilestoneCreation = ({ onLogout, userRole }) => {
                         <td>{formatDisplayDate(m.startDate || m.tent_st_dt)}</td>
                         <td>{formatDisplayDate(m.endDate || m.tent_end_dt)}</td>
                         <td><span className="mc-badge">{m.taskCount || 0} Tasks</span></td>
-                        <td><span className={`mc-status ${m.status === "DRAFT" || m.status === "draft" ? "draft" : m.status === "SUBMITTED" || m.status === "submitted" ? "submitted" : "live"}`}>{m.status}</span></td>
+                        <td><span className={`mc-status ${statusClass}`}>{m.status}</span></td>
                         <td>
                           <div className="mc-actions" style={{ justifyContent: "center" }}>
                             {isDraft ? (
