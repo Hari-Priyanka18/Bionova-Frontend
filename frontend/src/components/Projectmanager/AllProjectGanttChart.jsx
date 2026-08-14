@@ -406,7 +406,7 @@ export default function AllProjectGanttChart({ userRole, onLogout }) {
   const handleExportCSV = () => {
     let csvContent = "data:text/csv;charset=utf-8,Type,ID,Name,Start Date,End Date,Plan Progress %,Actual Progress %,Status\n";
     visibleRows.forEach(row => {
-      const rowData = [row.type, row.id, `"${row.name}"`, row.start, row.end, row.prog, row.aProg, row.status];
+      const rowData = [row.type, row.id, `"${row.name}"`, row.start, row.end, 100, row.aProg, row.status];
       csvContent += rowData.join(",") + "\n";
     });
     const encodedUri = encodeURI(csvContent);
@@ -781,7 +781,7 @@ export default function AllProjectGanttChart({ userRole, onLogout }) {
                             {/* ── Planned Bar ── */}
                             <div
                               style={{ position: 'absolute', top: barTop, left: barLeft, width: barWidth, height: barH, borderRadius: radius, overflow: 'hidden', cursor: 'pointer', zIndex: 4, boxShadow: isActive ? `0 0 0 2px ${highlightColor}` : 'none' }}
-                              title={`${row.name} | ${row.start} → ${row.end} | ${row.prog}%`}
+                              title={`${row.name} | ${row.start} → ${row.end} | 100%`}
                               onClick={(e) => { e.stopPropagation(); setActiveRow(row.id); if (row.type === 'project') toggleProjectExpand(row.id); if (row.type === 'milestone') toggleMilestoneExpand(row.id); }}
                             >
                               {/* Background track */}
@@ -793,7 +793,7 @@ export default function AllProjectGanttChart({ userRole, onLogout }) {
                             {/* Progress % badge */}
                             {barWidth > 30 && (
                               <span style={{ position: 'absolute', top: baseline ? barTop + barH + 14 : barTop + barH + 2, left: barLeft, fontSize: 9, color: barColor, fontWeight: 600, pointerEvents: 'none' }}>
-                                {row.prog}%
+                                {baseline ? `${row.prog}%` : '100%'}
                               </span>
                             )}
 

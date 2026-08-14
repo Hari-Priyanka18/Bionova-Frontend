@@ -485,9 +485,9 @@ const CompanyCreation = ({ onLogout, userRole }) => {
       if (!value.trim()) error = "Company Email is required.";
       else if (value.length > 100) error = "Company Email cannot exceed 100 characters.";
       else {
-        const emailRegex = /^[^\s@]+@gmail\.com$/i;
+        const emailRegex = /^([a-zA-Z0-9._%+-]+@)?[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/i;
         if (!emailRegex.test(value.trim())) {
-          error = "Company Email must be a valid @gmail.com address.";
+          error = "Company Email must be a valid email or domain.";
         }
       }
     } else if (name === "website") {
@@ -1070,7 +1070,7 @@ const CompanyCreation = ({ onLogout, userRole }) => {
 
           {view === "form" ? (
             <>
-              <div className="cc-content" style={{ paddingBottom: '80px', maxWidth: '1280px', margin: '0 auto' }}>
+              <div className="cc-content" style={{ paddingBottom: '80px' }}>
 
                 <div className="cc-form-card" style={{
                   backgroundColor: 'white',
@@ -1967,7 +1967,7 @@ const CompanyCreation = ({ onLogout, userRole }) => {
               </div>
             </>
           ) : (
-            <div className="cc-content" style={{ maxWidth: '1280px', margin: '0 auto' }}>
+            <div className="cc-content">
 
               <div className="cc-table-panel" style={{ backgroundColor: 'white', borderRadius: '8px', border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
 
@@ -2064,7 +2064,7 @@ const CompanyCreation = ({ onLogout, userRole }) => {
                       ) : currentItems.length > 0 ? (
                         currentItems.map((company, index) => (
                           <tr key={company.coyId} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                            <td style={{ padding: '14px 20px', fontSize: '14px', color: '#334155' }}>{index + 1}</td>
+                            <td style={{ padding: '14px 20px', fontSize: '14px', color: '#334155' }}>{indexOfFirstRecord + index + 1}</td>
                             <td style={{ padding: '14px 20px' }}>
                               {company.logo ? (
                                 <img src={company.logo} alt="Logo" style={{ width: '32px', height: '32px', borderRadius: '4px', objectFit: 'cover', border: '1px solid #e2e8f0' }} />
