@@ -210,7 +210,32 @@ const Header = ({ title, subtitle, showSearch = false, statusBadge, progressPerc
       });
       if (res.ok) {
         const data = await res.json();
+<<<<<<< HEAD
         setNotifications(data);
+=======
+<<<<<<< Updated upstream
+        const loggedUserKey = sessionStorage.getItem("userEmail") || sessionStorage.getItem("userName") || "user";
+        const clearedIds = new Set(JSON.parse(localStorage.getItem(`cleared_notifications_${loggedUserKey}`) || "[]"));
+        const clearedAt = parseInt(localStorage.getItem(`notifications_cleared_at_${loggedUserKey}`) || "0", 10);
+
+        const filteredData = (Array.isArray(data) ? data : []).filter(n => {
+          const id = n.id || n._id || n.notificationId;
+          if (id && clearedIds.has(String(id))) return false;
+          if (clearedAt && (n.createdAt || n.created_at || n.date)) {
+            const dateVal = n.createdAt || n.created_at || n.date;
+            const createdTime = new Date(dateVal).getTime();
+            if (!isNaN(createdTime) && createdTime <= clearedAt) return false;
+          }
+          return true;
+        });
+
+        setNotifications(filteredData);
+=======
+        // Filter out notifications that were cleared locally
+        const hiddenIds = JSON.parse(localStorage.getItem("hiddenNotifIds") || "[]");
+        setNotifications(data.filter(n => !hiddenIds.includes(n.id)));
+>>>>>>> Stashed changes
+>>>>>>> c1bb9ca (Update Company Master and Header)
       }
     } catch (err) {
       console.error("Failed to fetch notifications", err);
@@ -230,7 +255,11 @@ const Header = ({ title, subtitle, showSearch = false, statusBadge, progressPerc
   };
 
   const clearAllNotifications = async () => {
+    const readNotifs = notifications.filter(n => n.isRead);
+    if (readNotifs.length === 0) return;
+
     try {
+<<<<<<< Updated upstream
       await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/notifications/clear-all`, {
         method: "DELETE",
         headers: authHeaders()
@@ -238,7 +267,30 @@ const Header = ({ title, subtitle, showSearch = false, statusBadge, progressPerc
       setNotifications([]);
     } catch (err) {
       console.error("Failed to clear notifications", err);
+<<<<<<< HEAD
       setNotifications([]);
+=======
+=======
+      // 1. Store the cleared IDs in localStorage so they remain hidden on re-login
+      const hiddenIds = JSON.parse(localStorage.getItem("hiddenNotifIds") || "[]");
+      const newHiddenIds = [...new Set([...hiddenIds, ...readNotifs.map(n => n.id)])];
+      localStorage.setItem("hiddenNotifIds", JSON.stringify(newHiddenIds));
+
+      // 2. Attempt to delete each read notification from the backend
+      await Promise.all(
+        readNotifs.map(notif => 
+          fetch(`${import.meta.env.VITE_API_BASE_URL}/api/notifications/${notif.id}`, {
+            method: "DELETE",
+            headers: authHeaders()
+          }).catch(() => {})
+        )
+      );
+      // Remove read notifications from the UI state
+      setNotifications(prev => prev.filter(n => !n.isRead));
+    } catch (err) {
+      console.error("Failed to clear read notifications", err);
+>>>>>>> Stashed changes
+>>>>>>> c1bb9ca (Update Company Master and Header)
     }
   };
 
@@ -555,7 +607,7 @@ const Header = ({ title, subtitle, showSearch = false, statusBadge, progressPerc
                         </span>
                       )}
                     </div>
-                    {notifications.length > 0 && (
+                    {notifications.filter(n => n.isRead).length > 0 && (
                       <button
                         onClick={(e) => { e.stopPropagation(); clearAllNotifications(); }}
                         style={{
@@ -571,9 +623,9 @@ const Header = ({ title, subtitle, showSearch = false, statusBadge, progressPerc
                           fontWeight: "600",
                           cursor: "pointer"
                         }}
-                        title="Clear all notifications"
+                        title="Clear read notifications"
                       >
-                        <Trash2 size={13} /> Clear
+                        <Trash2 size={13} /> Clear Seen
                       </button>
                     )}
                   </div>

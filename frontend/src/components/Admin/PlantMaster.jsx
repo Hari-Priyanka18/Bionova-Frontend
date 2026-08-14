@@ -372,12 +372,14 @@ const PlantCreation = ({ userRole, onLogout }) => {
         }
       }
     } else if (name === "email") {
-      if (!value) {
-        error = "Email is required.";
+      if (!value.trim()) {
+        error = "Plant Email is required.";
+      } else if (value.length > 100) {
+        error = "Plant Email cannot exceed 100 characters.";
       } else {
-        const emailRegex = /^[^\s@]+@gmail\.com$/i;
+        const emailRegex = /^([a-zA-Z0-9._%+-]+@)?[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/i;
         if (!emailRegex.test(value.trim())) {
-          error = "Plant Email must be a valid @gmail.com address.";
+          error = "Plant Email must be a valid email or domain.";
         }
       }
     } else if (name === "addressLine1") {
@@ -520,9 +522,9 @@ const PlantCreation = ({ userRole, onLogout }) => {
     }
 
     // Strict email check
-    const emailRegex = /^[^\s@]+@gmail\.com$/i;
+    const emailRegex = /^([a-zA-Z0-9._%+-]+@)?[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/i;
     if (!emailRegex.test(form.email.trim())) {
-      triggerAlert("error", "Validation Error", "Plant Email must be a valid @gmail.com address.");
+      triggerAlert("error", "Validation Error", "Plant Email must be a valid email or domain.");
       return;
     }
 
@@ -1656,7 +1658,7 @@ const PlantCreation = ({ userRole, onLogout }) => {
                       ) : currentItems.length > 0 ? (
                         currentItems.map((plant, index) => (
                           <tr key={plant.pltId} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                            <td data-label="#" style={tdStyle}>{index + 1}</td>
+                            <td data-label="#" style={tdStyle}>{indexOfFirstRecord + index + 1}</td>
                             <td data-label="LOGO" style={{ ...tdStyle, padding: '14px 20px' }}>
                               {plant.logo ? (
                                 <img src={plant.logo} alt="Logo" style={{ width: '32px', height: '32px', borderRadius: '4px', objectFit: 'cover', border: '1px solid #e2e8f0' }} />
