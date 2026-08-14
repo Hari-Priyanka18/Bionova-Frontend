@@ -186,11 +186,13 @@ const getEmployeeName = (empId, employeesList) => {
   return emp.empCode || emp.employee_code || `User ${empId}`;
 };
 
-const getEmployeeInitials = (empId, employeesList) => {
-  const name = getEmployeeName(empId, employeesList);
+const getEmployeeInitials = (empId, employeesList, fallbackName = null) => {
+  let name = getEmployeeName(empId, employeesList);
+  if ((!name || name === "Unknown" || name.startsWith('User ')) && fallbackName) {
+    name = fallbackName;
+  }
   if (!name || name === "Unknown" || name.startsWith('User ')) {
-    const idStr = String(empId);
-    return idStr.substring(0, 2).toUpperCase();
+    return null;
   }
   const parts = name.trim().split(" ");
   if (parts.length >= 2) {
@@ -248,7 +250,7 @@ const formatDate = (dateStr) => {
 // ACTION BUTTON - DYNAMIC BASED ON PROGRESS, PROCESS, PRIORITY, TIME
 // ============================================
 
-const getActionButton = (task, currentUserEmpId, isExternal = false) => {
+const getActionButton = (task, currentUserEmpId, isExternal = false, employeesList = []) => {
   if (!task) return { label: "View", action: "view", variant: "secondary" };
 
   const rawTask = task.rawTask || task;
@@ -260,9 +262,10 @@ const getActionButton = (task, currentUserEmpId, isExternal = false) => {
   const approverId = rawTask.approverId || rawTask.approver || rawTask.approverEmpId;
 
   const isTeamMember = (Array.isArray(rawTask?.teamMembers) && rawTask.teamMembers.some(tm => String(tm.empId) === String(currentUserEmpId))) || (Array.isArray(task?.teamMembers) && task.teamMembers.some(tm => String(tm.empId) === String(currentUserEmpId)));
-  const isDoer = isExternalTask || String(executorId) === String(currentUserEmpId) || isTeamMember;
-  const isReviewer = !isExternalTask && String(reviewerId) === String(currentUserEmpId);
-  const isApprover = !isExternalTask && String(approverId) === String(currentUserEmpId);
+  const myName = getEmployeeName(currentUserEmpId, employeesList || []);
+  const isReviewer = !isExternalTask && (String(reviewerId) === String(currentUserEmpId) || (rawTask?.reviewerNm && myName && myName.trim().toLowerCase() === rawTask.reviewerNm.trim().toLowerCase()));
+  const isApprover = !isExternalTask && (String(approverId) === String(currentUserEmpId) || (rawTask?.approverNm && myName && myName.trim().toLowerCase() === rawTask.approverNm.trim().toLowerCase()));
+  const isDoer = isExternalTask || String(executorId) === String(currentUserEmpId) || String(rawTask.assignedBy || rawTask.assigned_by || rawTask.createdBy) === String(currentUserEmpId) || isTeamMember || (!isReviewer && !isApprover);
 
   // Get progress (status)
   const progress = (rawTask.taskSts || rawTask.status || rawTask.taskStatus || task.status || "OPEN").toUpperCase();
@@ -537,6 +540,8 @@ const MyTasks = ({ userRole, onLogout }) => {
             empId: data.extEmpId,
             assignedTo: data.extEmpId,
             extEmpNm: data.extEmpNm,
+            email: data.extEmpEmail || data.email,
+            extEmpEmail: data.extEmpEmail || data.email,
             companyNm: data.companyNm,
             taskSts: data.taskSts,
             priority: data.priority,
@@ -2997,7 +3002,7 @@ const MyTasks = ({ userRole, onLogout }) => {
     const priorityBadge = getPriorityBadge(task.priority);
 
     // Get dynamic action based on current state
-    const action = getActionButton(rawTask, currentUserEmpId, isExternalMode);
+    const action = getActionButton(rawTask, currentUserEmpId, isExternalMode, employeesList);
 
     const isCompleted = ['COMPLETED', 'CLOSED', 'DONE', 'COMPLETE'].includes(
       String(rawTask?.taskSts || rawTask?.status || task.rawStatus || task.status || '').toUpperCase()
@@ -3014,32 +3019,33 @@ const MyTasks = ({ userRole, onLogout }) => {
       return today > dueDate;
     })();
     const isTeamMember = taskTeamMembers.some(tm => String(tm.empId) === String(currentUserEmpId)) || (Array.isArray(rawTask?.teamMembers) && rawTask.teamMembers.some(tm => String(tm.empId) === String(currentUserEmpId)));
-    const isDoer = isExternalMode || String(rawTask.empId || rawTask.assignedTo) === String(currentUserEmpId) || isTeamMember;
-    const isReviewer = !isExternalMode && String(rawTask.reviewerId || rawTask.reviewer) === String(currentUserEmpId);
-    const isApprover = !isExternalMode && String(rawTask.approverId || rawTask.approver) === String(currentUserEmpId);
+    const myName = getEmployeeName(currentUserEmpId, employeesList);
+    const isReviewer = !isExternalMode && (String(rawTask.reviewerId || rawTask.reviewer) === String(currentUserEmpId) || (rawTask?.reviewerNm && myName && myName.trim().toLowerCase() === rawTask.reviewerNm.trim().toLowerCase()));
+    const isApprover = !isExternalMode && (String(rawTask.approverId || rawTask.approver) === String(currentUserEmpId) || (rawTask?.approverNm && myName && myName.trim().toLowerCase() === rawTask.approverNm.trim().toLowerCase()));
+    const isDoer = isExternalMode || String(rawTask.empId || rawTask.assignedTo || rawTask.extEmpId) === String(currentUserEmpId) || String(rawTask.assignedBy || rawTask.assigned_by || rawTask.createdBy) === String(currentUserEmpId) || isTeamMember || (!isReviewer && !isApprover);
 
     // Get current progress and process for display
     const currentProgress = (rawTask.taskSts || task.rawStatus || task.status || "OPEN").toUpperCase();
-    const currentProcess = rawTask.prcsYesActn || "NONE";
+    const currentProcess = rawTask.prcsYesActn || (rawTask.subStatus === "Under Review" ? "PENDING_REVIEWER" : "NONE");
 
     // Determine if task is in review
     const isUnderReview = currentProcess === "PENDING_REVIEWER" || currentProcess === "PENDING_APPROVER" || currentProcess === "UNDER_REVIEW";
 
-    const renderTeamMember = (empId, role, label, fallbackName = null) => {
+    const renderTeamMember = (empId, role, label, fallbackName = null, isExternal = false) => {
       if (!empId && !fallbackName) return null;
       let name = getEmployeeName(empId, employeesList);
       if ((!name || name === "Unknown" || name.startsWith("User ")) && fallbackName) {
         name = fallbackName;
       }
       let initials = null;
-      if (empId) {
-        initials = getEmployeeInitials(empId, employeesList);
+      if (empId || fallbackName) {
+        initials = getEmployeeInitials(empId, employeesList, fallbackName);
       }
-      if ((!initials || initials === "UN" || initials === "NU" || initials === "TM" || initials === "null") && name && name !== "Unknown") {
+      if ((!initials || initials === "UN" || initials === "NU" || initials === "TM" || initials === "null" || /^\d+$/.test(initials)) && name && name !== "Unknown" && !name.startsWith("User ")) {
         const parts = name.trim().split(" ");
         initials = parts.length >= 2 ? (parts[0][0] + parts[1][0]).toUpperCase() : parts[0].substring(0, 2).toUpperCase();
       }
-      if (!initials) initials = "TM";
+      if (!initials || /^\d+$/.test(initials)) initials = label || "TM";
       const photo = getEmployeePhoto(empId, employeesList);
 
       const roleColors = {
@@ -3087,7 +3093,14 @@ const MyTasks = ({ userRole, onLogout }) => {
             ) : initials || "UN"}
           </div>
           <div style={{ flex: 1 }}>
-            <div style={{ fontWeight: "600", fontSize: "14px", color: "#0f172a" }}>{name}</div>
+            <div style={{ fontWeight: "600", fontSize: "14px", color: "#0f172a", display: "flex", alignItems: "center", gap: "6px" }}>
+              <span>{name}</span>
+              {isExternal && (
+                <span style={{ fontSize: "11px", fontWeight: "600", color: "#2563eb", backgroundColor: "#dbeafe", padding: "1px 6px", borderRadius: "8px" }}>
+                  (External)
+                </span>
+              )}
+            </div>
             <div style={{ fontSize: "12px", color: color.bg, fontWeight: "500" }}>{role}</div>
           </div>
           <span style={{
@@ -3786,7 +3799,7 @@ const MyTasks = ({ userRole, onLogout }) => {
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "12px" }}>
                   {taskTeamMembers.map((tm, idx) => {
                     const empName = getEmployeeName(tm.empId, employeesList);
-                    const empInitials = getEmployeeInitials(tm.empId, employeesList);
+                    const empInitials = getEmployeeInitials(tm.empId, employeesList, tm.fallbackName) || tm.label || "TM";
                     const empPhoto = getEmployeePhoto(tm.empId, employeesList);
                     const isPrimaryExec = String(rawTask.empId || rawTask.executorId) === String(currentUserEmpId);
                     const canManageTeam = !isCompleted && isPrimaryExec && !isReviewer && !isApprover;
@@ -4406,30 +4419,26 @@ const MyTasks = ({ userRole, onLogout }) => {
                 Team
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                {isExternalMode ? (
-                  <>
-                    {(task.isIndividual || projectInfo.isIndividual) && (
-                      renderTeamMember(null, "Assigned By", "AB", "Project Admin")
-                    )}
-                    {renderTeamMember(null, "Executor", "EX", rawTask?.extEmpNm || "External Associate")}
-                    {rawTask?.reviewerId && renderTeamMember(rawTask?.reviewerId, "Reviewer", "RV", rawTask?.reviewerNm)}
-                    {rawTask?.approverId && renderTeamMember(rawTask?.approverId, "Approver", "AP", rawTask?.approverNm)}
-                  </>
-                ) : (
-                  <>
-                    {(task.isIndividual || projectInfo.isIndividual) && (
-                      renderTeamMember(
-                        rawTask?.assignedBy || rawTask?.assigned_by || rawTask?.createdBy,
-                        "Assigned By",
-                        "AB",
-                        rawTask?.assignedByNm || rawTask?.assignedByName
-                      )
-                    )}
-                    {renderTeamMember(rawTask?.empId || rawTask?.assignedTo, "Executor", "EX")}
-                    {renderTeamMember(rawTask?.reviewerId || rawTask?.reviewer, "Reviewer", "RV")}
-                    {renderTeamMember(rawTask?.approverId || rawTask?.approver, "Approver", "AP")}
-                  </>
+                {(task.isIndividual || projectInfo?.isIndividual || rawTask?.taskSource === "INDIVIDUAL") && (
+                  renderTeamMember(
+                    rawTask?.assignedBy || rawTask?.assigned_by || rawTask?.createdBy,
+                    "Assigned By",
+                    "AB",
+                    rawTask?.assignedByNm || rawTask?.assignedByName || (isExternalMode ? "Project Admin" : null)
+                  )
                 )}
+                {(() => {
+                  const isExtTask = rawTask?.taskAsgnTo === 'EXTERNAL' || !!rawTask?.extEmpId || isExternalMode;
+                  return renderTeamMember(
+                    isExtTask ? null : (rawTask?.empId || rawTask?.assignedTo || rawTask?.executorId),
+                    "Executor",
+                    "EX",
+                    rawTask?.extEmpNm || rawTask?.executorName || rawTask?.empNm || rawTask?.empName || rawTask?.assignedToName || (isExtTask ? "External Associate" : null),
+                    isExtTask
+                  );
+                })()}
+                {(rawTask?.reviewerId || rawTask?.reviewer || rawTask?.reviewerNm) && renderTeamMember(rawTask?.reviewerId || rawTask?.reviewer, "Reviewer", "RV", rawTask?.reviewerNm)}
+                {(rawTask?.approverId || rawTask?.approver || rawTask?.approverNm) && renderTeamMember(rawTask?.approverId || rawTask?.approver, "Approver", "AP", rawTask?.approverNm)}
               </div>
             </div>
 
@@ -4478,7 +4487,7 @@ const MyTasks = ({ userRole, onLogout }) => {
                 <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: isExternalMode ? "1px solid #f1f5f9" : "none" }}>
                   <span style={{ fontSize: "13px", color: "#64748b" }}>Assigned To</span>
                   <span style={{ fontSize: "13px", fontWeight: "500", color: "#0f172a" }}>
-                    {isExternalMode ? (rawTask?.extEmpNm || "External Associate") : (getEmployeeName(rawTask?.empId || rawTask?.assignedTo, employeesList) || "Unassigned")}
+                    {(isExternalMode || rawTask?.extEmpNm || rawTask?.taskAsgnTo === 'EXTERNAL' || rawTask?.extEmpId) ? `${rawTask?.extEmpNm || "External Associate"} (External)` : (getEmployeeName(rawTask?.empId || rawTask?.assignedTo, employeesList) || "Unassigned")}
                   </span>
                 </div>
                 {isExternalMode && (
@@ -4910,7 +4919,8 @@ const MyTasks = ({ userRole, onLogout }) => {
   const renderTeamMembers = (task) => {
     const rawTask = task.rawTask || task;
 
-    const executorId = rawTask.empId || rawTask.assignedTo || rawTask.executorId;
+    const isExtTask = rawTask?.taskAsgnTo === 'EXTERNAL' || !!rawTask?.extEmpId || task.isExternal || rawTask?.isExternal;
+    const executorId = isExtTask ? null : (rawTask.empId || rawTask.assignedTo || rawTask.executorId);
     const reviewerId = rawTask.reviewerId || rawTask.reviewer;
     const approverId = rawTask.approverId || rawTask.approver;
     const assignedById = rawTask.assignedBy || rawTask.assigned_by || rawTask.createdBy;
@@ -4927,7 +4937,7 @@ const MyTasks = ({ userRole, onLogout }) => {
         empId: executorId,
         role: "Executor",
         label: "EX",
-        fallbackName: rawTask.executorName || rawTask.empNm || rawTask.empName || rawTask.assignedToName || rawTask.executorNm,
+        fallbackName: rawTask.extEmpNm || rawTask.executorName || rawTask.empNm || rawTask.empName || rawTask.assignedToName || rawTask.executorNm,
         fallbackPhoto: rawTask.executorPhoto || rawTask.empPhoto
       },
       {
@@ -5142,7 +5152,7 @@ const MyTasks = ({ userRole, onLogout }) => {
     if (!task) return null;
 
     const rawTask = task.rawTask || task;
-    const action = getActionButton(rawTask, currentUserEmpId);
+    const action = getActionButton(rawTask, currentUserEmpId, false, employeesList);
     const isDisabled = loadingAction === (task.id || task.taskId);
 
     if (!action) return null;
@@ -5335,7 +5345,7 @@ const MyTasks = ({ userRole, onLogout }) => {
                       <div style={{ display: "flex", flexDirection: "column" }}>
                         <small style={{ fontSize: "10px", textTransform: "uppercase", color: "#94a3b8", fontWeight: "600", letterSpacing: "0.5px" }}>Email</small>
                         <span style={{ fontSize: "13px", color: "#334155", wordBreak: "break-all" }}>
-                          {selectedTask?.rawTask?.email || "—"}
+                          {selectedTask?.rawTask?.email || selectedTask?.rawTask?.extEmpEmail || "—"}
                         </span>
                       </div>
                       <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "4px" }}>
