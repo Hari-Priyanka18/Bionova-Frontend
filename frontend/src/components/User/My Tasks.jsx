@@ -490,48 +490,6 @@ const MyTasks = ({ userRole, onLogout }) => {
   const [loadingTeamMembers, setLoadingTeamMembers] = useState(false);
   const [teamMemberError, setTeamMemberError] = useState("");
 
-  const computeProgress = (checklist, task) => {
-    const rawTask = task?.rawTask || task || {};
-    const rawSts = rawTask.taskSts || rawTask.status || task?.rawStatus || task?.status;
-    const stsStr = typeof rawSts === 'object' && rawSts !== null
-      ? (rawSts.statusNm || rawSts.status_nm || "OPEN")
-      : (rawSts || "OPEN");
-    const taskSts = String(stsStr).toUpperCase();
-
-    // Always 100 for closed tasks
-    if (taskSts === 'COMPLETED' || taskSts === 'CLOSED') return 100;
-
-    const hasReviewer = !!(rawTask.reviewerId || rawTask.reviewer);
-    const hasApprover = !!(rawTask.approverId || rawTask.approver);
-    const isExt = task?.isExternal || rawTask.isExternal || isExternalMode;
-    const hasDependency = hasReviewer || hasApprover || isExt || rawTask.prcsFlg === true || rawTask.prcsFlg === 'YES' || rawTask.prcsFlg === 1 || rawTask.prcsFlg === 'true';
-
-    // ─── No dependency: executor checklist fills 0–100% ───
-    if (!hasDependency) {
-      if (!checklist || checklist.length === 0) return 0;
-      return Math.round((checklist.filter(i => i.completed).length / checklist.length) * 100);
-    }
-
-    // ─── Has dependency: executor fills 0–80%, reviewer +10%, approver +10% ───
-    const currentProcess = (rawTask.prcsYesActn || "NONE").toUpperCase();
-
-    // Approver stage done → 100%
-    if (taskSts === 'COMPLETED' || taskSts === 'CLOSED') return 100;
-
-    // Under approver review → 90%
-    if (currentProcess === 'PENDING_APPROVER') return 90;
-
-    // Under reviewer review → 80% (submitted, waiting for reviewer)
-    if (currentProcess === 'PENDING_REVIEWER' || taskSts === 'UNDER_REVIEW' || taskSts === 'SUBMIT_REVIEW') return 80;
-
-    // Executor working: checklist contributes to 0–80%
-    if (!checklist || checklist.length === 0) return 0;
-    const completed = checklist.filter(i => i.completed).length;
-    // Scale to max 79% (so hitting 100% checklist shows 79, not 80 — 80 means submitted)
-    const executorPct = Math.round((completed / checklist.length) * 79);
-    return executorPct;
-  };
-
   const fetchExternalTask = async () => {
     try {
       setIsLoading(true);
@@ -605,6 +563,7 @@ const MyTasks = ({ userRole, onLogout }) => {
           },
           isExternal: true
         };
+
         const chks = (data.checklists || []).map(c => ({
           id: c.chkId,
           text: (c.chkCd ? `[${c.chkCd}] ` : "") + (c.chkNm || c.chkDesc || ""),
@@ -622,54 +581,12 @@ const MyTasks = ({ userRole, onLogout }) => {
           url: a.atPath
         }));
 
-        const taskObj = {
-          id: data.taskCd || `TSK-${data.taskId}`,
-          taskCode: data.taskCd || `TSK-${data.taskId}`,
-          taskId: data.taskId,
-          title: data.taskNm,
-          description: data.taskDesc,
-          status: data.taskSts || "OPEN",
-          rawStatus: data.taskSts || "OPEN",
-          priority: data.priority || "Normal",
-          dueDate: data.endDt,
-          stDt: data.stDt,
-          endDt: data.endDt,
-          progress: 0,
-          project: data.prjNm || (data.isIndividual || !data.prjId ? "Individual Task" : "Assignment"),
-          projectId: data.prjId,
-          milestone: data.mlstnTtl || "—",
-          milestoneId: data.mId,
-          isIndividual: !!(data.isIndividual || data.taskSource === "INDIVIDUAL" || data.entityTyp === "INDIVIDUAL_TASK" || (!data.prjId && (!data.prjNm || data.prjNm === "Individual Task"))),
-          rawTask: {
-            ...data,
-            empId: data.extEmpId,
-            assignedTo: data.extEmpId,
-            extEmpNm: data.extEmpNm || data.ext_emp_nm,
-            extEmpMail: data.extEmpMail || data.ext_emp_mail || data.extEmpEmail || data.ext_emp_email || data.email || data.mail || data.extMail || data.extEmail,
-            email: data.extEmpMail || data.ext_emp_mail || data.extEmpEmail || data.ext_emp_email || data.email || data.mail || data.extMail || data.extEmail,
-            companyNm: data.companyNm || data.company_nm,
-            taskSts: data.taskSts,
-            priority: data.priority,
-            stDt: data.stDt,
-            endDt: data.endDt,
-            taskDesc: data.taskDesc,
-            addlRem: data.addlRem,
-            isExternal: true,
-            prcsYesActn: "NONE"
-          },
-          isExternal: true
-        };
-
-        const calcProgress = computeProgress(chks, taskObj);
-        taskObj.progress = calcProgress;
-
         setSelectedTask(taskObj);
         setShowDetailView(true);
         setUpdateChecklist(chks);
         setTaskAttachments(atts);
         setUpdateRemarks(data.addlRem || "");
         setUpdateProgressVal(calculatedProgress);
-
       }
     } catch (e) {
       console.error("Failed to fetch external task", e);
@@ -1814,32 +1731,6 @@ const MyTasks = ({ userRole, onLogout }) => {
 
   const handleReviewerApprove = async (task) => {
     if (!task) return;
-    if (isExternalMode) {
-      try {
-        setLoadingAction(task.id || task.taskId);
-        const originalTask = task.rawTask || task;
-        const targetPrcs = originalTask?.approverId ? "PENDING_APPROVER" : "NONE";
-        const nextSts = originalTask?.approverId ? "UNDER_REVIEW" : "COMPLETED";
-        await fetch(`${apiBaseUrl}/api/external-tasks/${externalToken}/update`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ taskSts: nextSts, prcsYesActn: targetPrcs, subStatus: originalTask?.approverId ? "Pending Approval" : "Completed" })
-        });
-        setSelectedTask(prev => ({
-          ...prev,
-          status: nextSts,
-          rawStatus: nextSts,
-          rawTask: { ...prev.rawTask, taskSts: nextSts, prcsYesActn: targetPrcs }
-        }));
-        triggerAlert("success", "Approved", originalTask?.approverId ? "Approved and sent to Approver." : "Task approved and completed.");
-      } catch (err) {
-        console.error("Error in external reviewer approve:", err);
-        triggerAlert("danger", "Error", "Failed to approve task.");
-      } finally {
-        setLoadingAction(null);
-      }
-      return;
-    }
     try {
       setLoadingAction(task.id || task.taskId);
       const taskId = task.taskId || task.id;
@@ -1871,29 +1762,6 @@ const MyTasks = ({ userRole, onLogout }) => {
 
   const handleApproverApprove = async (task) => {
     if (!task) return;
-    if (isExternalMode) {
-      try {
-        setLoadingAction(task.id || task.taskId);
-        await fetch(`${apiBaseUrl}/api/external-tasks/${externalToken}/update`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ taskSts: "COMPLETED", prcsYesActn: "NONE", subStatus: "Completed" })
-        });
-        setSelectedTask(prev => ({
-          ...prev,
-          status: "COMPLETED",
-          rawStatus: "COMPLETED",
-          rawTask: { ...prev.rawTask, taskSts: "COMPLETED", prcsYesActn: "NONE" }
-        }));
-        triggerAlert("success", "Closed", "Task closed successfully.");
-      } catch (err) {
-        console.error("Error in external approver approve:", err);
-        triggerAlert("danger", "Error", "Failed to close task.");
-      } finally {
-        setLoadingAction(null);
-      }
-      return;
-    }
     try {
       setLoadingAction(task.id || task.taskId);
       const taskId = task.taskId || task.id;
@@ -2177,12 +2045,6 @@ const MyTasks = ({ userRole, onLogout }) => {
       return;
     }
 
-    if (!id) return;
-    const taskStatus = (selectedTask?.rawTask?.taskSts || selectedTask?.rawStatus || selectedTask?.status || "OPEN").toUpperCase();
-    if (taskStatus === "OPEN" || taskStatus === "DRAFT") {
-      triggerAlert("warning", "Task Not Started", "Please click the Start button to begin working on this task and its checklist.");
-      return;
-    }
     if (isExternalMode) {
       if (isExpired) return;
       const targetItem = updateChecklist.find(c => c.id === id);
@@ -2358,6 +2220,48 @@ const MyTasks = ({ userRole, onLogout }) => {
       triggerAlert("danger", "Error", "Failed to process: " + (err.response?.data?.message || err.message));
     }
   };
+
+  const computeProgress = (checklist, task) => {
+    const rawTask = task?.rawTask || task || {};
+    const rawSts = rawTask.taskSts || rawTask.status || task?.rawStatus || task?.status;
+    const stsStr = typeof rawSts === 'object' && rawSts !== null
+      ? (rawSts.statusNm || rawSts.status_nm || "OPEN")
+      : (rawSts || "OPEN");
+    const taskSts = String(stsStr).toUpperCase();
+
+    // Always 100 for closed tasks
+    if (taskSts === 'COMPLETED' || taskSts === 'CLOSED') return 100;
+
+    const hasReviewer = !!(rawTask.reviewerId || rawTask.reviewer);
+    const hasApprover = !!(rawTask.approverId || rawTask.approver);
+    const hasDependency = hasReviewer || hasApprover;
+
+    // ─── No dependency: executor checklist fills 0–100% ───
+    if (!hasDependency) {
+      if (!checklist || checklist.length === 0) return 0;
+      return Math.round((checklist.filter(i => i.completed).length / checklist.length) * 100);
+    }
+
+    // ─── Has dependency: executor fills 0–80%, reviewer +10%, approver +10% ───
+    const currentProcess = (rawTask.prcsYesActn || "NONE").toUpperCase();
+
+    // Approver stage done → 100%
+    if (taskSts === 'COMPLETED' || taskSts === 'CLOSED') return 100;
+
+    // Under approver review → 90%
+    if (currentProcess === 'PENDING_APPROVER') return 90;
+
+    // Under reviewer review → 80% (submitted, waiting for reviewer)
+    if (currentProcess === 'PENDING_REVIEWER' || taskSts === 'UNDER_REVIEW' || taskSts === 'SUBMIT_REVIEW') return 80;
+
+    // Executor working: checklist contributes to 0–80%
+    if (!checklist || checklist.length === 0) return 0;
+    const completed = checklist.filter(i => i.completed).length;
+    // Scale to max 79% (so hitting 100% checklist shows 79, not 80 — 80 means submitted)
+    const executorPct = Math.round((completed / checklist.length) * 79);
+    return executorPct;
+  };
+
 
   const triggerAlert = (type, title, message) => {
     setAlertConfig({ type, title, message });
@@ -3126,11 +3030,8 @@ const MyTasks = ({ userRole, onLogout }) => {
 
     // Determine if task is in review
     const isUnderReview = currentProcess === "PENDING_REVIEWER" || currentProcess === "PENDING_APPROVER" || currentProcess === "UNDER_REVIEW";
-    const isNotStarted = currentProgress === "OPEN" || currentProgress === "DRAFT";
-
 
     const renderTeamMember = (empId, role, label, fallbackName = null, isExternal = false) => {
-
       if (!empId && !fallbackName) return null;
       let name = getEmployeeName(empId, employeesList);
       if ((!name || name === "Unknown" || name.startsWith("User ")) && fallbackName) {
@@ -3165,34 +3066,32 @@ const MyTasks = ({ userRole, onLogout }) => {
           backgroundColor: color.light,
           border: `1px solid ${color.bg}33`
         }}>
-          {showAvatar && (
-            <div style={{
-              width: "40px",
-              height: "40px",
-              borderRadius: "50%",
-              backgroundColor: color.bg,
-              color: "white",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: "12px",
-              fontWeight: "700",
-              overflow: "hidden",
-              flexShrink: 0
-            }}>
-              {photo ? (
-                <img
-                  src={photo.startsWith('data:') || photo.startsWith('http') ? photo : `data:image/jpeg;base64,${photo}`}
-                  alt={name}
-                  style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                  onError={(e) => {
-                    e.target.style.display = "none";
-                    e.target.parentElement.textContent = initials || "UN";
-                  }}
-                />
-              ) : initials || "UN"}
-            </div>
-          )}
+          <div style={{
+            width: "40px",
+            height: "40px",
+            borderRadius: "50%",
+            backgroundColor: color.bg,
+            color: "white",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: "12px",
+            fontWeight: "700",
+            overflow: "hidden",
+            flexShrink: 0
+          }}>
+            {photo ? (
+              <img
+                src={photo.startsWith('data:') || photo.startsWith('http') ? photo : `data:image/jpeg;base64,${photo}`}
+                alt={name}
+                style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                onError={(e) => {
+                  e.target.style.display = "none";
+                  e.target.parentElement.textContent = initials || "UN";
+                }}
+              />
+            ) : initials || "UN"}
+          </div>
           <div style={{ flex: 1 }}>
             <div style={{ fontWeight: "600", fontSize: "14px", color: "#0f172a", display: "flex", alignItems: "center", gap: "6px" }}>
               <span>{name}</span>
@@ -3255,8 +3154,7 @@ const MyTasks = ({ userRole, onLogout }) => {
       }
 
       // REVIEWER ACTIONS
-      const isReviewerAction = isReviewer || (isExternalMode && (currentProcess === "PENDING_REVIEWER" || currentProcess === "UNDER_REVIEW" || currentProgress === "UNDER_REVIEW" || currentProgress === "SUBMIT_REVIEW"));
-      if (isReviewerAction && (currentProcess === "PENDING_REVIEWER" || currentProcess === "UNDER_REVIEW" || currentProgress === "UNDER_REVIEW" || currentProgress === "SUBMIT_REVIEW")) {
+      if (isReviewer && (currentProcess === "PENDING_REVIEWER" || currentProcess === "UNDER_REVIEW")) {
         return (
           <div style={{ display: "flex", flexDirection: "column", gap: "8px", width: "100%" }}>
             <button
@@ -3274,7 +3172,7 @@ const MyTasks = ({ userRole, onLogout }) => {
               className="cc-btn primary"
               onClick={async () => {
                 await handleReviewerApprove(task);
-                if (onBack) onBack();
+                onBack();
               }}
               style={{ borderRadius: "6px", backgroundColor: "#10b981", border: "none", color: "white", width: "100%" }}
             >
@@ -3285,8 +3183,7 @@ const MyTasks = ({ userRole, onLogout }) => {
       }
 
       // APPROVER ACTIONS
-      const isApproverAction = isApprover || (isExternalMode && currentProcess === "PENDING_APPROVER");
-      if (isApproverAction && currentProcess === "PENDING_APPROVER") {
+      if (isApprover && currentProcess === "PENDING_APPROVER") {
         return (
           <div style={{ display: "flex", flexDirection: "column", gap: "8px", width: "100%" }}>
             <button
@@ -3304,7 +3201,7 @@ const MyTasks = ({ userRole, onLogout }) => {
               className="cc-btn primary"
               onClick={async () => {
                 await handleApproverApprove(task);
-                if (onBack) onBack();
+                onBack();
               }}
               style={{ borderRadius: "6px", backgroundColor: "#10b981", border: "none", color: "white", width: "100%" }}
             >
@@ -3373,11 +3270,11 @@ const MyTasks = ({ userRole, onLogout }) => {
 
           // Determine label:
           // - Not all checked -> Save Updated Progress
-          // - All checked + (has reviewer OR workflow flag OR external mode) -> Send to Reviewer
+          // - All checked + (has reviewer OR workflow flag) -> Send to Reviewer
           // - All checked + no reviewer + no workflow -> Mark as Completed
           let label = "Save Updated Progress";
           if (allChecked || noChecklist) {
-            if (hasWorkflow || hasReviewer || isExternalMode || rawTask?.isExternal || rawTask?.prcsFlg !== false) {
+            if (hasWorkflow || hasReviewer) {
               label = "Send to Reviewer";
             } else {
               label = "Mark as Completed";
@@ -3759,12 +3656,10 @@ const MyTasks = ({ userRole, onLogout }) => {
                         alignItems: "center",
                         gap: "8px"
                       }}>
-
                         <AlertCircle size={15} color="#d97706" style={{ flexShrink: 0 }} />
                         <span>Click the <strong>Start</strong> button above to begin working on this task before checking off items.</span>
                       </div>
                     )}
-
                     {isCompleted && (
                       <div style={{
                         fontSize: "12px",
@@ -3782,7 +3677,6 @@ const MyTasks = ({ userRole, onLogout }) => {
                         <span>Task is closed. Checklists are locked (read-only).</span>
                       </div>
                     )}
-
                     {isUnderReview && (
                       <div style={{
                         fontSize: "12px",
@@ -4525,34 +4419,13 @@ const MyTasks = ({ userRole, onLogout }) => {
                 Team
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                {isExternalMode ? (
-                  <>
-                    {(task.isIndividual || projectInfo.isIndividual || rawTask?.isIndividual || rawTask?.taskSource === "INDIVIDUAL" || rawTask?.entityTyp === "INDIVIDUAL_TASK" || task.project === "Individual Task") && (
-                      renderTeamMember(
-                        rawTask?.assignedBy || rawTask?.assigned_by || rawTask?.createdBy,
-                        "Assigned By",
-                        "AB",
-                        rawTask?.assignedByNm || rawTask?.assignedByName || rawTask?.createdByName || rawTask?.assignerName,
-                        false
-                      )
-                    )}
-                    {renderTeamMember(null, "Executor", "EX", rawTask?.extEmpNm || "External Associate")}
-                  </>
-                ) : (
-                  <>
-                    {(task.isIndividual || projectInfo.isIndividual || rawTask?.assignedBy || rawTask?.assigned_by) && (
-                      renderTeamMember(
-                        rawTask?.assignedBy || rawTask?.assigned_by || rawTask?.createdBy,
-                        "Assigned By",
-                        "AB",
-                        rawTask?.assignedByNm || rawTask?.assignedByName,
-                        !(task.isIndividual || projectInfo.isIndividual || rawTask?.isIndividual || rawTask?.taskSource === "INDIVIDUAL")
-                      )
-                    )}
-                    {renderTeamMember(rawTask?.empId || rawTask?.assignedTo, "Executor", "EX")}
-                    {renderTeamMember(rawTask?.reviewerId || rawTask?.reviewer, "Reviewer", "RV")}
-                    {renderTeamMember(rawTask?.approverId || rawTask?.approver, "Approver", "AP")}
-                  </>
+                {(task.isIndividual || projectInfo?.isIndividual || rawTask?.taskSource === "INDIVIDUAL") && (
+                  renderTeamMember(
+                    rawTask?.assignedBy || rawTask?.assigned_by || rawTask?.createdBy,
+                    "Assigned By",
+                    "AB",
+                    rawTask?.assignedByNm || rawTask?.assignedByName || (isExternalMode ? "Project Admin" : null)
+                  )
                 )}
                 {(() => {
                   const isExtTask = rawTask?.taskAsgnTo === 'EXTERNAL' || !!rawTask?.extEmpId || isExternalMode;
@@ -5473,8 +5346,6 @@ const MyTasks = ({ userRole, onLogout }) => {
                         <small style={{ fontSize: "10px", textTransform: "uppercase", color: "#94a3b8", fontWeight: "600", letterSpacing: "0.5px" }}>Email</small>
                         <span style={{ fontSize: "13px", color: "#334155", wordBreak: "break-all" }}>
                           {selectedTask?.rawTask?.email || selectedTask?.rawTask?.extEmpEmail || "—"}
-
-                          {selectedTask?.rawTask?.extEmpMail || selectedTask?.rawTask?.ext_emp_mail || selectedTask?.rawTask?.extEmpEmail || selectedTask?.rawTask?.ext_emp_email || selectedTask?.rawTask?.email || selectedTask?.rawTask?.mail || selectedTask?.rawTask?.extEmail || selectedTask?.rawTask?.extMail || selectedTask?.email || "—"}
                         </span>
                       </div>
                       <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "4px" }}>
