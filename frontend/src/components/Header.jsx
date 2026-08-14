@@ -210,7 +210,9 @@ const Header = ({ title, subtitle, showSearch = false, statusBadge, progressPerc
       });
       if (res.ok) {
         const data = await res.json();
-        setNotifications(data);
+        // Filter out notifications that were cleared locally
+        const hiddenIds = JSON.parse(localStorage.getItem("hiddenNotifIds") || "[]");
+        setNotifications(data.filter(n => !hiddenIds.includes(n.id)));
       }
     } catch (err) {
       console.error("Failed to fetch notifications", err);
@@ -230,15 +232,28 @@ const Header = ({ title, subtitle, showSearch = false, statusBadge, progressPerc
   };
 
   const clearAllNotifications = async () => {
+    const readNotifs = notifications.filter(n => n.isRead);
+    if (readNotifs.length === 0) return;
+
     try {
-      await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/notifications/clear-all`, {
-        method: "DELETE",
-        headers: authHeaders()
-      }).catch(() => {});
-      setNotifications([]);
+      // 1. Store the cleared IDs in localStorage so they remain hidden on re-login
+      const hiddenIds = JSON.parse(localStorage.getItem("hiddenNotifIds") || "[]");
+      const newHiddenIds = [...new Set([...hiddenIds, ...readNotifs.map(n => n.id)])];
+      localStorage.setItem("hiddenNotifIds", JSON.stringify(newHiddenIds));
+
+      // 2. Attempt to delete each read notification from the backend
+      await Promise.all(
+        readNotifs.map(notif => 
+          fetch(`${import.meta.env.VITE_API_BASE_URL}/api/notifications/${notif.id}`, {
+            method: "DELETE",
+            headers: authHeaders()
+          }).catch(() => {})
+        )
+      );
+      // Remove read notifications from the UI state
+      setNotifications(prev => prev.filter(n => !n.isRead));
     } catch (err) {
-      console.error("Failed to clear notifications", err);
-      setNotifications([]);
+      console.error("Failed to clear read notifications", err);
     }
   };
 
@@ -555,7 +570,7 @@ const Header = ({ title, subtitle, showSearch = false, statusBadge, progressPerc
                         </span>
                       )}
                     </div>
-                    {notifications.length > 0 && (
+                    {notifications.filter(n => n.isRead).length > 0 && (
                       <button
                         onClick={(e) => { e.stopPropagation(); clearAllNotifications(); }}
                         style={{
@@ -571,9 +586,9 @@ const Header = ({ title, subtitle, showSearch = false, statusBadge, progressPerc
                           fontWeight: "600",
                           cursor: "pointer"
                         }}
-                        title="Clear all notifications"
+                        title="Clear read notifications"
                       >
-                        <Trash2 size={13} /> Clear
+                        <Trash2 size={13} /> Clear Seen
                       </button>
                     )}
                   </div>

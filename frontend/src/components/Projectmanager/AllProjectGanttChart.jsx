@@ -22,6 +22,125 @@ const SC = {
 const ROW_H_NORMAL   = 52;
 const ROW_H_BASELINE = 72;
 
+// ── Searchable Select Component for Projects ───────────────────
+const SearchableSelect = ({ options, value, onChange, placeholder, style, disabled, className }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const wrapperRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const filtered = options.filter(o => o.label.toLowerCase().includes(search.toLowerCase()));
+  const selected = options.find(o => String(o.value) === String(value));
+
+  return (
+    <div ref={wrapperRef} style={{ position: 'relative', width: '220px', flexShrink: 0, ...style }}>
+      <div
+        onClick={() => !disabled && setIsOpen(!isOpen)}
+        className={className}
+        style={{
+          padding: '6px 12px',
+          border: '1px solid #cbd5e1',
+          borderRadius: '6px',
+          background: disabled ? '#f1f5f9' : 'white',
+          cursor: disabled ? 'not-allowed' : 'pointer',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          minHeight: '34px',
+          fontSize: '13px',
+          color: selected ? '#0f172a' : '#64748b',
+          boxSizing: 'border-box'
+        }}
+      >
+        <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          {selected ? selected.label : (placeholder || "All Projects")}
+        </span>
+        <ChevronDown size={14} style={{ color: '#64748b', flexShrink: 0, marginLeft: '6px', transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+      </div>
+      {isOpen && !disabled && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 'calc(100% + 4px)',
+            left: 0,
+            width: '260px',
+            background: 'white',
+            border: '1px solid #cbd5e1',
+            borderRadius: '6px',
+            zIndex: 99999,
+            maxHeight: '240px',
+            overflowY: 'auto',
+            boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1)'
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div style={{ padding: '6px 8px', position: 'sticky', top: 0, background: 'white', borderBottom: '1px solid #e2e8f0', zIndex: 2 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '4px 8px', border: '1px solid #cbd5e1', borderRadius: '4px', background: '#fafbfc' }}>
+              <Search size={13} color="#94a3b8" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search projects..."
+                autoFocus
+                style={{
+                  width: '100%',
+                  border: 'none',
+                  outline: 'none',
+                  fontSize: '12px',
+                  background: 'transparent'
+                }}
+              />
+            </div>
+          </div>
+          <div style={{ padding: '4px 0' }}>
+            {filtered.map(opt => (
+              <div
+                key={opt.value}
+                onClick={() => {
+                  onChange({ target: { value: opt.value } });
+                  setIsOpen(false);
+                  setSearch("");
+                }}
+                style={{
+                  padding: '7px 12px',
+                  cursor: 'pointer',
+                  background: String(value) === String(opt.value) ? '#eff6ff' : 'white',
+                  fontSize: '13px',
+                  color: String(value) === String(opt.value) ? '#1d4ed8' : '#334155',
+                  fontWeight: String(value) === String(opt.value) ? '600' : '400'
+                }}
+                onMouseOver={(e) => {
+                  if (String(value) !== String(opt.value)) e.currentTarget.style.background = '#f8fafc';
+                }}
+                onMouseOut={(e) => {
+                  if (String(value) !== String(opt.value)) e.currentTarget.style.background = 'white';
+                }}
+              >
+                {opt.label}
+              </div>
+            ))}
+            {filtered.length === 0 && (
+              <div style={{ padding: '10px 12px', color: '#94a3b8', fontSize: '12px', textAlign: 'center' }}>
+                No projects found
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 export default function AllProjectGanttChart({ userRole, onLogout }) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -406,7 +525,7 @@ export default function AllProjectGanttChart({ userRole, onLogout }) {
   const handleExportCSV = () => {
     let csvContent = "data:text/csv;charset=utf-8,Type,ID,Name,Start Date,End Date,Plan Progress %,Actual Progress %,Status\n";
     visibleRows.forEach(row => {
-      const rowData = [row.type, row.id, `"${row.name}"`, row.start, row.end, row.prog, row.aProg, row.status];
+      const rowData = [row.type, row.id, `"${row.name}"`, row.start, row.end, 100, row.aProg, row.status];
       csvContent += rowData.join(",") + "\n";
     });
     const encodedUri = encodeURI(csvContent);
@@ -482,25 +601,27 @@ export default function AllProjectGanttChart({ userRole, onLogout }) {
                 <Search size={14} color="#94a3b8"/>
                 <input type="text" placeholder="Search projects..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
               </div>
-              <select className="gantt-filter-select" style={{appearance: 'auto', border: '1px solid #e2e8f0', background: 'white'}} value={projectFilter} onChange={e => {
-                const val = e.target.value;
-                setProjectFilter(val);
-                if (val !== "All Projects") {
-                  const projRow = ganttRows.find(r => r.type === 'project' && String(r.id) === String(val));
-                  setSingleProjectView(projRow || null);
-                  setTableCollapsed(true);
-                  // Auto expand this project
-                  if (projRow) setExpandedProjects(prev => new Set([...prev, projRow.id]));
-                } else {
-                  setSingleProjectView(null);
-                  setTableCollapsed(false);
-                }
-              }}>
-                <option value="All Projects">All Projects</option>
-                {ganttRows.filter(r => r.type === 'project').map(p => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
-                ))}
-              </select>
+              <SearchableSelect
+                options={[
+                  { value: "All Projects", label: "All Projects" },
+                  ...ganttRows.filter(r => r.type === 'project').map(p => ({ value: p.id, label: p.name }))
+                ]}
+                value={projectFilter}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setProjectFilter(val);
+                  if (val !== "All Projects") {
+                    const projRow = ganttRows.find(r => r.type === 'project' && String(r.id) === String(val));
+                    setSingleProjectView(projRow || null);
+                    setTableCollapsed(true);
+                    if (projRow) setExpandedProjects(prev => new Set([...prev, projRow.id]));
+                  } else {
+                    setSingleProjectView(null);
+                    setTableCollapsed(false);
+                  }
+                }}
+                placeholder="All Projects"
+              />
               <div className="gantt-filter-date" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <input type="date" value={startDateFilter} onChange={e => setStartDateFilter(e.target.value)} style={{ border: '1px solid #e2e8f0', padding: '4px 8px', borderRadius: '4px', fontSize: '12px' }} title="Start Date" />
                 <span style={{ color: '#64748b' }}>-</span>
@@ -781,7 +902,7 @@ export default function AllProjectGanttChart({ userRole, onLogout }) {
                             {/* ── Planned Bar ── */}
                             <div
                               style={{ position: 'absolute', top: barTop, left: barLeft, width: barWidth, height: barH, borderRadius: radius, overflow: 'hidden', cursor: 'pointer', zIndex: 4, boxShadow: isActive ? `0 0 0 2px ${highlightColor}` : 'none' }}
-                              title={`${row.name} | ${row.start} → ${row.end} | ${row.prog}%`}
+                              title={`${row.name} | ${row.start} → ${row.end} | 100%`}
                               onClick={(e) => { e.stopPropagation(); setActiveRow(row.id); if (row.type === 'project') toggleProjectExpand(row.id); if (row.type === 'milestone') toggleMilestoneExpand(row.id); }}
                             >
                               {/* Background track */}
@@ -793,7 +914,7 @@ export default function AllProjectGanttChart({ userRole, onLogout }) {
                             {/* Progress % badge */}
                             {barWidth > 30 && (
                               <span style={{ position: 'absolute', top: baseline ? barTop + barH + 14 : barTop + barH + 2, left: barLeft, fontSize: 9, color: barColor, fontWeight: 600, pointerEvents: 'none' }}>
-                                {row.prog}%
+                                {baseline ? `${row.prog}%` : '100%'}
                               </span>
                             )}
 

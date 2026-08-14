@@ -1904,7 +1904,7 @@ const AgriLandAllocation = ({ userRole, onLogout }) => {
                       ) : currentItems.length > 0 ? (
                         currentItems.map((land, index) => (
                           <tr key={land.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                            <td data-label="#" style={{ padding: '14px 20px', fontSize: '14px', color: '#334155' }}>{index + 1}</td>
+                            <td data-label="#" style={{ padding: '14px 20px', fontSize: '14px', color: '#334155' }}>{indexOfFirstRecord + index + 1}</td>
                             <td data-label="LOGO" style={{ padding: '14px 20px' }}>
                               {land.logo ? (
                                 <img src={land.logo} alt="Logo" style={{ width: '32px', height: '32px', borderRadius: '4px', objectFit: 'cover', border: '1px solid #e2e8f0' }} />
