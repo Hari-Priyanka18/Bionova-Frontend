@@ -725,12 +725,13 @@ const MilestoneCreation = ({ onLogout, userRole }) => {
         triggerAlert(
           "success",
           "Success",
-          location.state.message || "Project created successfully! Please configure milestones and tasks."
+          location.state.message || "Milestone created successfully! Please configure milestones and tasks."
         );
+        delete location.state.showSuccessAlert;
       }
       window.history.replaceState({}, document.title);
     }
-  }, [location.state, milestoneList]);
+  }, [location.state]);
 
   // ── Alert ────────────────────────────────────────────────────
   const triggerAlert = (type, title, message, onClose = null) => {
@@ -1742,27 +1743,32 @@ const MilestoneCreation = ({ onLogout, userRole }) => {
 
   // ── Load Milestone for View ──────────────────────────────────
   const loadMilestoneForView = async (m) => {
+    setView("view");
     setLoading(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+
+    setMilestone({
+      drft_m_id: m.id,
+      drft_prj_id: m.projectId || "",
+      mlstm_cd: m.code || "",
+      mlstm_ttl: m.title || "",
+      mlstm_desc: m.original?.mlstnDesc || m.original?.mlstm_desc || "",
+      mlstm_days: m.duration || "",
+      mlstm_dep_flg: m.original?.mlstnDepFlg || m.original?.mlstm_dep_flg || false,
+      mlstm_dep_typ: m.original?.mlstnDepTyp || m.original?.mlstm_dep_typ || "INDEPENDENT",
+      mlstm_dep_m_id: m.original?.mlstnDepMId || m.original?.mlstm_dep_m_id || "",
+      tent_st_dt: m.startDate || "",
+      tent_end_dt: m.endDate || "",
+      chk_id: m.original?.chkId || m.original?.chk_id || null,
+      file_url: m.original?.fileUrl || m.original?.file_url || "",
+      addl_rem: m.original?.addlRem || m.original?.addl_rem || "",
+      mlstm_sts: m.status || (m.type === 'live' ? "LIVE" : "DRAFT"),
+      sts: true
+    });
+    setTasks([]);
+
     try {
       if (m.type === 'live') {
-        setMilestone({
-          drft_m_id: m.id,
-          drft_prj_id: m.projectId || "",
-          mlstm_cd: m.code || "",
-          mlstm_ttl: m.title || "",
-          mlstm_desc: m.original?.mlstnDesc || m.original?.mlstm_desc || "",
-          mlstm_days: m.duration || "",
-          mlstm_dep_flg: m.original?.mlstnDepFlg || m.original?.mlstm_dep_flg || false,
-          mlstm_dep_typ: m.original?.mlstnDepTyp || m.original?.mlstm_dep_typ || "INDEPENDENT",
-          mlstm_dep_m_id: m.original?.mlstnDepMId || m.original?.mlstm_dep_m_id || "",
-          tent_st_dt: m.startDate || "",
-          tent_end_dt: m.endDate || "",
-          chk_id: m.original?.chkId || m.original?.chk_id || null,
-          file_url: m.original?.fileUrl || m.original?.file_url || "",
-          addl_rem: m.original?.addlRem || m.original?.addl_rem || "",
-          mlstm_sts: m.status || "LIVE",
-          sts: true
-        });
         let tasksData = [];
         try {
           tasksData = await liveTaskApi.getByMilestone(m.id);
@@ -1976,7 +1982,6 @@ const MilestoneCreation = ({ onLogout, userRole }) => {
         }));
         setTasks(mappedTasks);
       }
-      setView("view");
     } catch (err) {
       console.error("Error loading milestone for view:", err);
       triggerAlert("error", "Load Error", "Failed to load milestone details.");
@@ -3002,6 +3007,22 @@ const MilestoneCreation = ({ onLogout, userRole }) => {
 
   // ── Render Detail View (Read-Only) ───────────────────────────
   const renderDetailView = () => {
+    if (loading) {
+      return (
+        <div className="mc-content">
+          <div className="mc-form-card" style={{ padding: "60px 20px", textAlign: "center" }}>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "16px" }}>
+              <div className="spinner-border text-primary" role="status" style={{ width: "3rem", height: "3rem" }}>
+                <span className="visually-hidden">Loading...</span>
+              </div>
+              <h3 style={{ margin: 0, color: "#1e293b", fontSize: "18px", fontWeight: "600" }}>Loading Task Details...</h3>
+              <p style={{ margin: 0, color: "#64748b", fontSize: "14px" }}>Please wait while we fetch the milestone and task details.</p>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     const project = projects.find(p => p.prj_id === parseInt(milestone.drft_prj_id));
     const isLive = milestone.mlstm_sts !== "DRAFT" && milestone.mlstm_sts !== "draft";
     const dependentMilestone = milestoneList.find(m => m.id === parseInt(milestone.mlstm_dep_m_id) && m.type === (isLive ? 'live' : 'draft'));

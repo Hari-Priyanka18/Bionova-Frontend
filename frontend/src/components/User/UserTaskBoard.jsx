@@ -19,15 +19,23 @@ const authHeaders = () => ({
 });
 
 const formatDate = (dateStr) => {
-  if (!dateStr || typeof dateStr !== 'string') return dateStr || '';
-  const cleanStr = dateStr.trim().split('T')[0].split(' ')[0];
-  if (/^\d{2}\/\d{2}\/\d{4}$/.test(cleanStr)) return cleanStr;
-  const parts = cleanStr.split('-');
-  if (parts.length === 3 && parts[0].length === 4) {
-    const [year, month, day] = parts;
-    return `${day.padStart(2, '0')}/${month.padStart(2, '0')}/${year}`;
+  if (!dateStr) return '';
+  if (dateStr instanceof Date) {
+    const day = String(dateStr.getDate()).padStart(2, '0');
+    const month = String(dateStr.getMonth() + 1).padStart(2, '0');
+    const year = dateStr.getFullYear();
+    return `${day}/${month}/${year}`;
   }
-  return dateStr;
+  const cleanStr = String(dateStr).trim().split('T')[0].split(' ')[0];
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(cleanStr)) return cleanStr;
+  const parts = cleanStr.split(/[-/]/);
+  if (parts.length === 3) {
+    if (parts[0].length === 4) {
+      const [year, month, day] = parts;
+      return `${day.padStart(2, '0')}/${month.padStart(2, '0')}/${year}`;
+    }
+  }
+  return cleanStr;
 };
 
 // ------------------- Helper: Determine display status from raw task -------------------
@@ -97,20 +105,86 @@ const checkIsUpcoming = (task) => {
   return false;
 };
 
+const parseTaskDate = (val) => {
+  if (!val) return null;
+  if (val instanceof Date) {
+    if (isNaN(val.getTime())) return null;
+    const d = new Date(val);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }
+  const str = String(val).trim();
+  if (!str || str === "N/A" || str === "—") return null;
+
+  if (/^\d{1,2}[\/-]\d{1,2}[\/-]\d{4}/.test(str)) {
+    const parts = str.split(/[\/-]/);
+    const day = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10) - 1;
+    const year = parseInt(parts[2], 10);
+    const d = new Date(year, month, day);
+    d.setHours(0, 0, 0, 0);
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  if (/^\d{4}[\/-]\d{1,2}[\/-]\d{1,2}/.test(str)) {
+    const parts = str.split(/[\/-]/);
+    const year = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10) - 1;
+    const day = parseInt(parts[2], 10);
+    const d = new Date(year, month, day);
+    d.setHours(0, 0, 0, 0);
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  const d = new Date(str);
+  if (!isNaN(d.getTime())) {
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }
+  return null;
+};
+
 const getScheduleStatusInfo = (task) => {
   if (!task) return { status: 'ON TIME', bg: '#eff6ff', color: '#3b82f6', border: '#bfdbfe' };
-  
-  const refDate = task.completedOn || task.submittedOn;
+
+  const rawTask = task.rawTask || task;
+  const dueVal = task.due || rawTask.endDt || rawTask.enddt || rawTask.endDate || rawTask.tentEndDt;
+  const dueDate = parseTaskDate(dueVal);
+
+  if (!dueDate) {
+    return { status: 'ON TIME', bg: '#eff6ff', color: '#3b82f6', border: '#bfdbfe' };
+  }
+
+  const compVal = task.completedOn || rawTask.actCmpDt || rawTask.actcmpdt || rawTask.completedTs || task.submittedOn || rawTask.sbmtDt;
+  const compDate = parseTaskDate(compVal);
+
+  const rawSts = (task.rawStatus || rawTask.taskSts || rawTask.tasksts || task.status || "").toString().toUpperCase();
+  const isClosed = rawSts === "COMPLETED" || rawSts === "CLOSED" || rawSts === "DONE" || task.status === "Closed" || task.status === "Completed";
+
   let status = 'ON TIME';
 
-  if (refDate && task.due) {
-    if (refDate < task.due) status = 'LEAD';
-    else if (refDate > task.due) status = 'LAG';
-    else status = 'ON TIME';
-  } else if (task.due) {
-    const today = new Date().toISOString().split('T')[0];
-    if (today > task.due || task.isOverdue) status = 'LAG';
-    else status = 'ON TIME';
+  if (isClosed) {
+    const refDate = compDate || new Date();
+    refDate.setHours(0, 0, 0, 0);
+
+    if (refDate < dueDate) {
+      status = 'LEAD';
+    } else if (refDate.getTime() === dueDate.getTime()) {
+      status = 'ON TIME';
+    } else {
+      status = 'LAG';
+    }
+  } else {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    if (today < dueDate) {
+      status = 'LEAD';
+    } else if (today.getTime() === dueDate.getTime()) {
+      status = 'ON TIME';
+    } else {
+      status = 'LAG';
+    }
   }
 
   if (status === 'LEAD') {
@@ -249,7 +323,7 @@ const UserTaskBoard = ({ userRole, onLogout }) => {
           priorityMeta: dynamicPrio,
           due: endDt || "",
           submittedOn: t.sbmtDt || t.sbmtdt || "",
-          completedOn: t.actCmpDt || t.actcmpdt || "",
+          completedOn: t.actCmpDt || t.actcmpdt || t.completedTs || t.completed_ts || t.completedOn || t.act_cmp_dt || t.updtDt || t.updtdt || "",
           status: status,
           rawStatus: rawSts,
           rawTask: t,
@@ -283,7 +357,7 @@ const UserTaskBoard = ({ userRole, onLogout }) => {
           priority: priority,
           due: endDt || "",
           submittedOn: t.sbmtDt || t.sbmtdt || "",
-          completedOn: t.actCmpDt || t.actcmpdt || "",
+          completedOn: t.actCmpDt || t.actcmpdt || t.completedTs || t.completed_ts || t.completedOn || t.act_cmp_dt || t.updtDt || t.updtdt || "",
           status: status,
           rawStatus: rawSts,
           rawTask: t,
@@ -668,16 +742,25 @@ const UserTaskBoard = ({ userRole, onLogout }) => {
                   <p>{selectedTask.assigned}</p>
                 </div>
               </div>
-              {(selectedTask.due || selectedTask.submittedOn || selectedTask.completedOn) && (
-                <div className="utb-modal-field">
-                  <label>Relevant Dates</label>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    {selectedTask.due && <div>Due: {formatDate(selectedTask.due)}</div>}
-                    {selectedTask.submittedOn && <div>Submitted: {formatDate(selectedTask.submittedOn)}</div>}
-                    {selectedTask.completedOn && <div>Closed: {formatDate(selectedTask.completedOn)}</div>}
-                  </div>
-                </div>
-              )}
+              {(() => {
+                const isClosedTask = selectedTask.status === "Closed" || selectedTask.status === "Completed" || selectedTask.rawStatus === "CLOSED" || selectedTask.rawStatus === "COMPLETED";
+                const closedDateVal = selectedTask.completedOn || selectedTask.rawTask?.actCmpDt || selectedTask.rawTask?.actcmpdt || selectedTask.rawTask?.completedTs || selectedTask.rawTask?.completed_ts || selectedTask.rawTask?.updtDt || selectedTask.rawTask?.updtdt;
+
+                return (
+                  (selectedTask.due || selectedTask.submittedOn || closedDateVal || isClosedTask) && (
+                    <div className="utb-modal-field">
+                      <label>Relevant Dates</label>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        {selectedTask.due && <div>Due: {formatDate(selectedTask.due)}</div>}
+                        {selectedTask.submittedOn && <div>Submitted: {formatDate(selectedTask.submittedOn)}</div>}
+                        {isClosedTask && (
+                          <div>Closed: {formatDate(closedDateVal || new Date())}</div>
+                        )}
+                      </div>
+                    </div>
+                  )
+                );
+              })()}
             </div>
             <div className="utb-modal-footer">
               <button className="utb-btn outline" onClick={() => setSelectedTask(null)} style={{ padding: '8px 16px', background: '#fff', border: '1px solid #cbd5e1', borderRadius: '8px' }}>Close</button>

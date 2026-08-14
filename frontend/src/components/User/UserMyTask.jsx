@@ -75,6 +75,8 @@ const UserMyTask = ({ selectedProject, userTasks = [] }) => {
     else if (statusVal === 'SUBMIT_REVIEW' || statusVal === 'UNDER_REVIEW') displayStatus = "In Progress";
     else if (statusVal === 'OPEN') displayStatus = "Pending";
 
+    const progressVal = (statusVal === 'COMPLETED' || statusVal === 'CLOSED') ? 100 : (statusVal === 'WIP' || statusVal === 'IN_PROGRESS') ? 50 : (statusVal === 'SUBMIT_REVIEW' || statusVal === 'UNDER_REVIEW') ? 80 : 0;
+
     return {
       code: t.taskCd || t.taskcd || `TSK-${t.taskId}`,
       name: t.taskNm || t.tasknm,
