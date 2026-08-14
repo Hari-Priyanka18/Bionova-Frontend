@@ -210,32 +210,9 @@ const Header = ({ title, subtitle, showSearch = false, statusBadge, progressPerc
       });
       if (res.ok) {
         const data = await res.json();
-<<<<<<< HEAD
-        setNotifications(data);
-=======
-<<<<<<< Updated upstream
-        const loggedUserKey = sessionStorage.getItem("userEmail") || sessionStorage.getItem("userName") || "user";
-        const clearedIds = new Set(JSON.parse(localStorage.getItem(`cleared_notifications_${loggedUserKey}`) || "[]"));
-        const clearedAt = parseInt(localStorage.getItem(`notifications_cleared_at_${loggedUserKey}`) || "0", 10);
-
-        const filteredData = (Array.isArray(data) ? data : []).filter(n => {
-          const id = n.id || n._id || n.notificationId;
-          if (id && clearedIds.has(String(id))) return false;
-          if (clearedAt && (n.createdAt || n.created_at || n.date)) {
-            const dateVal = n.createdAt || n.created_at || n.date;
-            const createdTime = new Date(dateVal).getTime();
-            if (!isNaN(createdTime) && createdTime <= clearedAt) return false;
-          }
-          return true;
-        });
-
-        setNotifications(filteredData);
-=======
         // Filter out notifications that were cleared locally
         const hiddenIds = JSON.parse(localStorage.getItem("hiddenNotifIds") || "[]");
         setNotifications(data.filter(n => !hiddenIds.includes(n.id)));
->>>>>>> Stashed changes
->>>>>>> c1bb9ca (Update Company Master and Header)
       }
     } catch (err) {
       console.error("Failed to fetch notifications", err);
@@ -259,18 +236,6 @@ const Header = ({ title, subtitle, showSearch = false, statusBadge, progressPerc
     if (readNotifs.length === 0) return;
 
     try {
-<<<<<<< Updated upstream
-      await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/notifications/clear-all`, {
-        method: "DELETE",
-        headers: authHeaders()
-      }).catch(() => {});
-      setNotifications([]);
-    } catch (err) {
-      console.error("Failed to clear notifications", err);
-<<<<<<< HEAD
-      setNotifications([]);
-=======
-=======
       // 1. Store the cleared IDs in localStorage so they remain hidden on re-login
       const hiddenIds = JSON.parse(localStorage.getItem("hiddenNotifIds") || "[]");
       const newHiddenIds = [...new Set([...hiddenIds, ...readNotifs.map(n => n.id)])];
@@ -289,8 +254,6 @@ const Header = ({ title, subtitle, showSearch = false, statusBadge, progressPerc
       setNotifications(prev => prev.filter(n => !n.isRead));
     } catch (err) {
       console.error("Failed to clear read notifications", err);
->>>>>>> Stashed changes
->>>>>>> c1bb9ca (Update Company Master and Header)
     }
   };
 
