@@ -492,6 +492,11 @@ const AgriLandAllocation = ({ userRole, onLogout }) => {
           error = "Pincode must be exactly 6 digits and cannot start with 0.";
         }
       }
+    } else if (name === "surveyInput") {
+      const val = value ? value.trim() : "";
+      if (val && !/\d/.test(val)) {
+        error = "Letters alone are not allowed. Must contain numbers (e.g. 123/A).";
+      }
     }
     return error;
   };
@@ -545,7 +550,7 @@ const AgriLandAllocation = ({ userRole, onLogout }) => {
     setForm(prev => {
       const updatedForm = { ...prev, [name]: newValue };
       if (
-        ['latitude', 'longitude', 'mobileNo', 'landCode', 'landArea', 'district', 'mandal', 'village', 'pincode'].includes(name)
+        ['latitude', 'longitude', 'mobileNo', 'landCode', 'landArea', 'district', 'mandal', 'village', 'pincode', 'surveyInput'].includes(name)
       ) {
         const error = validateField(name, newValue);
         setFormErrors(prevErrors => ({ ...prevErrors, [name]: error }));
@@ -559,6 +564,10 @@ const AgriLandAllocation = ({ userRole, onLogout }) => {
       e.preventDefault();
       const val = form.surveyInput?.trim().toUpperCase();
       if (val) {
+        if (!/\d/.test(val)) {
+          triggerAlert("warning", "Invalid Survey Number", "Survey number must contain numbers (e.g. 123/A, 45/2). Only letters are not allowed.");
+          return;
+        }
         if (!form.surveyNo.includes(val)) {
           setForm(prev => ({
             ...prev,
@@ -685,8 +694,27 @@ const AgriLandAllocation = ({ userRole, onLogout }) => {
     }
 
     // 4. Survey Number check
-    if (!form.surveyNo || form.surveyNo.length === 0) {
-      triggerAlert("error", "Validation Error", "At least one Survey Number is required. Enter a value and press Enter/comma.");
+    let currentSurveyNos = [...(form.surveyNo || [])];
+    const pendingInput = form.surveyInput?.trim().toUpperCase();
+    if (pendingInput) {
+      if (!/\d/.test(pendingInput)) {
+        triggerAlert("error", "Validation Error", "Survey Number must contain numbers (e.g. 123/A, 45/2). Only letters are not allowed.");
+        return;
+      }
+      if (!currentSurveyNos.includes(pendingInput)) {
+        currentSurveyNos.push(pendingInput);
+        setForm(prev => ({ ...prev, surveyNo: currentSurveyNos, surveyInput: '' }));
+      }
+    }
+
+    if (!currentSurveyNos || currentSurveyNos.length === 0) {
+      triggerAlert("error", "Validation Error", "At least one Survey Number is required (e.g. 123/A, 45/2). Enter a value and press Enter/comma.");
+      return;
+    }
+
+    const invalidSurvey = currentSurveyNos.find(s => !/\d/.test(s));
+    if (invalidSurvey) {
+      triggerAlert("error", "Validation Error", `Survey Number '${invalidSurvey}' is invalid. It must contain numbers (e.g. 123/A, 45/2).`);
       return;
     }
 
@@ -1580,6 +1608,9 @@ const AgriLandAllocation = ({ userRole, onLogout }) => {
                                   style={{ border: 'none', outline: 'none', flex: 1, minWidth: '150px', fontSize: '14px', background: 'transparent' }}
                                 />
                               </div>
+                              {formErrors.surveyInput && (
+                                <span className="error-text" style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block' }}>{formErrors.surveyInput}</span>
+                              )}
                             </label>
                           </div>
                           <div className="al-form-layout-row columns-4" style={{ marginTop: '20px' }}>

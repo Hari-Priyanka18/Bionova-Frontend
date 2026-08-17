@@ -465,6 +465,11 @@ const DepartmentMapping = ({ onLogout, userRole }) => {
     return found ? found.coyNm : `Company ID: ${id}`;
   };
 
+  const getCompanyCode = (id) => {
+    const found = companies.find(c => String(c.coyId) === String(id));
+    return found ? (found.coyCd || found.coyCode || found.code || "N/A") : "N/A";
+  };
+
   const getPlantName = (id) => {
     const found = plants.find(p => String(p.pltId) === String(id));
     return found ? found.pltNm : `Plant ID: ${id}`;
@@ -488,11 +493,14 @@ const DepartmentMapping = ({ onLogout, userRole }) => {
   const filteredMappings = mappings.filter(mapping => {
     if (!tableSearchQuery) return true;
     const searchLower = tableSearchQuery.toLowerCase();
-    const coyNm = getCompanyName(mapping.coyId).toLowerCase();
-    const pltNm = getPlantName(mapping.pltId).toLowerCase();
+    const coyCodeStr = getCompanyCode(mapping.coyId).toLowerCase();
     const deptCodeStr = getDeptCode(mapping.deptId).toLowerCase();
     const deptNmStr = getDeptName(mapping.deptId).toLowerCase();
-    return coyNm.includes(searchLower) || pltNm.includes(searchLower) || deptCodeStr.includes(searchLower) || deptNmStr.includes(searchLower);
+    return (
+      deptCodeStr.includes(searchLower) ||
+      coyCodeStr.includes(searchLower) ||
+      deptNmStr.includes(searchLower)
+    );
   });
 
   // Pagination logic

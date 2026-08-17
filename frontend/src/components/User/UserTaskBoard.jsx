@@ -433,9 +433,13 @@ const UserTaskBoard = ({ userRole, onLogout }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshKey]);
 
-  // Handle stat card click to filter columns
+  // Handle stat card click to filter columns (toggle click)
   const handleStatClick = (status) => {
-    setSelectedStatusFilter(status);
+    if (selectedStatusFilter === status) {
+      setSelectedStatusFilter('all');
+    } else {
+      setSelectedStatusFilter(status);
+    }
   };
 
   // Filter tasks by search and project
@@ -471,7 +475,7 @@ const UserTaskBoard = ({ userRole, onLogout }) => {
   const renderCard = (task, type) => {
     const isCompleted = task.status === "Closed" || task.status === "Completed";
     return (
-      <div className="utb-card" key={task.id}>
+      <div className="utb-card" key={task.id} onClick={() => setSelectedTask(task)} style={{ cursor: 'pointer' }}>
         <div className="utb-card-top">
           <span className="utb-card-id">{task.id}</span>
           {!isCompleted && task.priority && (
@@ -493,10 +497,26 @@ const UserTaskBoard = ({ userRole, onLogout }) => {
           })()}
         </div>
         <h4 className="utb-card-title">{task.title}</h4>
-        <div className="utb-card-details">
-          <div className="utb-card-detail-item">Project: <span>{task.project}</span></div>
-          <div className="utb-card-detail-item">Milestone: <span>{task.milestone}</span></div>
-        </div>
+        {(() => {
+          const isIndividual = task.isIndividual || task.project === "Individual Task" || task.rawTask?.taskSource === "INDIVIDUAL" || task.rawTask?.entityTyp === "INDIVIDUAL_TASK" || (!task.rawTask?.prjId && (!task.project || task.project === "Individual Task" || task.project === "-"));
+          
+          if (isIndividual) {
+            return (
+              <div className="utb-card-details">
+                <div className="utb-card-detail-item" style={{ color: '#4f46e5', fontWeight: '600', fontSize: '13px' }}>
+                  Individual Task
+                </div>
+              </div>
+            );
+          }
+          
+          return (
+            <div className="utb-card-details">
+              <div className="utb-card-detail-item">Project: <span>{task.project}</span></div>
+              <div className="utb-card-detail-item">Milestone: <span>{task.milestone}</span></div>
+            </div>
+          );
+        })()}
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: '12px' }}>
           {!isCompleted && task.due && (
@@ -607,6 +627,44 @@ const UserTaskBoard = ({ userRole, onLogout }) => {
                     </div>
                   </div>
                 ))}
+              </div>
+
+              {/* ===== STANDALONE SEARCH BAR ===== */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                marginBottom: '16px',
+                maxWidth: '380px',
+                background: '#ffffff',
+                border: '1px solid #cbd5e1',
+                borderRadius: '8px',
+                padding: '8px 12px',
+                boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+              }}>
+                <Search size={16} color="#64748b" />
+                <input
+                  type="text"
+                  placeholder="Search tasks..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  style={{
+                    border: 'none',
+                    outline: 'none',
+                    background: 'transparent',
+                    width: '100%',
+                    fontSize: '13px',
+                    color: '#0f172a'
+                  }}
+                />
+                {searchTerm && (
+                  <button
+                    onClick={() => setSearchTerm('')}
+                    style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}
+                  >
+                    <X size={14} color="#94a3b8" />
+                  </button>
+                )}
               </div>
 
               {/* Board Columns */}

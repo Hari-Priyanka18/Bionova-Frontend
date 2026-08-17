@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   Bell, Search, X, Menu, ChevronRight, RefreshCcw, Save, Edit, Trash2, Eye,
   Plus, MoreVertical, ChevronLeft, Settings, Users, Link, CalendarDays, Clock,
@@ -331,6 +331,7 @@ const SearchableSelect = ({ options, value, onChange, placeholder, style, disabl
 // MAIN COMPONENT
 // ============================================================
 const MilestoneCreation = ({ onLogout, userRole }) => {
+  const navigate = useNavigate();
   const screenPerm = getScreenPermission('MILESTONE_CREATION');
   const STEPS = [
     { id: 1, name: "Milestone Details", icon: Settings, description: "Basic milestone information" },
@@ -722,14 +723,10 @@ const MilestoneCreation = ({ onLogout, userRole }) => {
         setCompletedSteps(new Set([1]));
       }
       if (location.state?.showSuccessAlert) {
-        triggerAlert(
-          "success",
-          "Success",
-          location.state.message || "Milestone created successfully! Please configure milestones and tasks."
-        );
-        delete location.state.showSuccessAlert;
+        const alertMsg = location.state.message || "Project created successfully! Please configure milestones and tasks.";
+        navigate(location.pathname, { replace: true, state: {} });
+        triggerAlert("success", "Success", alertMsg);
       }
-      window.history.replaceState({}, document.title);
     }
   }, [location.state]);
 
