@@ -137,25 +137,29 @@ body.sidebar-collapsed .gc-shell {
 /* Filters */
 .gantt-filters-bar {
   display: flex;
-  flex-wrap: nowrap;
-  gap: 8px;
+  flex-wrap: wrap;
+  gap: 10px;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 24px;
   background: white;
-  padding: 12px 12px;
+  padding: 12px 16px;
   border-radius: 8px;
   border: 1px solid #e2e8f0;
-  overflow: hidden;
+  overflow: visible;
+  position: relative;
+  z-index: 100;
 }
 
 .gantt-filters-left {
   display: flex;
-  flex-wrap: nowrap;
-  gap: 6px;
+  flex-wrap: wrap;
+  gap: 10px;
   align-items: center;
   flex: 1 1 auto;
   min-width: 0;
+  position: relative;
+  z-index: 101;
 }
 
 .gantt-search-input {
