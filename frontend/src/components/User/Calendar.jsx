@@ -112,7 +112,75 @@ const Calendar = ({ userRole, onLogout }) => {
       try {
         const formattedDate = formatDateStr(currentDate);
         const data = await apiGet(`/api/calendar/user-feed?viewType=${view}&date=${formattedDate}&showClosed=${showCompleted}`);
-        setEventsList(data || []);
+        let allEvents = data || [];
+
+        try {
+          const profile = await apiGet("/api/profile");
+          const liveTasks = await apiGet("/api/task-live").catch(() => []);
+          const indTasks = await apiGet("/api/assignments").catch(() => []);
+          
+          if (profile) {
+            const empId = profile.empId || profile.empid || profile.id;
+            
+            let reviewApproveTasks = [];
+            if (Array.isArray(liveTasks)) {
+              reviewApproveTasks = liveTasks.filter(t => 
+                String(t.reviewerId) === String(empId) || 
+                String(t.approverId) === String(empId) ||
+                String(t.reviewer) === String(empId) ||
+                String(t.approver) === String(empId)
+              );
+            }
+
+            let userIndTasks = [];
+            if (Array.isArray(indTasks)) {
+              userIndTasks = indTasks.filter(t => 
+                String(t.empId) === String(empId) ||
+                String(t.empid) === String(empId) ||
+                String(t.reviewerId) === String(empId) ||
+                String(t.approverId) === String(empId) ||
+                String(t.reviewer) === String(empId) ||
+                String(t.approver) === String(empId)
+              );
+            }
+
+            const combinedExtraTasks = [...reviewApproveTasks, ...userIndTasks];
+
+            const formattedExtraEvents = combinedExtraTasks.map(t => ({
+              id: t.empTaskId || t.emptaskid || t.taskId || t.taskid || t.taskCd || Math.random().toString(),
+              taskId: t.empTaskId || t.taskId || t.taskid,
+              type: 'task',
+              title: t.taskNm || t.taskName || t.taskTitle || "Task",
+              date: t.endDt || t.enddt || t.dueDate || t.date || "",
+              status: t.taskSts || t.tasksts || t.status || "OPEN",
+              code: t.taskCd || t.empTaskCd || "",
+              description: t.taskDesc || "",
+              actCmpDt: t.actCmpDt || t.actcmpdt || t.act_cmp_dt || t.completedTs || t.sbmtDt || "",
+              completed: t.completed,
+              closed: t.closed,
+              isClosed: t.isClosed,
+              progress: t.progress,
+              sts: t.sts
+            }));
+
+            const existingIds = new Set(allEvents.map(e => String(e.id || e.taskId)));
+            const existingTitleDates = new Set(allEvents.map(e => `${(e.title || "").trim().toLowerCase()}_${(e.date || "").trim()}`));
+            
+            formattedExtraEvents.forEach(e => {
+              const titleDateKey = `${(e.title || "").trim().toLowerCase()}_${(e.date || "").trim()}`;
+              
+              if (e.id && !existingIds.has(String(e.id)) && !existingTitleDates.has(titleDateKey)) {
+                allEvents.push(e);
+                existingIds.add(String(e.id));
+                existingTitleDates.add(titleDateKey);
+              }
+            });
+          }
+        } catch (extraErr) {
+          console.warn("Failed to fetch extra reviewer tasks", extraErr);
+        }
+
+        setEventsList(allEvents);
       } catch (err) {
         console.error("Error fetching calendar data:", err);
         setError("Failed to load calendar events.");
@@ -149,6 +217,37 @@ const Calendar = ({ userRole, onLogout }) => {
     return isCompletedStatus || isCompletedBool || isInactiveSts;
   };
 
+  const getEventDateString = (evt) => {
+    if (!evt) return "";
+    let raw = "";
+    if (isEventClosed(evt)) {
+      raw = evt.actCmpDt || evt.actcmpdt || evt.act_cmp_dt || evt.completedTs || evt.sbmtDt || evt.date || evt.dueDate || evt.tentEndDt || evt.tent_end_dt || evt.endDate || evt.end_date || evt.endDt || evt.enddt || "";
+    } else {
+      raw = evt.date || evt.dueDate || evt.tentEndDt || evt.tent_end_dt || evt.endDate || evt.end_date || evt.endDt || evt.enddt || evt.actCmpDt || evt.actcmpdt || evt.act_cmp_dt || "";
+    }
+    if (!raw) return "";
+    
+    let cleanStr = String(raw).split('T')[0].split(' ')[0];
+    
+    const monthMap = { jan:"01", feb:"02", mar:"03", apr:"04", may:"05", jun:"06", jul:"07", aug:"08", sep:"09", oct:"10", nov:"11", dec:"12" };
+    if (/^\d{1,2}-[a-zA-Z]{3}-\d{4}$/.test(cleanStr)) {
+      const parts = cleanStr.split('-');
+      const m = monthMap[parts[1].toLowerCase()];
+      if (m) {
+        return `${parts[2]}-${m}-${parts[0].padStart(2, '0')}`;
+      }
+    }
+    
+    if (/^\d{1,2}[-/]\d{1,2}[-/]\d{4}$/.test(cleanStr)) {
+      const parts = cleanStr.split(/[-/]/);
+      return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+    }
+    
+    return cleanStr;
+  };
+
+
+
   // Determine event type (with overdue check)
   const getEventType = (evt) => {
     if (!evt) return 'task';
@@ -178,7 +277,7 @@ const Calendar = ({ userRole, onLogout }) => {
     if (isTask) {
       const statusUpper = getEventStatusString(evt);
       const isExplicitOverdue = typeLower === 'overdue' || statusUpper === 'OVERDUE' || evt.isOverdue === true || evt.overdue === true;
-      const dateVal = evt.date || evt.dueDate || evt.tentEndDt || evt.endDate;
+      const dateVal = getEventDateString(evt);
       const taskDate = parseLocalDate(dateVal);
       if (taskDate) {
         taskDate.setHours(23, 59, 59, 999);
@@ -241,7 +340,7 @@ const Calendar = ({ userRole, onLogout }) => {
       }
       
       
-      const evtDateStr = String(evt.date || evt.dueDate || evt.tentEndDt || evt.endDate || evt.endDt || "");
+      const evtDateStr = String(getEventDateString(evt));
       if (!evtDateStr) return false;
       const cleanEvtDate = evtDateStr.split('T')[0].split(' ')[0];
       return cleanEvtDate === dateStr;
@@ -268,13 +367,13 @@ const Calendar = ({ userRole, onLogout }) => {
           if (eventType === 'milestone' && !filterMilestones) return false;
         }
 
-        const dateVal = evt.date || evt.dueDate || evt.tentEndDt || evt.endDate;
+        const dateVal = getEventDateString(evt);
         const evtDate = parseLocalDate(dateVal);
         if (!evtDate) return false;
         evtDate.setHours(0, 0, 0, 0);
         return evtDate >= today && evtDate <= next7Days;
       })
-      .sort((a, b) => new Date(a.date || a.dueDate || a.tentEndDt) - new Date(b.date || b.dueDate || b.tentEndDt));
+      .sort((a, b) => new Date(getEventDateString(a)) - new Date(getEventDateString(b)));
   };
 
   const previousMonth = () => {
