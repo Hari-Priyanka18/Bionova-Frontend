@@ -2068,7 +2068,7 @@ const Assignment = ({ userRole, onLogout }) => {
                         <div style={{ display: 'flex', borderBottom: '1px solid #e2e8f0', padding: '8px 0' }}>
                           <span style={{ fontWeight: '600', color: '#475569', width: '140px', flexShrink: 0 }}>Assigned To</span>
                           <span style={{ color: '#0f172a' }}>
-                            {tasks.find(t => String(t.empTaskId || t.id) === String(editId))?.empNm || "None"}
+                            {assignedEmployee ? getEmployeeName(assignedEmployee) : "None"}
                           </span>
                         </div>
                         <div style={{ display: 'flex', borderBottom: '1px solid #e2e8f0', padding: '8px 0' }}>
@@ -2128,26 +2128,6 @@ const Assignment = ({ userRole, onLogout }) => {
                       >
                         Close Preview
                       </button>
-                      {!editId && (
-                        <button
-                          onClick={handleAssignClick}
-                          style={{
-                            padding: '8px 20px',
-                            borderRadius: '6px',
-                            border: 'none',
-                            background: '#2563eb',
-                            color: 'white',
-                            fontWeight: '500',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '6px',
-                            fontSize: '14px',
-                          }}
-                        >
-                          <Plus size={16} /> Create & Assignment
-                        </button>
-                      )}
                     </div>
                   </div>
                 </div>

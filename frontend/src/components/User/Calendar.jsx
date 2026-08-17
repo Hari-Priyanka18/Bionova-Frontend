@@ -23,7 +23,9 @@ const EVENT_COLORS = {
   milestone: "#f59e0b",  
   meeting: "#8b5cf6",    
   overdue: "#ef4444",    
-  today: "#3b82f6"       
+  today: "#3b82f6",
+  holiday: "#0ea5e9",
+  closed: "#4b5563"
 };
 
 const Calendar = ({ userRole, onLogout }) => {
@@ -75,7 +77,9 @@ const Calendar = ({ userRole, onLogout }) => {
 
   const parseLocalDate = (dateStr) => {
     if (!dateStr) return null;
-    const [year, month, day] = dateStr.split('-').map(Number);
+    const cleanStr = String(dateStr).split('T')[0].split(' ')[0];
+    const [year, month, day] = cleanStr.split('-').map(Number);
+    if (!year || !month || !day) return null;
     return new Date(year, month - 1, day);
   };
 
@@ -107,8 +111,76 @@ const Calendar = ({ userRole, onLogout }) => {
       setError(null);
       try {
         const formattedDate = formatDateStr(currentDate);
-        const data = await apiGet(`/api/calendar/user-feed?viewType=${view}&date=${formattedDate}`);
-        setEventsList(data || []);
+        const data = await apiGet(`/api/calendar/user-feed?viewType=${view}&date=${formattedDate}&showClosed=${showCompleted}`);
+        let allEvents = data || [];
+
+        try {
+          const profile = await apiGet("/api/profile");
+          const liveTasks = await apiGet("/api/task-live").catch(() => []);
+          const indTasks = await apiGet("/api/assignments").catch(() => []);
+          
+          if (profile) {
+            const empId = profile.empId || profile.empid || profile.id;
+            
+            let reviewApproveTasks = [];
+            if (Array.isArray(liveTasks)) {
+              reviewApproveTasks = liveTasks.filter(t => 
+                String(t.reviewerId) === String(empId) || 
+                String(t.approverId) === String(empId) ||
+                String(t.reviewer) === String(empId) ||
+                String(t.approver) === String(empId)
+              );
+            }
+
+            let userIndTasks = [];
+            if (Array.isArray(indTasks)) {
+              userIndTasks = indTasks.filter(t => 
+                String(t.empId) === String(empId) ||
+                String(t.empid) === String(empId) ||
+                String(t.reviewerId) === String(empId) ||
+                String(t.approverId) === String(empId) ||
+                String(t.reviewer) === String(empId) ||
+                String(t.approver) === String(empId)
+              );
+            }
+
+            const combinedExtraTasks = [...reviewApproveTasks, ...userIndTasks];
+
+            const formattedExtraEvents = combinedExtraTasks.map(t => ({
+              id: t.empTaskId || t.emptaskid || t.taskId || t.taskid || t.taskCd || Math.random().toString(),
+              taskId: t.empTaskId || t.taskId || t.taskid,
+              type: 'task',
+              title: t.taskNm || t.taskName || t.taskTitle || "Task",
+              date: t.endDt || t.enddt || t.dueDate || t.date || "",
+              status: t.taskSts || t.tasksts || t.status || "OPEN",
+              code: t.taskCd || t.empTaskCd || "",
+              description: t.taskDesc || "",
+              actCmpDt: t.actCmpDt || t.actcmpdt || t.act_cmp_dt || t.completedTs || t.sbmtDt || "",
+              completed: t.completed,
+              closed: t.closed,
+              isClosed: t.isClosed,
+              progress: t.progress,
+              sts: t.sts
+            }));
+
+            const existingIds = new Set(allEvents.map(e => String(e.id || e.taskId)));
+            const existingTitleDates = new Set(allEvents.map(e => `${(e.title || "").trim().toLowerCase()}_${(e.date || "").trim()}`));
+            
+            formattedExtraEvents.forEach(e => {
+              const titleDateKey = `${(e.title || "").trim().toLowerCase()}_${(e.date || "").trim()}`;
+              
+              if (e.id && !existingIds.has(String(e.id)) && !existingTitleDates.has(titleDateKey)) {
+                allEvents.push(e);
+                existingIds.add(String(e.id));
+                existingTitleDates.add(titleDateKey);
+              }
+            });
+          }
+        } catch (extraErr) {
+          console.warn("Failed to fetch extra reviewer tasks", extraErr);
+        }
+
+        setEventsList(allEvents);
       } catch (err) {
         console.error("Error fetching calendar data:", err);
         setError("Failed to load calendar events.");
@@ -118,7 +190,7 @@ const Calendar = ({ userRole, onLogout }) => {
     };
 
     fetchCalendarData();
-  }, [currentDate, view]);
+  }, [currentDate, view, showCompleted]);
 
   // Robust Helper to extract status string
   const getEventStatusString = (evt) => {
@@ -145,15 +217,55 @@ const Calendar = ({ userRole, onLogout }) => {
     return isCompletedStatus || isCompletedBool || isInactiveSts;
   };
 
+  const getEventDateString = (evt) => {
+    if (!evt) return "";
+    let raw = "";
+    if (isEventClosed(evt)) {
+      raw = evt.actCmpDt || evt.actcmpdt || evt.act_cmp_dt || evt.completedTs || evt.sbmtDt || evt.date || evt.dueDate || evt.tentEndDt || evt.tent_end_dt || evt.endDate || evt.end_date || evt.endDt || evt.enddt || "";
+    } else {
+      raw = evt.date || evt.dueDate || evt.tentEndDt || evt.tent_end_dt || evt.endDate || evt.end_date || evt.endDt || evt.enddt || evt.actCmpDt || evt.actcmpdt || evt.act_cmp_dt || "";
+    }
+    if (!raw) return "";
+    
+    let cleanStr = String(raw).split('T')[0].split(' ')[0];
+    
+    const monthMap = { jan:"01", feb:"02", mar:"03", apr:"04", may:"05", jun:"06", jul:"07", aug:"08", sep:"09", oct:"10", nov:"11", dec:"12" };
+    if (/^\d{1,2}-[a-zA-Z]{3}-\d{4}$/.test(cleanStr)) {
+      const parts = cleanStr.split('-');
+      const m = monthMap[parts[1].toLowerCase()];
+      if (m) {
+        return `${parts[2]}-${m}-${parts[0].padStart(2, '0')}`;
+      }
+    }
+    
+    if (/^\d{1,2}[-/]\d{1,2}[-/]\d{4}$/.test(cleanStr)) {
+      const parts = cleanStr.split(/[-/]/);
+      return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+    }
+    
+    return cleanStr;
+  };
+
+
+
   // Determine event type (with overdue check)
   const getEventType = (evt) => {
     if (!evt) return 'task';
     const typeLower = (evt.type || "").toLowerCase();
     const isClosed = isEventClosed(evt);
 
+    if (isClosed) {
+      return 'closed';
+    }
+
     const isMilestone = typeLower === 'milestone' || typeLower.includes('milestone') || (evt.id && evt.id.toString().toUpperCase().includes('MILESTONE'));
     if (isMilestone) {
       return 'milestone';
+    }
+
+    const isHoliday = typeLower === 'holiday' || typeLower.includes('holiday');
+    if (isHoliday) {
+      return 'holiday';
     }
 
     const isTask = typeLower === 'task' || 
@@ -165,7 +277,7 @@ const Calendar = ({ userRole, onLogout }) => {
     if (isTask) {
       const statusUpper = getEventStatusString(evt);
       const isExplicitOverdue = typeLower === 'overdue' || statusUpper === 'OVERDUE' || evt.isOverdue === true || evt.overdue === true;
-      const dateVal = evt.date || evt.dueDate || evt.tentEndDt || evt.endDate;
+      const dateVal = getEventDateString(evt);
       const taskDate = parseLocalDate(dateVal);
       if (taskDate) {
         taskDate.setHours(23, 59, 59, 999);
@@ -189,8 +301,8 @@ const Calendar = ({ userRole, onLogout }) => {
     return eventsList.filter(evt => {
       const isClosed = isEventClosed(evt);
 
-      if (isClosed && !showCompleted) {
-        return false;
+      if (isClosed) {
+        return showCompleted;
       }
 
       const eventType = getEventType(evt);
@@ -205,7 +317,34 @@ const Calendar = ({ userRole, onLogout }) => {
 
   const getEventsForDate = (dateObj) => {
     const dateStr = formatDateStr(dateObj);
-    return getFilteredEvents().filter(evt => evt.date === dateStr);
+    const dateObjTime = new Date(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate()).getTime();
+
+    return getFilteredEvents().filter(evt => {
+      const typeLower = (evt.type || "").toLowerCase();
+      const isMilestone = typeLower === 'milestone' || typeLower.includes('milestone') || (evt.id && evt.id.toString().toUpperCase().includes('MILESTONE'));
+      
+      if (isMilestone) {
+        const sStr = evt.startDate || evt.stDt || evt.date;
+        const eStr = evt.endDate || evt.endDt || evt.dueDate || evt.date;
+        if (sStr && eStr) {
+          const sDate = parseLocalDate(sStr);
+          const eDate = parseLocalDate(eStr);
+          if (sDate && eDate) {
+            sDate.setHours(0,0,0,0);
+            eDate.setHours(0,0,0,0);
+            if (dateObjTime >= sDate.getTime() && dateObjTime <= eDate.getTime()) {
+              return true;
+            }
+          }
+        }
+      }
+      
+      
+      const evtDateStr = String(getEventDateString(evt));
+      if (!evtDateStr) return false;
+      const cleanEvtDate = evtDateStr.split('T')[0].split(' ')[0];
+      return cleanEvtDate === dateStr;
+    });
   };
 
   const getUpcomingEvents = () => {
@@ -218,20 +357,23 @@ const Calendar = ({ userRole, onLogout }) => {
     return eventsList
       .filter(evt => {
         const isClosed = isEventClosed(evt);
-        if (isClosed && !showCompleted) return false;
 
-        const eventType = getEventType(evt);
-        if (eventType === 'task' && !filterTasks) return false;
-        if (eventType === 'overdue' && !filterOverdue) return false;
-        if (eventType === 'milestone' && !filterMilestones) return false;
+        if (isClosed) {
+          if (!showCompleted) return false;
+        } else {
+          const eventType = getEventType(evt);
+          if (eventType === 'task' && !filterTasks) return false;
+          if (eventType === 'overdue' && !filterOverdue) return false;
+          if (eventType === 'milestone' && !filterMilestones) return false;
+        }
 
-        const dateVal = evt.date || evt.dueDate || evt.tentEndDt || evt.endDate;
+        const dateVal = getEventDateString(evt);
         const evtDate = parseLocalDate(dateVal);
         if (!evtDate) return false;
         evtDate.setHours(0, 0, 0, 0);
         return evtDate >= today && evtDate <= next7Days;
       })
-      .sort((a, b) => new Date(a.date || a.dueDate || a.tentEndDt) - new Date(b.date || b.dueDate || b.tentEndDt));
+      .sort((a, b) => new Date(getEventDateString(a)) - new Date(getEventDateString(b)));
   };
 
   const previousMonth = () => {
@@ -280,10 +422,26 @@ const Calendar = ({ userRole, onLogout }) => {
   let emptyPrefix = 0;
 
   if (view === "month") {
-    emptyPrefix = firstDay;
+    const startDate = new Date(currentYear, currentMonth, 1);
+    const firstDayOfWeek = startDate.getDay();
+    const daysToPrepend = firstDayOfWeek;
+    
+    // Previous month dates
+    for (let i = daysToPrepend - 1; i >= 0; i--) {
+      visibleDays.push(new Date(currentYear, currentMonth, -i));
+    }
+    
+    // Current month dates
     for (let i = 1; i <= daysInMonth; i++) {
       visibleDays.push(new Date(currentYear, currentMonth, i));
     }
+    
+    // Next month dates
+    const daysToAppend = 42 - visibleDays.length;
+    for (let i = 1; i <= daysToAppend; i++) {
+      visibleDays.push(new Date(currentYear, currentMonth + 1, i));
+    }
+    emptyPrefix = 0;
   } else if (view === "week") {
     emptyPrefix = 0;
     const startOfWeek = new Date(currentDate);
@@ -380,9 +538,6 @@ const Calendar = ({ userRole, onLogout }) => {
                   {/* Empty cells for visual offset in week/month view */}
                   {Array.from({ length: emptyPrefix }).map((_, i) => (
                     <div key={`empty-${i}`} className="calendar-day empty">
-                      {view === "month" && (
-                        <span className="day-number empty-number">{getDaysInMonth(currentYear, currentMonth - 1) - firstDay + i + 1}</span>
-                      )}
                     </div>
                   ))}
 
@@ -394,13 +549,14 @@ const Calendar = ({ userRole, onLogout }) => {
                     const isToday = dayObj.getDate() === todayObj.getDate() &&
                                     dayObj.getMonth() === todayObj.getMonth() &&
                                     dayObj.getFullYear() === todayObj.getFullYear();
+                    const isOtherMonth = view === "month" && dayObj.getMonth() !== currentMonth;
 
                     return (
-                      <div key={index} className={`calendar-day ${isToday ? "today-cell" : ""}`} onClick={(e) => {
+                      <div key={index} className={`calendar-day ${isToday ? "today-cell" : ""} ${isOtherMonth ? "empty" : ""}`} onClick={(e) => {
                         setSelectedDateEvents({ date: dayObj, events: dayEvents });
                       }}>
                         <div className="day-number-wrapper">
-                          <span className={`day-number ${isToday ? "today-number" : ""}`}>{day}</span>
+                          <span className={`day-number ${isToday ? "today-number" : ""} ${isOtherMonth ? "empty-number" : ""}`}>{day}</span>
                         </div>
                         <div className="day-events-list">
                           {dayEvents.slice(0, 3).map((evt, idx) => {
@@ -627,7 +783,7 @@ const Calendar = ({ userRole, onLogout }) => {
                 </div>
               )}
               <div className="event-modal-meta">
-                <strong>Date:</strong> {selectedEvent.date} {selectedEvent.time ? `@ ${selectedEvent.time}` : ''}
+                <strong>Date:</strong> {selectedEvent.date ? selectedEvent.date.split('-').reverse().join('/') : ''} {selectedEvent.time ? `@ ${selectedEvent.time}` : ''}
               </div>
               {selectedEvent.status && (
                 <div className="event-modal-meta">
@@ -757,7 +913,7 @@ const Calendar = ({ userRole, onLogout }) => {
                       )}
                       
                       <div className="event-modal-meta">
-                        <strong>Date:</strong> {evt.date} {evt.time ? `@ ${evt.time}` : ''}
+                        <strong>Date:</strong> {evt.date ? evt.date.split('-').reverse().join('/') : ''} {evt.time ? `@ ${evt.time}` : ''}
                       </div>
                       
                       {evt.status && (

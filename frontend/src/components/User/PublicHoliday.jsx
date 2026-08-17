@@ -151,8 +151,10 @@ const PublicHoliday = ({ userRole, onLogout }) => {
   const currentYear = new Date().getFullYear();
 
   const filteredHolidays = holidays.filter(h => {
+    const formattedDate = formatDateDisplay(h.date);
     const matchQuery = h.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                       (h.desc && h.desc.toLowerCase().includes(searchQuery.toLowerCase()));
+                       (h.date && h.date.toLowerCase().includes(searchQuery.toLowerCase())) ||
+                       (formattedDate && formattedDate.toLowerCase().includes(searchQuery.toLowerCase()));
     const year = h.date ? h.date.split('-')[0] : "";
     
     // Hide future years completely from the UI until the year changes
