@@ -16,6 +16,34 @@ const authHeaders = () => ({
   "Authorization": `Bearer ${getAuthToken()}`
 });
 
+const formatDateDDMMYYYY = (dateVal) => {
+  if (!dateVal) return 'No Deadline';
+  try {
+    const str = String(dateVal).trim();
+    const cleanStr = str.split('T')[0];
+    const ymdMatch = cleanStr.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/);
+    if (ymdMatch) {
+      const [, y, m, d] = ymdMatch;
+      return `${d.padStart(2, '0')}/${m.padStart(2, '0')}/${y}`;
+    }
+    const dmyMatch = cleanStr.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
+    if (dmyMatch) {
+      const [, d, m, y] = dmyMatch;
+      return `${d.padStart(2, '0')}/${m.padStart(2, '0')}/${y}`;
+    }
+    const dateObj = new Date(dateVal);
+    if (!isNaN(dateObj.getTime())) {
+      const day = String(dateObj.getDate()).padStart(2, '0');
+      const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+      const year = dateObj.getFullYear();
+      return `${day}/${month}/${year}`;
+    }
+    return str;
+  } catch (e) {
+    return String(dateVal);
+  }
+};
+
 // ===== CUSTOM DROPDOWN COMPONENT =====
 const CustomDropdown = ({ value, options, onChange, label, enableSearch = true }) => {
   const [open, setOpen] = useState(false);
@@ -1065,7 +1093,7 @@ const AdminDashboard = ({ userRole, onLogout }) => {
                           <div>
                             <strong style={{ fontSize: '13px', color: '#1e293b', display: 'block' }}>{t.taskNm || t.name || 'Task'}</strong>
                             <span style={{ fontSize: '11px', color: '#64748b' }}>
-                              Due: {t.endDt ? new Date(t.endDt).toLocaleDateString() : 'No Deadline'}
+                              Due: {t.endDt ? formatDateDDMMYYYY(t.endDt) : 'No Deadline'}
                             </span>
                           </div>
                           <span style={{
