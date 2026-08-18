@@ -1081,10 +1081,7 @@ const AgriLandAllocation = ({ userRole, onLogout }) => {
         const plantObj = plants.find(p => Number(p.pltId) === Number(land.pltId));
         return (
           (land.landCode && land.landCode.toLowerCase().includes(q)) ||
-          (plantObj && plantObj.pltNm && plantObj.pltNm.toLowerCase().includes(q)) ||
-          (land.allotedFor && land.allotedFor.toLowerCase().includes(q)) ||
-          (land.district && land.district.toLowerCase().includes(q)) ||
-          (land.village && land.village.toLowerCase().includes(q))
+          (plantObj && plantObj.pltNm && plantObj.pltNm.toLowerCase().includes(q))
         );
       });
     }
@@ -1634,42 +1631,70 @@ const AgriLandAllocation = ({ userRole, onLogout }) => {
                             <div className="al-form-layout-row columns-4" style={{ marginTop: '20px' }}>
                               <label className="al-field-item">
                               <span>Lease Start Date <b style={{ color: '#ef4444' }}>*</b></span>
-                              <input 
-                                type="date"
-                                name="leaseStartDate"
-                                value={form.leaseStartDate || ''}
-                                onChange={handleChange}
-                                max={form.leaseEndDate || ''}
-                                style={{
-                                  width: '100%',
-                                  padding: '8px 12px',
-                                  border: '1px solid #cbd5e1',
-                                  borderRadius: '6px',
-                                  fontSize: '14px',
-                                  outline: 'none',
-                                  boxSizing: 'border-box',
-                                  height: '40px'
+                              <DatePicker
+                                selected={form.leaseStartDate ? new Date(form.leaseStartDate) : null}
+                                onChange={(date) => {
+                                  if (date) {
+                                    const y = date.getFullYear();
+                                    const m = String(date.getMonth() + 1).padStart(2, '0');
+                                    const d = String(date.getDate()).padStart(2, '0');
+                                    handleChange({ target: { name: "leaseStartDate", value: `${y}-${m}-${d}` } });
+                                  } else {
+                                    handleChange({ target: { name: "leaseStartDate", value: "" } });
+                                  }
                                 }}
+                                dateFormat="dd-MM-yyyy"
+                                maxDate={form.leaseEndDate ? new Date(form.leaseEndDate) : null}
+                                placeholderText="dd-mm-yyyy"
+                                showYearDropdown
+                                scrollableYearDropdown
+                                yearDropdownItemNumber={100}
+                                customInput={
+                                  <input style={{
+                                    width: '100%',
+                                    padding: '8px 12px',
+                                    border: '1px solid #cbd5e1',
+                                    borderRadius: '6px',
+                                    fontSize: '14px',
+                                    outline: 'none',
+                                    boxSizing: 'border-box',
+                                    height: '40px'
+                                  }} />
+                                }
                               />
                             </label>
                             <label className="al-field-item">
                               <span>Lease End Date <b style={{ color: '#ef4444' }}>*</b></span>
-                              <input 
-                                type="date"
-                                name="leaseEndDate"
-                                value={form.leaseEndDate || ''}
-                                onChange={handleChange}
-                                min={form.leaseStartDate || ''}
-                                style={{
-                                  width: '100%',
-                                  padding: '8px 12px',
-                                  border: '1px solid #cbd5e1',
-                                  borderRadius: '6px',
-                                  fontSize: '14px',
-                                  outline: 'none',
-                                  boxSizing: 'border-box',
-                                  height: '40px'
+                              <DatePicker
+                                selected={form.leaseEndDate ? new Date(form.leaseEndDate) : null}
+                                onChange={(date) => {
+                                  if (date) {
+                                    const y = date.getFullYear();
+                                    const m = String(date.getMonth() + 1).padStart(2, '0');
+                                    const d = String(date.getDate()).padStart(2, '0');
+                                    handleChange({ target: { name: "leaseEndDate", value: `${y}-${m}-${d}` } });
+                                  } else {
+                                    handleChange({ target: { name: "leaseEndDate", value: "" } });
+                                  }
                                 }}
+                                dateFormat="dd-MM-yyyy"
+                                minDate={form.leaseStartDate ? new Date(form.leaseStartDate) : null}
+                                placeholderText="dd-mm-yyyy"
+                                showYearDropdown
+                                scrollableYearDropdown
+                                yearDropdownItemNumber={100}
+                                customInput={
+                                  <input style={{
+                                    width: '100%',
+                                    padding: '8px 12px',
+                                    border: '1px solid #cbd5e1',
+                                    borderRadius: '6px',
+                                    fontSize: '14px',
+                                    outline: 'none',
+                                    boxSizing: 'border-box',
+                                    height: '40px'
+                                  }} />
+                                }
                               />
                             </label>
                               <label className="al-field-item" style={{ gridColumn: 'span 2' }}>

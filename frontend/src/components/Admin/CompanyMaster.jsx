@@ -60,18 +60,18 @@ const formatDate = (dateStr) => {
     if (cleanStr.includes('-')) {
       const parts = cleanStr.split('-');
       if (parts[0].length === 4) {
-        return `${parts[2]}/${parts[1]}/${parts[0]}`;
+        return `${parts[2]}-${parts[1]}-${parts[0]}`;
       }
       if (parts[2].length === 4) {
-        return `${parts[0]}/${parts[1]}/${parts[2]}`;
+        return `${parts[0]}-${parts[1]}-${parts[2]}`;
       }
     }
     if (cleanStr.includes('/')) {
       const parts = cleanStr.split('/');
       if (parts[0].length === 4) {
-        return `${parts[2]}/${parts[1]}/${parts[0]}`;
+        return `${parts[2]}-${parts[1]}-${parts[0]}`;
       }
-      return cleanStr;
+      return cleanStr.replace(/\//g, '-');
     }
   } catch (e) {
     console.error("Error formatting date:", dateStr, e);
@@ -1770,22 +1770,36 @@ const CompanyCreation = ({ onLogout, userRole }) => {
                         </label>
                         <label className="cc-field-item">
                           <span>Incorporation Date <b style={{ color: '#ef4444' }}>*</b></span>
-                          <input 
-                            type="date"
-                            name="incorporationDate"
-                            value={formData.incorporationDate}
-                            onChange={handleInputChange}
-                            max={new Date().toISOString().split('T')[0]}
-                            style={{
-                              width: '100%',
-                              padding: '8px 12px',
-                              border: '1px solid #cbd5e1',
-                              borderRadius: '6px',
-                              fontSize: '14px',
-                              outline: 'none',
-                              boxSizing: 'border-box',
-                              height: '40px'
+                          <DatePicker
+                            selected={formData.incorporationDate ? new Date(formData.incorporationDate) : null}
+                            onChange={(date) => {
+                              if (date) {
+                                const y = date.getFullYear();
+                                const m = String(date.getMonth() + 1).padStart(2, '0');
+                                const d = String(date.getDate()).padStart(2, '0');
+                                handleInputChange({ target: { name: "incorporationDate", value: `${y}-${m}-${d}` } });
+                              } else {
+                                handleInputChange({ target: { name: "incorporationDate", value: "" } });
+                              }
                             }}
+                            dateFormat="dd-MM-yyyy"
+                            maxDate={new Date()}
+                            placeholderText="dd-mm-yyyy"
+                            showYearDropdown
+                            scrollableYearDropdown
+                            yearDropdownItemNumber={100}
+                            customInput={
+                              <input style={{
+                                width: '100%',
+                                padding: '8px 12px',
+                                border: '1px solid #cbd5e1',
+                                borderRadius: '6px',
+                                fontSize: '14px',
+                                outline: 'none',
+                                boxSizing: 'border-box',
+                                height: '40px'
+                              }} />
+                            }
                           />
                           {formErrors.incorporationDate && <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block' }}>{formErrors.incorporationDate}</span>}
                         </label>
@@ -2023,10 +2037,10 @@ const CompanyCreation = ({ onLogout, userRole }) => {
                         <th style={{ width: "50px", padding: '14px 20px', fontSize: '11px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>S.NO</th>
                         <th style={{ padding: '14px 20px', fontSize: '11px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>LOGO</th>
                         <th style={{ padding: '14px 20px', fontSize: '11px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                          COMPANY NAME
+                          CODE
                         </th>
                         <th style={{ padding: '14px 20px', fontSize: '11px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                          CODE
+                          COMPANY NAME
                         </th>
                         <th style={{ padding: '14px 20px', fontSize: '11px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>UNDER</th>
                         <th style={{ padding: '14px 20px', fontSize: '11px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>CIN NUMBER</th>
@@ -2074,12 +2088,12 @@ const CompanyCreation = ({ onLogout, userRole }) => {
                                 </div>
                               )}
                             </td>
-                            <td style={{ padding: '14px 20px', fontSize: '14px', color: '#334155' }}><strong>{company.coyNm}</strong></td>
                             <td style={{ padding: '14px 20px', fontSize: '14px', color: '#334155' }}>
                               <span style={{ backgroundColor: '#f1f5f9', padding: '4px 10px', borderRadius: '4px', fontWeight: '600', color: '#0f172a', border: '1px solid #e2e8f0', fontSize: '13px' }}>
                                 {company.coyCd}
                               </span>
                             </td>
+                            <td style={{ padding: '14px 20px', fontSize: '14px', color: '#334155' }}><strong>{company.coyNm}</strong></td>
                             <td style={{ padding: '14px 20px', fontSize: '14px', color: '#334155' }}>{companies.find(c => c.coyId === company.prntCoyId)?.coyNm || "Independent"}</td>
                             <td style={{ padding: '14px 20px', fontSize: '14px', color: '#334155' }}>{company.cin || "N/A"}</td>
                             <td style={{ padding: '14px 20px', fontSize: '14px', color: '#334155' }}>{company.gstNum || "N/A"}</td>
