@@ -1880,25 +1880,25 @@ const ProjectCreation = ({ userRole, onLogout }) => {
                                   fontWeight: '700',
                                   display: 'inline-block',
                                   backgroundColor: project.priorityMeta?.bgColor || (
-                                    project.priority === 'ATMOST CRITICAL' ? '#ffe4e6' :
-                                      project.priority === 'CRITICAL' ? '#fee2e2' :
-                                        project.priority === 'HIGH' ? '#ffedd5' :
-                                          project.priority === 'NORMAL' ? '#dbeafe' :
-                                            project.priority === 'MEDIUM' ? '#fef3c7' : '#dcfce7'
+                                    project.priority === 'ATMOST CRITICAL' ? '#7f1d1d18' :
+                                      project.priority === 'CRITICAL' ? '#b91c1c18' :
+                                        project.priority === 'HIGH' ? '#ef444418' :
+                                          project.priority === 'NORMAL' ? '#3b82f618' :
+                                            project.priority === 'MEDIUM' ? '#f59e0b18' : '#22c55e18'
                                   ),
                                   color: project.priorityMeta?.color || (
-                                    project.priority === 'ATMOST CRITICAL' ? '#7f1d1d' :
-                                      project.priority === 'CRITICAL' ? '#dc2626' :
-                                        project.priority === 'HIGH' ? '#ea580c' :
-                                          project.priority === 'NORMAL' ? '#3b82f6' :
-                                            project.priority === 'MEDIUM' ? '#d97706' : '#16a34a'
+                                    project.priority === 'ATMOST CRITICAL' ? '#7F1D1D' :
+                                      project.priority === 'CRITICAL' ? '#B91C1C' :
+                                        project.priority === 'HIGH' ? '#EF4444' :
+                                          project.priority === 'NORMAL' ? '#3B82F6' :
+                                            project.priority === 'MEDIUM' ? '#F59E0B' : '#22C55E'
                                   ),
                                   border: `1px solid ${project.priorityMeta?.borderColor || (
-                                    project.priority === 'ATMOST CRITICAL' ? '#fda4af' :
-                                      project.priority === 'CRITICAL' ? '#fca5a5' :
-                                        project.priority === 'HIGH' ? '#fed7aa' :
-                                          project.priority === 'NORMAL' ? '#bfdbfe' :
-                                            project.priority === 'MEDIUM' ? '#fde68a' : '#bbf7d0'
+                                    project.priority === 'ATMOST CRITICAL' ? '#7f1d1d40' :
+                                      project.priority === 'CRITICAL' ? '#b91c1c40' :
+                                        project.priority === 'HIGH' ? '#ef444440' :
+                                          project.priority === 'NORMAL' ? '#3b82f640' :
+                                            project.priority === 'MEDIUM' ? '#f59e0b40' : '#22c55e40'
                                   )}`
                                 }}>
                                   {project.priority}

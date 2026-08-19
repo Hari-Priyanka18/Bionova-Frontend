@@ -349,12 +349,12 @@ body.sidebar-collapsed .pl-shell {
   text-align: center;
 }
 
-.pl-badge.atmost-critical { background: #ffe4e6; color: #7f1d1d; border: 1px solid #fda4af; font-weight: 700; }
-.pl-badge.critical { background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; font-weight: 700; }
-.pl-badge.high { background: #ffedd5; color: #ea580c; }
-.pl-badge.medium { background: #fef3c7; color: #d97706; }
-.pl-badge.normal { background: #dbeafe; color: #2563eb; }
-.pl-badge.low { background: #dcfce7; color: #16a34a; }
+.pl-badge.atmost-critical { background: #7f1d1d18; color: #7F1D1D; border: 1px solid #7f1d1d40; font-weight: 700; }
+.pl-badge.critical { background: #b91c1c18; color: #B91C1C; border: 1px solid #b91c1c40; font-weight: 700; }
+.pl-badge.high { background: #ef444418; color: #EF4444; border: 1px solid #ef444440; }
+.pl-badge.medium { background: #f59e0b18; color: #F59E0B; border: 1px solid #f59e0b40; }
+.pl-badge.normal { background: #3b82f618; color: #3B82F6; border: 1px solid #3b82f640; }
+.pl-badge.low { background: #22c55e18; color: #22C55E; border: 1px solid #22c55e40; }
 
 .pl-badge.live { background: #dcfce7; color: #16a34a; }
 .pl-badge.draft { background: #f1f5f9; color: #475569; }

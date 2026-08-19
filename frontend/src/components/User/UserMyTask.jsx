@@ -107,16 +107,21 @@ const UserMyTask = ({ selectedProject, userTasks = [] }) => {
   const pagedTasks = filteredTasks.slice((currentPage - 1) * tasksPerPage, currentPage * tasksPerPage);
 
   const getStatusClass = (status) => {
-    switch (status) {
-      case 'Closed':
-      case 'Completed': return 'ut-status-completed';
-      case 'Overdue': return 'ut-status-overdue';
-      case 'In Progress': return 'ut-status-inprogress';
-      case 'Not Started': return 'ut-status-notstarted';
-      case 'Pending': return 'ut-status-pending';
-      case 'High': return 'ut-status-high';
-      case 'Medium': return 'ut-status-medium';
-      case 'Low': return 'ut-status-low';
+    const s = String(status || '').toUpperCase().trim();
+    switch (s) {
+      case 'CLOSED':
+      case 'COMPLETED': return 'ut-status-completed';
+      case 'OVERDUE': return 'ut-status-overdue';
+      case 'IN PROGRESS': return 'ut-status-inprogress';
+      case 'NOT STARTED': return 'ut-status-notstarted';
+      case 'PENDING': return 'ut-status-pending';
+      case 'ATMOST CRITICAL':
+      case 'ATMOST_CRITICAL': return 'ut-status-atmost-critical';
+      case 'CRITICAL': return 'ut-status-critical';
+      case 'HIGH': return 'ut-status-high';
+      case 'NORMAL': return 'ut-status-normal';
+      case 'MEDIUM': return 'ut-status-medium';
+      case 'LOW': return 'ut-status-low';
       default: return 'ut-status-default';
     }
   };

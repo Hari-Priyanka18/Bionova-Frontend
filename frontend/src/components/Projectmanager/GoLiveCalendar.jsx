@@ -129,7 +129,7 @@ const GoLiveCalendar = ({ project, onCancel, onPreview }) => {
   const [expandedRows, setExpandedRows] = useState(new Set(['project']));
 
   const toggleMaster = (day) => setConsiderOnly(p => ({ ...p, [day]: { ...p[day], active: !p[day].active } }));
-  const toggleSub = (day, field) => setConsiderOnly(p => ({ ...p, [day]: { ...p[day], [field]: !p[field] } }));
+  const toggleSub = (day, field) => setConsiderOnly(p => ({ ...p, [day]: { ...p[day], [field]: !p[day][field] } }));
   
   const toggleRow = (id) => {
     const next = new Set(expandedRows);
@@ -591,7 +591,7 @@ const GoLiveCalendar = ({ project, onCancel, onPreview }) => {
               <div className="glm-sub-cards">
                 {['company','plant','external'].map(opt => (
                   <div key={opt} className={`glm-sub-card ${existingSelection[opt] ? 'selected' : ''}`} onClick={() => setExistingSelection(prev => ({ ...prev, [opt]: !prev[opt] }))}>
-                    <input type="checkbox" readOnly checked={!!existingSelection[opt]} className="glm-checkbox-sm"/>
+                    <input type="checkbox" checked={!!existingSelection[opt]} onChange={(e) => { e.stopPropagation(); setExistingSelection(prev => ({ ...prev, [opt]: e.target.checked })); }} style={{ pointerEvents: 'none' }} className="glm-checkbox-sm"/>
                     {opt === 'company' && <Building2 size={22} className="glm-sub-icon"/>}
                     {opt === 'plant'   && <Factory   size={22} className="glm-sub-icon"/>}
                     {opt === 'external'&& <CalendarIcon size={22} className="glm-sub-icon"/>}

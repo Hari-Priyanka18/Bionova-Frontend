@@ -370,12 +370,12 @@ const MyProjects = ({ userRole, onLogout }) => {
   const priorityColor = (p) => {
     switch (p?.toUpperCase()) {
       case "ATMOST CRITICAL":
-      case "ATMOST_CRITICAL": return "#7f1d1d";
-      case "CRITICAL": return "#dc2626";
-      case "HIGH": return "#ea580c";
-      case "MEDIUM": return "#f59e0b";
-      case "NORMAL": return "#3b82f6";
-      case "LOW": return "#10b981";
+      case "ATMOST_CRITICAL": return "#7F1D1D";
+      case "CRITICAL": return "#B91C1C";
+      case "HIGH": return "#EF4444";
+      case "MEDIUM": return "#F59E0B";
+      case "NORMAL": return "#3B82F6";
+      case "LOW": return "#22C55E";
       default: return "#64748b";
     }
   };

@@ -27,45 +27,45 @@ export const getPriorityMetadata = (name, id = null) => {
       return {
         priority: 'LOW',
         priorityId: id || 1,
-        color: '#10b981',
-        bgColor: '#dcfce7',
-        borderColor: '#bbf7d0',
+        color: '#22C55E',
+        bgColor: '#22c55e18',
+        borderColor: '#22c55e40',
         badgeClass: 'low'
       };
     case 'NORMAL':
       return {
         priority: 'NORMAL',
         priorityId: id || 2,
-        color: '#3b82f6',
-        bgColor: '#dbeafe',
-        borderColor: '#bfdbfe',
+        color: '#3B82F6',
+        bgColor: '#3b82f618',
+        borderColor: '#3b82f640',
         badgeClass: 'normal'
       };
     case 'MEDIUM':
       return {
         priority: 'MEDIUM',
         priorityId: id || 3,
-        color: '#f59e0b',
-        bgColor: '#fef3c7',
-        borderColor: '#fde68a',
+        color: '#F59E0B',
+        bgColor: '#f59e0b18',
+        borderColor: '#f59e0b40',
         badgeClass: 'medium'
       };
     case 'HIGH':
       return {
         priority: 'HIGH',
         priorityId: id || 4,
-        color: '#ea580c',
-        bgColor: '#ffedd5',
-        borderColor: '#fed7aa',
+        color: '#EF4444',
+        bgColor: '#ef444418',
+        borderColor: '#ef444440',
         badgeClass: 'high'
       };
     case 'CRITICAL':
       return {
         priority: 'CRITICAL',
         priorityId: id || 5,
-        color: '#dc2626',
-        bgColor: '#fee2e2',
-        borderColor: '#fca5a5',
+        color: '#B91C1C',
+        bgColor: '#b91c1c18',
+        borderColor: '#b91c1c40',
         badgeClass: 'critical'
       };
     case 'ATMOST CRITICAL':
@@ -73,9 +73,9 @@ export const getPriorityMetadata = (name, id = null) => {
       return {
         priority: 'ATMOST CRITICAL',
         priorityId: id || 6,
-        color: '#7f1d1d',
-        bgColor: '#ffe4e6',
-        borderColor: '#fda4af',
+        color: '#7F1D1D',
+        bgColor: '#7f1d1d18',
+        borderColor: '#7f1d1d40',
         badgeClass: 'atmost-critical'
       };
     default:
