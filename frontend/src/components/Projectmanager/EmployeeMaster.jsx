@@ -575,6 +575,16 @@ const EmployeeCreation = ({ userRole, onLogout }) => {
       if (/[^a-zA-Z\s]/.test(value)) {
         error = "Only letters and spaces are allowed.";
       }
+    } else if (name === "dateOfBirth") {
+      if (!value) {
+        error = "Date of Birth is required.";
+      } else {
+        const today = new Date();
+        const maxDob = new Date(today.setFullYear(today.getFullYear() - 18)).toISOString().split('T')[0];
+        if (value > maxDob) {
+          error = "Employee must be at least 18 years old.";
+        }
+      }
     }
     return error;
   };
@@ -968,9 +978,9 @@ const EmployeeCreation = ({ userRole, onLogout }) => {
       triggerAlert("error", "Validation Error", "Date of Birth is required.");
       return;
     }
-    const todayStr = new Date().toISOString().split('T')[0];
-    if (form.dateOfBirth > todayStr) {
-      triggerAlert("error", "Validation Error", "Date of Birth cannot be in the future.");
+    const maxDob = new Date(new Date().setFullYear(new Date().getFullYear() - 18)).toISOString().split('T')[0];
+    if (form.dateOfBirth > maxDob) {
+      triggerAlert("error", "Validation Error", "Employee must be at least 18 years old.");
       return;
     }
 
@@ -1809,7 +1819,7 @@ const EmployeeCreation = ({ userRole, onLogout }) => {
                             name="dateOfBirth"
                             value={form.dateOfBirth}
                             onChange={handleChange}
-                            max={new Date().toISOString().split("T")[0]}
+                            max={new Date(new Date().setFullYear(new Date().getFullYear() - 18)).toISOString().split("T")[0]}
                             style={{
                               width: '100%',
                               padding: '8px 12px',
@@ -1821,6 +1831,11 @@ const EmployeeCreation = ({ userRole, onLogout }) => {
                             }}
                           />
                         </div>
+                        {formErrors.dateOfBirth && (
+                          <div style={{ color: "#ef4444", fontSize: "12px", marginTop: "4px" }}>
+                            {formErrors.dateOfBirth}
+                          </div>
+                        )}
                       </div>
                       <div className="emp-form-item">
                         <label>Email <span className="emp-req-star">*</span></label>
