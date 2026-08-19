@@ -485,9 +485,9 @@ const CompanyCreation = ({ onLogout, userRole }) => {
       if (!value.trim()) error = "Company Email is required.";
       else if (value.length > 100) error = "Company Email cannot exceed 100 characters.";
       else {
-        const emailRegex = /^([a-zA-Z0-9._%+-]+@)?[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/i;
+        const emailRegex = /^([a-zA-Z0-9._%+-]*@)[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/i;
         if (!emailRegex.test(value.trim())) {
-          error = "Company Email must be a valid email or domain.";
+          error = "Company Email must be a valid email or domain containing '@'.";
         }
       }
     } else if (name === "website") {
@@ -1770,36 +1770,22 @@ const CompanyCreation = ({ onLogout, userRole }) => {
                         </label>
                         <label className="cc-field-item">
                           <span>Incorporation Date <b style={{ color: '#ef4444' }}>*</b></span>
-                          <DatePicker
-                            selected={formData.incorporationDate ? new Date(formData.incorporationDate) : null}
-                            onChange={(date) => {
-                              if (date) {
-                                const y = date.getFullYear();
-                                const m = String(date.getMonth() + 1).padStart(2, '0');
-                                const d = String(date.getDate()).padStart(2, '0');
-                                handleInputChange({ target: { name: "incorporationDate", value: `${y}-${m}-${d}` } });
-                              } else {
-                                handleInputChange({ target: { name: "incorporationDate", value: "" } });
-                              }
+                          <input
+                            type="date"
+                            name="incorporationDate"
+                            value={formData.incorporationDate || ""}
+                            onChange={handleInputChange}
+                            max={new Date().toISOString().split("T")[0]}
+                            style={{
+                              width: '100%',
+                              padding: '8px 12px',
+                              border: '1px solid #cbd5e1',
+                              borderRadius: '6px',
+                              fontSize: '14px',
+                              outline: 'none',
+                              boxSizing: 'border-box',
+                              height: '40px'
                             }}
-                            dateFormat="dd-MM-yyyy"
-                            maxDate={new Date()}
-                            placeholderText="dd-mm-yyyy"
-                            showYearDropdown
-                            scrollableYearDropdown
-                            yearDropdownItemNumber={100}
-                            customInput={
-                              <input style={{
-                                width: '100%',
-                                padding: '8px 12px',
-                                border: '1px solid #cbd5e1',
-                                borderRadius: '6px',
-                                fontSize: '14px',
-                                outline: 'none',
-                                boxSizing: 'border-box',
-                                height: '40px'
-                              }} />
-                            }
                           />
                           {formErrors.incorporationDate && <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block' }}>{formErrors.incorporationDate}</span>}
                         </label>

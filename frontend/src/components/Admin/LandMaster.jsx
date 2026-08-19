@@ -492,6 +492,11 @@ const AgriLandAllocation = ({ userRole, onLogout }) => {
           error = "Pincode must be exactly 6 digits and cannot start with 0.";
         }
       }
+    } else if (name === "surveyInput") {
+      const val = value ? value.trim() : "";
+      if (val && !/\d/.test(val)) {
+        error = "Letters alone are not allowed. Must contain numbers (e.g. 123/A).";
+      }
     }
     return error;
   };
@@ -545,7 +550,7 @@ const AgriLandAllocation = ({ userRole, onLogout }) => {
     setForm(prev => {
       const updatedForm = { ...prev, [name]: newValue };
       if (
-        ['latitude', 'longitude', 'mobileNo', 'landCode', 'landArea', 'district', 'mandal', 'village', 'pincode'].includes(name)
+        ['latitude', 'longitude', 'mobileNo', 'landCode', 'landArea', 'district', 'mandal', 'village', 'pincode', 'surveyInput'].includes(name)
       ) {
         const error = validateField(name, newValue);
         setFormErrors(prevErrors => ({ ...prevErrors, [name]: error }));
@@ -559,6 +564,10 @@ const AgriLandAllocation = ({ userRole, onLogout }) => {
       e.preventDefault();
       const val = form.surveyInput?.trim().toUpperCase();
       if (val) {
+        if (!/\d/.test(val)) {
+          triggerAlert("warning", "Invalid Survey Number", "Survey number must contain numbers (e.g. 123/A, 45/2). Only letters are not allowed.");
+          return;
+        }
         if (!form.surveyNo.includes(val)) {
           setForm(prev => ({
             ...prev,
@@ -654,6 +663,12 @@ const AgriLandAllocation = ({ userRole, onLogout }) => {
   const handleSave = async (e) => {
     e.preventDefault();
 
+    const hasErrors = Object.values(formErrors).some(err => err && err !== "");
+    if (hasErrors) {
+      triggerAlert("error", "Validation Error", "Please fix all validation errors before saving.");
+      return;
+    }
+
     // 1. Land Code check
     if (!form.landCode.trim()) {
       triggerAlert("error", "Validation Error", "Land Code is required.");
@@ -685,8 +700,27 @@ const AgriLandAllocation = ({ userRole, onLogout }) => {
     }
 
     // 4. Survey Number check
-    if (!form.surveyNo || form.surveyNo.length === 0) {
-      triggerAlert("error", "Validation Error", "At least one Survey Number is required. Enter a value and press Enter/comma.");
+    let currentSurveyNos = [...(form.surveyNo || [])];
+    const pendingInput = form.surveyInput?.trim().toUpperCase();
+    if (pendingInput) {
+      if (!/\d/.test(pendingInput)) {
+        triggerAlert("error", "Validation Error", "Survey Number must contain numbers (e.g. 123/A, 45/2). Only letters are not allowed.");
+        return;
+      }
+      if (!currentSurveyNos.includes(pendingInput)) {
+        currentSurveyNos.push(pendingInput);
+        setForm(prev => ({ ...prev, surveyNo: currentSurveyNos, surveyInput: '' }));
+      }
+    }
+
+    if (!currentSurveyNos || currentSurveyNos.length === 0) {
+      triggerAlert("error", "Validation Error", "At least one Survey Number is required (e.g. 123/A, 45/2). Enter a value and press Enter/comma.");
+      return;
+    }
+
+    const invalidSurvey = currentSurveyNos.find(s => !/\d/.test(s));
+    if (invalidSurvey) {
+      triggerAlert("error", "Validation Error", `Survey Number '${invalidSurvey}' is invalid. It must contain numbers (e.g. 123/A, 45/2).`);
       return;
     }
 
@@ -702,7 +736,16 @@ const AgriLandAllocation = ({ userRole, onLogout }) => {
     }
 
     // 6. Land Owner Name check
-    if (!form.landOwnerName || form.landOwnerName.length === 0) {
+    let currentOwnerNames = [...(form.landOwnerName || [])];
+    const pendingOwnerInput = form.ownerInput?.trim();
+    if (pendingOwnerInput) {
+      if (!currentOwnerNames.includes(pendingOwnerInput)) {
+        currentOwnerNames.push(pendingOwnerInput);
+        setForm(prev => ({ ...prev, landOwnerName: currentOwnerNames, ownerInput: '' }));
+      }
+    }
+
+    if (!currentOwnerNames || currentOwnerNames.length === 0) {
       triggerAlert("error", "Validation Error", "At least one Land Owner Name is required. Enter a name and press Enter/comma.");
       return;
     }
@@ -738,6 +781,10 @@ const AgriLandAllocation = ({ userRole, onLogout }) => {
       triggerAlert("error", "Validation Error", "District is required.");
       return;
     }
+    if (!/^[a-zA-Z\s]+$/.test(form.district.trim())) {
+      triggerAlert("error", "Validation Error", "District should contain only letters.");
+      return;
+    }
     if (form.district.length > 30) {
       triggerAlert("error", "Validation Error", "District cannot exceed 30 characters.");
       return;
@@ -748,6 +795,10 @@ const AgriLandAllocation = ({ userRole, onLogout }) => {
       triggerAlert("error", "Validation Error", "Mandal is required.");
       return;
     }
+    if (!/^[a-zA-Z\s]+$/.test(form.mandal.trim())) {
+      triggerAlert("error", "Validation Error", "Mandal should contain only letters.");
+      return;
+    }
     if (form.mandal.length > 30) {
       triggerAlert("error", "Validation Error", "Mandal cannot exceed 30 characters.");
       return;
@@ -756,6 +807,10 @@ const AgriLandAllocation = ({ userRole, onLogout }) => {
     // 10. Village check
     if (!form.village || !String(form.village).trim()) {
       triggerAlert("error", "Validation Error", "Village is required.");
+      return;
+    }
+    if (!/^[a-zA-Z\s]+$/.test(form.village.trim())) {
+      triggerAlert("error", "Validation Error", "Village should contain only letters.");
       return;
     }
     if (form.village.length > 50) {
@@ -854,8 +909,8 @@ const AgriLandAllocation = ({ userRole, onLogout }) => {
     const landPayload = {
       landCd: form.landCode.trim(),
       pltId: Number(form.plant),
-      surveyNo: form.surveyNo.join(","),
-      landOwners: form.landOwnerName.join(","),
+      surveyNo: currentSurveyNos.join(","),
+      landOwners: currentOwnerNames.join(","),
       mobNum: form.mobileNo.trim(),
       landSize: Number(form.landArea),
       allotedFor: alcTypVal,
@@ -886,8 +941,8 @@ const AgriLandAllocation = ({ userRole, onLogout }) => {
     })
       .then(async (response) => {
         if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(errorText || "Failed to save land record.");
+          await response.text(); // Consume error body but do not use it to avoid backend messages
+          throw new Error("Failed to save land record due to a server error. Please check your data.");
         }
         triggerAlert("success", "Success", isEditing ? "Land record updated successfully!" : "Land record created successfully!");
         fetchLands();
@@ -898,7 +953,7 @@ const AgriLandAllocation = ({ userRole, onLogout }) => {
       })
       .catch((err) => {
         console.error("Save land failed:", err);
-        triggerAlert("error", "Error", err.message || "Could not save land record.");
+        triggerAlert("error", "Error", "Something went wrong! Please check the details you have entered.");
       })
       .finally(() => {
         setLoading(false);
@@ -1081,7 +1136,10 @@ const AgriLandAllocation = ({ userRole, onLogout }) => {
         const plantObj = plants.find(p => Number(p.pltId) === Number(land.pltId));
         return (
           (land.landCode && land.landCode.toLowerCase().includes(q)) ||
-          (plantObj && plantObj.pltNm && plantObj.pltNm.toLowerCase().includes(q))
+          (plantObj && plantObj.pltNm && plantObj.pltNm.toLowerCase().includes(q)) ||
+          (land.allotedFor && land.allotedFor.toLowerCase().includes(q)) ||
+          (land.district && land.district.toLowerCase().includes(q)) ||
+          (land.village && land.village.toLowerCase().includes(q))
         );
       });
     }
@@ -1577,6 +1635,9 @@ const AgriLandAllocation = ({ userRole, onLogout }) => {
                                   style={{ border: 'none', outline: 'none', flex: 1, minWidth: '150px', fontSize: '14px', background: 'transparent' }}
                                 />
                               </div>
+                              {formErrors.surveyInput && (
+                                <span className="error-text" style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block' }}>{formErrors.surveyInput}</span>
+                              )}
                             </label>
                           </div>
                           <div className="al-form-layout-row columns-4" style={{ marginTop: '20px' }}>
@@ -1631,70 +1692,43 @@ const AgriLandAllocation = ({ userRole, onLogout }) => {
                             <div className="al-form-layout-row columns-4" style={{ marginTop: '20px' }}>
                               <label className="al-field-item">
                               <span>Lease Start Date <b style={{ color: '#ef4444' }}>*</b></span>
-                              <DatePicker
-                                selected={form.leaseStartDate ? new Date(form.leaseStartDate) : null}
-                                onChange={(date) => {
-                                  if (date) {
-                                    const y = date.getFullYear();
-                                    const m = String(date.getMonth() + 1).padStart(2, '0');
-                                    const d = String(date.getDate()).padStart(2, '0');
-                                    handleChange({ target: { name: "leaseStartDate", value: `${y}-${m}-${d}` } });
-                                  } else {
-                                    handleChange({ target: { name: "leaseStartDate", value: "" } });
-                                  }
+                              <input 
+                                type="date"
+                                name="leaseStartDate"
+                                value={form.leaseStartDate || ''}
+                                onChange={handleChange}
+                                max={form.leaseEndDate || '9999-12-31'}
+                                style={{
+                                  width: '100%',
+                                  padding: '8px 12px',
+                                  border: '1px solid #cbd5e1',
+                                  borderRadius: '6px',
+                                  fontSize: '14px',
+                                  outline: 'none',
+                                  boxSizing: 'border-box',
+                                  height: '40px'
                                 }}
-                                dateFormat="dd-MM-yyyy"
-                                maxDate={form.leaseEndDate ? new Date(form.leaseEndDate) : null}
-                                placeholderText="dd-mm-yyyy"
-                                showYearDropdown
-                                scrollableYearDropdown
-                                yearDropdownItemNumber={100}
-                                customInput={
-                                  <input style={{
-                                    width: '100%',
-                                    padding: '8px 12px',
-                                    border: '1px solid #cbd5e1',
-                                    borderRadius: '6px',
-                                    fontSize: '14px',
-                                    outline: 'none',
-                                    boxSizing: 'border-box',
-                                    height: '40px'
-                                  }} />
-                                }
                               />
                             </label>
                             <label className="al-field-item">
                               <span>Lease End Date <b style={{ color: '#ef4444' }}>*</b></span>
-                              <DatePicker
-                                selected={form.leaseEndDate ? new Date(form.leaseEndDate) : null}
-                                onChange={(date) => {
-                                  if (date) {
-                                    const y = date.getFullYear();
-                                    const m = String(date.getMonth() + 1).padStart(2, '0');
-                                    const d = String(date.getDate()).padStart(2, '0');
-                                    handleChange({ target: { name: "leaseEndDate", value: `${y}-${m}-${d}` } });
-                                  } else {
-                                    handleChange({ target: { name: "leaseEndDate", value: "" } });
-                                  }
+                              <input 
+                                type="date"
+                                name="leaseEndDate"
+                                value={form.leaseEndDate || ''}
+                                onChange={handleChange}
+                                min={form.leaseStartDate || ''}
+                                max="9999-12-31"
+                                style={{
+                                  width: '100%',
+                                  padding: '8px 12px',
+                                  border: '1px solid #cbd5e1',
+                                  borderRadius: '6px',
+                                  fontSize: '14px',
+                                  outline: 'none',
+                                  boxSizing: 'border-box',
+                                  height: '40px'
                                 }}
-                                dateFormat="dd-MM-yyyy"
-                                minDate={form.leaseStartDate ? new Date(form.leaseStartDate) : null}
-                                placeholderText="dd-mm-yyyy"
-                                showYearDropdown
-                                scrollableYearDropdown
-                                yearDropdownItemNumber={100}
-                                customInput={
-                                  <input style={{
-                                    width: '100%',
-                                    padding: '8px 12px',
-                                    border: '1px solid #cbd5e1',
-                                    borderRadius: '6px',
-                                    fontSize: '14px',
-                                    outline: 'none',
-                                    boxSizing: 'border-box',
-                                    height: '40px'
-                                  }} />
-                                }
                               />
                             </label>
                               <label className="al-field-item" style={{ gridColumn: 'span 2' }}>
