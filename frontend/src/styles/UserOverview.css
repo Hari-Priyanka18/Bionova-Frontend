@@ -135,10 +135,12 @@
   justify-content: center;
 }
 
+.mp-icon-purple { background: #f3e8ff; color: #9333ea; }
 .mp-icon-blue  { background: #eff6ff; color: #3b82f6; }
 .mp-icon-green { background: #f0fdf4; color: #10b981; }
 .mp-icon-orange{ background: #fff7ed; color: #f59e0b; }
 .mp-icon-red   { background: #fef2f2; color: #ef4444; }
+.mp-icon-gray  { background: #f3f4f6; color: #6b7280; }
 
 .mp-task-num {
   font-size: 22px;

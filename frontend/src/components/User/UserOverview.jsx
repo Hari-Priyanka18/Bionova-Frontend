@@ -1,6 +1,6 @@
 // UserOverview.jsx
 import React from 'react';
-import { BarChart2, Users, CheckCircle2, PlayCircle, Clock, Calendar } from 'lucide-react';
+import { BarChart2, Users, CheckCircle2, PlayCircle, Clock, Calendar, ClipboardCheck } from 'lucide-react';
 import '../../styles/UserOverview.css';
 
 // Donut chart for project progress panel
@@ -38,10 +38,10 @@ const DonutChart = ({ completedPct, inProgressPct, yetToStartPct, overallPct }) 
 };
 
 const UserOverview = ({ selectedProject }) => {
-  const total = selectedProject.taskSummary?.assigned || 0;
-  const completedCount = selectedProject.taskSummary?.completed || 0;
-  const wipCount = selectedProject.taskSummary?.inProgress || 0;
-  const openCount = selectedProject.taskSummary?.openTasks || 0;
+  const total = selectedProject?.taskSummary?.assigned || 0;
+  const completedCount = selectedProject?.taskSummary?.completed || 0;
+  const wipCount = selectedProject?.taskSummary?.inProgress || 0;
+  const openCount = selectedProject?.taskSummary?.openTasks || 0;
   const reviewCount = Math.max(0, total - completedCount - wipCount - openCount);
 
   const completedPct = total > 0 ? Math.round((completedCount / total) * 100) : 0;
@@ -95,23 +95,23 @@ const UserOverview = ({ selectedProject }) => {
         <div className="mp-card-title"><CheckCircle2 size={15} /> TASK SUMMARY</div>
         <div className="mp-task-summary-grid">
           <div className="mp-task-stat">
-            <div className="mp-task-icon mp-icon-gray"><CheckCircle2 size={20} /></div>
-            <div className="mp-task-num">{selectedProject.taskSummary.assigned}</div>
+            <div className="mp-task-icon mp-icon-purple"><ClipboardCheck size={20} /></div>
+            <div className="mp-task-num">{selectedProject?.taskSummary?.assigned ?? 0}</div>
             <div className="mp-task-label">Tasks Assigned</div>
           </div>
           <div className="mp-task-stat">
-            <div className="mp-task-icon mp-icon-blue"><PlayCircle size={20} /></div>
-            <div className="mp-task-num">{selectedProject.taskSummary.inProgress}</div>
+            <div className="mp-task-icon mp-icon-orange"><PlayCircle size={20} /></div>
+            <div className="mp-task-num">{selectedProject?.taskSummary?.inProgress ?? 0}</div>
             <div className="mp-task-label">In Progress</div>
           </div>
           <div className="mp-task-stat">
-            <div className="mp-task-icon mp-icon-orange"><Clock size={20} /></div>
-            <div className="mp-task-num">{selectedProject.taskSummary.openTasks}</div>
+            <div className="mp-task-icon mp-icon-blue"><Clock size={20} /></div>
+            <div className="mp-task-num">{selectedProject?.taskSummary?.openTasks ?? 0}</div>
             <div className="mp-task-label">Open Tasks</div>
           </div>
           <div className="mp-task-stat">
             <div className="mp-task-icon mp-icon-green"><CheckCircle2 size={20} /></div>
-            <div className="mp-task-num">{selectedProject.taskSummary.completed}</div>
+            <div className="mp-task-num">{selectedProject?.taskSummary?.completed ?? 0}</div>
             <div className="mp-task-label">Closed</div>
           </div>
         </div>

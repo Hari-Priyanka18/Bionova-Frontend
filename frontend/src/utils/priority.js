@@ -28,7 +28,7 @@ export const getPriorityMetadata = (name, id = null) => {
         priority: 'LOW',
         priorityId: id || 1,
         color: '#22C55E',
-        bgColor: '#22c55e18',
+        bgColor: '#f0fdf4',
         borderColor: '#22c55e40',
         badgeClass: 'low'
       };
@@ -37,7 +37,7 @@ export const getPriorityMetadata = (name, id = null) => {
         priority: 'NORMAL',
         priorityId: id || 2,
         color: '#3B82F6',
-        bgColor: '#3b82f618',
+        bgColor: '#eff6ff',
         borderColor: '#3b82f640',
         badgeClass: 'normal'
       };
@@ -46,7 +46,7 @@ export const getPriorityMetadata = (name, id = null) => {
         priority: 'MEDIUM',
         priorityId: id || 3,
         color: '#F59E0B',
-        bgColor: '#f59e0b18',
+        bgColor: '#fff7ed',
         borderColor: '#f59e0b40',
         badgeClass: 'medium'
       };
@@ -55,7 +55,7 @@ export const getPriorityMetadata = (name, id = null) => {
         priority: 'HIGH',
         priorityId: id || 4,
         color: '#EF4444',
-        bgColor: '#ef444418',
+        bgColor: '#fef2f2',
         borderColor: '#ef444440',
         badgeClass: 'high'
       };
@@ -63,9 +63,9 @@ export const getPriorityMetadata = (name, id = null) => {
       return {
         priority: 'CRITICAL',
         priorityId: id || 5,
-        color: '#B91C1C',
-        bgColor: '#b91c1c18',
-        borderColor: '#b91c1c40',
+        color: '#FFFFFF',
+        bgColor: '#B91C1C',
+        borderColor: '#b91c1c',
         badgeClass: 'critical'
       };
     case 'ATMOST CRITICAL':
@@ -73,9 +73,9 @@ export const getPriorityMetadata = (name, id = null) => {
       return {
         priority: 'ATMOST CRITICAL',
         priorityId: id || 6,
-        color: '#7F1D1D',
-        bgColor: '#7f1d1d18',
-        borderColor: '#7f1d1d40',
+        color: '#FFFFFF',
+        bgColor: '#7F1D1D',
+        borderColor: '#7f1d1d',
         badgeClass: 'atmost-critical'
       };
     default:

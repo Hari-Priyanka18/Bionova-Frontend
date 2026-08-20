@@ -57,7 +57,9 @@ const UserMyTask = ({ selectedProject, userTasks = [] }) => {
     const statusVal = (t.taskSts || t.tasksts || "").toUpperCase();
     const subSts = (t.subStatus || t.substatus || "").toUpperCase();
     const isRework = subSts === 'REWORK' || statusVal === 'REWORK';
-    const rawEnd = t.endDt || t.enddt;
+    const rawEnd = t.endDt || t.enddt || t.endDate;
+    const actCmp = t.actCmpDt || t.actcmpdt || t.act_cmp_dt || t.updDt || t.upddt;
+
     let isTaskOverdue = false;
     if (statusVal !== 'COMPLETED' && statusVal !== 'CLOSED' && rawEnd && rawEnd !== 'N/A') {
       const d = new Date(rawEnd);
@@ -68,8 +70,33 @@ const UserMyTask = ({ selectedProject, userTasks = [] }) => {
       }
     }
 
+    let leadLagType = "On Time";
+    if (statusVal === 'COMPLETED' || statusVal === 'CLOSED') {
+      if (rawEnd && rawEnd !== 'N/A') {
+        const dueD = new Date(rawEnd);
+        dueD.setHours(0, 0, 0, 0);
+
+        let cmpD = actCmp ? new Date(actCmp) : new Date();
+        cmpD.setHours(0, 0, 0, 0);
+
+        if (!isNaN(dueD.getTime()) && !isNaN(cmpD.getTime())) {
+          if (cmpD < dueD) {
+            leadLagType = "Lead";
+          } else if (cmpD > dueD) {
+            leadLagType = "Lag";
+          } else {
+            leadLagType = "On Time";
+          }
+        } else {
+          leadLagType = "On Time";
+        }
+      } else {
+        leadLagType = "On Time";
+      }
+    }
+
     let displayStatus = "Not Started";
-    if (statusVal === 'COMPLETED' || statusVal === 'CLOSED') displayStatus = "Closed";
+    if (statusVal === 'COMPLETED' || statusVal === 'CLOSED') displayStatus = `Closed (${leadLagType})`;
     else if (isTaskOverdue) displayStatus = "Overdue";
     else if (statusVal === 'WIP' || isRework) displayStatus = "In Progress";
     else if (statusVal === 'SUBMIT_REVIEW' || statusVal === 'UNDER_REVIEW') displayStatus = "In Progress";
@@ -85,6 +112,8 @@ const UserMyTask = ({ selectedProject, userTasks = [] }) => {
       priority: t.priority || "Medium",
       due: formatDateDDMMYYYY(t.endDt || t.enddt || "N/A"),
       status: displayStatus,
+      rawStatus: statusVal,
+      leadLagType: leadLagType,
       progress: progressVal,
       isOverdue: isTaskOverdue
     };
@@ -96,10 +125,43 @@ const UserMyTask = ({ selectedProject, userTasks = [] }) => {
   }, [statusFilter, priorityFilter, milestoneFilter, searchQuery]);
 
   const filteredTasks = mappedTasks.filter(t => {
-    const matchStatus = statusFilter === "All Status" || t.status === statusFilter;
-    const matchPriority = priorityFilter === "All Priority" || t.priority === priorityFilter;
-    const matchMilestone = milestoneFilter === "All Milestones" || String(t.milestoneId) === String(milestoneFilter);
-    const matchSearch = t.name.toLowerCase().includes(searchQuery.toLowerCase()) || t.code.toLowerCase().includes(searchQuery.toLowerCase());
+    const sFilter = statusFilter.toUpperCase().trim();
+    const tSts = String(t.status || '').toUpperCase().trim();
+    const tRawSts = String(t.rawStatus || '').toUpperCase().trim();
+    
+    let matchStatus = statusFilter === "All Status";
+    if (!matchStatus) {
+      if (sFilter === "CLOSED") matchStatus = tSts.startsWith("CLOSED") || tRawSts === "COMPLETED" || tRawSts === "CLOSED";
+      else if (sFilter === "IN PROGRESS") matchStatus = tSts === "IN PROGRESS" || tRawSts === "WIP" || tRawSts === "IN_PROGRESS" || tRawSts === "UNDER_REVIEW" || tRawSts === "SUBMIT_REVIEW";
+      else if (sFilter === "PENDING") matchStatus = tSts === "PENDING" || tRawSts === "OPEN";
+      else if (sFilter === "NOT STARTED") matchStatus = tSts === "NOT STARTED" || tRawSts === "NOT_STARTED";
+      else if (sFilter === "OVERDUE") matchStatus = tSts === "OVERDUE" || t.isOverdue;
+      else matchStatus = tSts === sFilter;
+    }
+
+    const pFilter = priorityFilter.toUpperCase().trim();
+    const tPrio = String(t.priority || '').toUpperCase().trim();
+    let matchPriority = priorityFilter === "All Priority";
+    if (!matchPriority) {
+      if (pFilter === "CRITICAL") matchPriority = tPrio.includes("CRITICAL") && !tPrio.includes("ATMOST") && !tPrio.includes("AT MOST");
+      else if (pFilter === "AT MOST CRITICAL") matchPriority = tPrio.includes("ATMOST") || tPrio.includes("AT MOST");
+      else matchPriority = tPrio === pFilter;
+    }
+
+    const mFilter = String(milestoneFilter).trim();
+    const matchMilestone = milestoneFilter === "All Milestones" || 
+      String(t.milestoneId) === mFilter || 
+      String(t.milestone).toLowerCase().trim() === mFilter.toLowerCase();
+
+    const q = searchQuery.toLowerCase().trim();
+    const matchSearch = !q || 
+      t.name.toLowerCase().includes(q) || 
+      t.code.toLowerCase().includes(q) ||
+      t.milestone.toLowerCase().includes(q) ||
+      t.priority.toLowerCase().includes(q) ||
+      t.status.toLowerCase().includes(q) ||
+      t.due.toLowerCase().includes(q);
+
     return matchStatus && matchPriority && matchMilestone && matchSearch;
   });
 
@@ -108,6 +170,7 @@ const UserMyTask = ({ selectedProject, userTasks = [] }) => {
 
   const getStatusClass = (status) => {
     const s = String(status || '').toUpperCase().trim();
+    if (s.startsWith('CLOSED')) return 'ut-status-completed';
     switch (s) {
       case 'CLOSED':
       case 'COMPLETED': return 'ut-status-completed';
@@ -149,6 +212,7 @@ const UserMyTask = ({ selectedProject, userTasks = [] }) => {
               <option value="In Progress">In Progress</option>
               <option value="Pending">Pending</option>
               <option value="Not Started">Not Started</option>
+              <option value="Overdue">Overdue</option>
               <option value="Closed">Closed</option>
             </select>
           </div>
@@ -158,8 +222,11 @@ const UserMyTask = ({ selectedProject, userTasks = [] }) => {
             <select className="ut-select" value={priorityFilter} onChange={e => setPriorityFilter(e.target.value)}>
               <option value="All Priority">All Priority</option>
               <option value="High">High</option>
+              <option value="Normal">Normal</option>
               <option value="Medium">Medium</option>
               <option value="Low">Low</option>
+              <option value="Critical">Critical</option>
+              <option value="At Most Critical">At Most Critical</option>
             </select>
           </div>
 
@@ -167,16 +234,20 @@ const UserMyTask = ({ selectedProject, userTasks = [] }) => {
             <label className="ut-filter-label">Milestone</label>
             <select className="ut-select" value={milestoneFilter} onChange={e => setMilestoneFilter(e.target.value)}>
               <option value="All Milestones">All Milestones</option>
-              {(selectedProject?.milestones || []).map(m => (
-                <option key={m.mId} value={m.mId}>{m.name}</option>
-              ))}
+              {(selectedProject?.milestones || []).map((m, idx) => {
+                const mId = m.mId || m.mid || m.id;
+                const mName = m.name || m.mlstnTtl || m.mlstnttl || `Milestone ${idx + 1}`;
+                return (
+                  <option key={idx} value={String(mId)}>{mName}</option>
+                );
+              })}
             </select>
           </div>
 
           <div className="ut-search-group">
             <Search size={14} className="ut-search-icon" />
             <input type="text" className="ut-search-input" placeholder="Search tasks..." 
-              value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+              value={searchQuery} maxLength={25} onChange={e => setSearchQuery(e.target.value.slice(0, 25))} />
           </div>
         </div>
 
@@ -207,9 +278,50 @@ const UserMyTask = ({ selectedProject, userTasks = [] }) => {
                     <td><strong>{t.code}</strong></td>
                     <td>{t.name}</td>
                     <td>{t.milestone}</td>
-                    <td>{t.status !== 'Closed' && <span className={`ut-badge ${getStatusClass(t.priority)}`}>{t.priority}</span>}</td>
+                    <td>
+                      {t.status.startsWith("Closed") || t.rawStatus === "CLOSED" || t.rawStatus === "COMPLETED" ? (
+                        <span style={{ color: "#94a3b8", fontWeight: 600 }}>-</span>
+                      ) : (
+                        <span className={`ut-badge ${getStatusClass(t.priority)}`}>{t.priority}</span>
+                      )}
+                    </td>
                     <td>{t.due}</td>
-                    <td><span className={`ut-badge ${getStatusClass(t.status)}`}>{t.status}</span></td>
+                    <td>
+                      {t.status.startsWith("Closed") || t.rawStatus === "CLOSED" || t.rawStatus === "COMPLETED" ? (
+                        <span
+                          className="ut-badge ut-status-completed"
+                          style={{
+                            display: "inline-block",
+                            textAlign: "center",
+                            lineHeight: "1.2",
+                            padding: "4px 10px",
+                            borderRadius: "4px",
+                            fontWeight: 600,
+                            fontSize: "11px",
+                            background: "#dcfce7"
+                          }}
+                        >
+                          <span style={{ color: "#16a34a", display: "block" }}>Closed</span>
+                          <span
+                            style={{
+                              display: "block",
+                              fontSize: "10px",
+                              fontWeight: 700,
+                              color:
+                                t.leadLagType === "Lead"
+                                  ? "#16a34a"
+                                  : t.leadLagType === "Lag"
+                                  ? "#dc2626"
+                                  : "#2563eb"
+                            }}
+                          >
+                            ({t.leadLagType})
+                          </span>
+                        </span>
+                      ) : (
+                        <span className={`ut-badge ${getStatusClass(t.status)}`}>{t.status}</span>
+                      )}
+                    </td>
                     <td>
                       <HorizontalProgress pct={t.progress} color={t.progress > 0 ? "#195dfa" : "#d1d5db"} />
                     </td>

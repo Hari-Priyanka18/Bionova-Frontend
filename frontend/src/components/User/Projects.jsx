@@ -273,12 +273,12 @@ const MyProjects = ({ userRole, onLogout }) => {
             }
           }
 
-          const rawBasePriority = typeof proj.prjPrty === 'string' ? proj.prjPrty : (proj.prjPrty?.priorityNm || proj.prjprty || "LOW");
+          const rawBasePriority = typeof proj.prjPrty === 'string' ? proj.prjPrty : (proj.prjPrty?.priorityNm || proj.prjprty || dashP.priority || dashP.prjPrty || "LOW");
           const dynamicPrio = calculateDynamicPriority(
             rawBasePriority,
             rawStart,
             rawEnd,
-            proj.totalProjectDays || proj.total_project_days
+            proj.totalProjectDays || proj.total_project_days || proj.noOfDays || proj.no_of_days || dashP.totalDays || dashP.noOfDays
           );
 
           return {
@@ -357,8 +357,17 @@ const MyProjects = ({ userRole, onLogout }) => {
   }, []);
 
   const filtered = projects.filter(p => {
-    const matchSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchFilter = statusFilter === "All Projects" || p.status === statusFilter;
+    const q = searchQuery.toLowerCase().trim();
+    const matchSearch = !q || 
+      p.name.toLowerCase().includes(q) || 
+      (p.code && p.code.toLowerCase().includes(q)) || 
+      (p.company && p.company.toLowerCase().includes(q)) || 
+      (p.plant && p.plant.toLowerCase().includes(q)) ||
+      (p.priority && p.priority.toLowerCase().includes(q));
+
+    const sFilter = statusFilter.toUpperCase().trim();
+    const pSts = String(p.status || '').toUpperCase().trim();
+    const matchFilter = statusFilter === "All Projects" || pSts === sFilter || (sFilter === "CLOSED" && p.isUserClosed);
     return matchSearch && matchFilter;
   });
 
@@ -418,7 +427,8 @@ const MyProjects = ({ userRole, onLogout }) => {
                     type="text"
                     placeholder="Search projects..."
                     value={searchQuery}
-                    onChange={e => setSearchQuery(e.target.value)}
+                    maxLength={25}
+                    onChange={e => setSearchQuery(e.target.value.slice(0, 25))}
                   />
                 </div>
                 <div className="mp-filter-wrap">
@@ -440,98 +450,127 @@ const MyProjects = ({ userRole, onLogout }) => {
 
               {/* Project Cards */}
               <div className="mp-card-list">
-                {paged.map(proj => (
-                  <div
-                    key={proj.id}
-                    className={`mp-project-card ${selectedProject?.id === proj.id ? "selected" : ""}`}
-                    onClick={() => { setSelectedProject(proj); setActiveTab("Overview"); setShowFilterDrop(false); }}
-                  >
-                    {proj.image ? (
-                      <img src={proj.image} alt={proj.name} className="mp-card-img" style={{ objectFit: 'contain', alignSelf: 'flex-start', height: 'auto', maxHeight: '140px', background: 'transparent', borderRadius: '8px' }} />
-                    ) : (
-                      <div className="mp-card-img" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '110px', minWidth: '110px', height: '80px', borderRadius: '8px', background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)', flexShrink: 0, alignSelf: 'flex-start' }}>
-                        <span style={{ fontSize: '32px', fontWeight: '800', color: '#fff', textTransform: 'uppercase', letterSpacing: '-1px' }}>{(proj.name || 'P').charAt(0)}</span>
-                      </div>
-                    )}
-                    <div className="mp-card-info" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '16px', flex: 1 }}>
-                      <div className="mp-card-header-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
-                        <div style={{ flex: 1, paddingRight: '12px' }}>
-                          <div className="mp-card-name" style={{ fontSize: '16px', fontWeight: '700', color: '#0f172a', marginBottom: '4px' }}>{proj.name}</div>
-                          <div className="mp-card-sub" style={{ fontSize: '12px', color: '#64748b', marginBottom: '12px', lineHeight: '1.4' }}>{proj.company} | {proj.plant}</div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            {proj.isUserClosed && proj.userLeadLagLabel ? (
-                              <>
-                                <span style={{ fontSize: '12px', color: '#64748b', fontWeight: '500' }}>Schedule:</span>
-                                <span style={{ 
-                                  backgroundColor: proj.userLeadLagColor + '15', 
-                                  color: proj.userLeadLagColor,
-                                  padding: '2px 8px',
-                                  borderRadius: '12px',
-                                  fontSize: '10px',
-                                  fontWeight: '700',
-                                  letterSpacing: '0.3px',
-                                  textTransform: 'uppercase'
-                                }}>{proj.userLeadLagLabel}</span>
-                              </>
-                            ) : (
-                              <>
-                                <span style={{ fontSize: '12px', color: '#64748b', fontWeight: '500' }}>Priority:</span>
-                                <span style={{ 
-                                  backgroundColor: priorityColor(proj.priority) + '15', 
-                                  color: priorityColor(proj.priority),
-                                  padding: '2px 8px',
-                                  borderRadius: '12px',
-                                  fontSize: '10px',
-                                  fontWeight: '700',
-                                  letterSpacing: '0.3px',
-                                  textTransform: 'uppercase'
-                                }}>{proj.priority}</span>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                        <div className="mp-card-circle" style={{ flexShrink: 0, display: 'flex', justifyContent: 'flex-end', width: '100px' }}>
-                          <CircularProgress pct={proj.progress} color={progressColor(proj.progress)} />
-                        </div>
-                      </div>
-                      
-                      <div className="mp-card-footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #f1f5f9', paddingTop: '12px', marginTop: 'auto' }}>
-                        <div style={{ display: 'flex', gap: '20px' }}>
-                          <div className="mp-card-stat" style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                            <span className="mp-stat-label" style={{ fontSize: '11px', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Tasks</span>
-                            <span className="mp-stat-value" style={{ fontSize: '15px', fontWeight: '700', color: '#1e293b' }}>{proj.tasksAssigned}</span>
-                          </div>
-                          <div className="mp-card-stat" style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                            <span className="mp-stat-label" style={{ fontSize: '11px', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Open</span>
-                            <span className="mp-stat-value" style={{ fontSize: '15px', fontWeight: '700', color: '#1e293b' }}>{proj.openTasks}</span>
-                          </div>
-                          <div className="mp-card-stat" style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                            <span className="mp-stat-label" style={{ fontSize: '11px', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Closed</span>
-                            <span className="mp-stat-value" style={{ fontSize: '15px', fontWeight: '700', color: '#1e293b' }}>{proj.closedTasks}</span>
-                          </div>
-                        </div>
-                        <span style={{
-                          backgroundColor: statusColor(proj.status) + '15',
-                          color: statusColor(proj.status),
-                          padding: '6px 12px',
-                          borderRadius: '16px',
-                          fontSize: '11px',
-                          fontWeight: '700',
-                          textTransform: 'uppercase',
-                          letterSpacing: '0.3px',
-                          display: 'inline-block'
-                        }}>
-                          {proj.status}
-                        </span>
-                      </div>
+                {paged.length === 0 ? (
+                  <div style={{
+                    gridColumn: '1 / -1',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '60px 24px',
+                    background: '#ffffff',
+                    borderRadius: '12px',
+                    border: '1px solid #e9ecef',
+                    textAlign: 'center',
+                    margin: '12px 0'
+                  }}>
+                    <div style={{ fontSize: '16px', fontWeight: '700', color: '#1e293b', marginBottom: '8px' }}>
+                      {statusFilter.toUpperCase() === "HOLD" ? "No projects are currently on hold" : 
+                       statusFilter.toUpperCase() === "LIVE" ? "No live projects found" :
+                       statusFilter.toUpperCase() === "CLOSED" ? "No closed projects found" :
+                       "No projects found"}
+                    </div>
+                    <div style={{ fontSize: '13px', color: '#64748b' }}>
+                      {statusFilter !== "All Projects" 
+                        ? `There are no projects under the "${statusFilter}" filter.` 
+                        : "No projects match your search query."}
                     </div>
                   </div>
-                ))}
+                ) : (
+                  paged.map(proj => (
+                    <div
+                      key={proj.id}
+                      className={`mp-project-card ${selectedProject?.id === proj.id ? "selected" : ""}`}
+                      onClick={() => { setSelectedProject(proj); setActiveTab("Overview"); setShowFilterDrop(false); }}
+                    >
+                      {proj.image ? (
+                        <img src={proj.image} alt={proj.name} className="mp-card-img" style={{ objectFit: 'contain', alignSelf: 'flex-start', height: 'auto', maxHeight: '140px', background: 'transparent', borderRadius: '8px' }} />
+                      ) : (
+                        <div className="mp-card-img" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '110px', minWidth: '110px', height: '80px', borderRadius: '8px', background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)', flexShrink: 0, alignSelf: 'flex-start' }}>
+                          <span style={{ fontSize: '32px', fontWeight: '800', color: '#fff', textTransform: 'uppercase', letterSpacing: '-1px' }}>{(proj.name || 'P').charAt(0)}</span>
+                        </div>
+                      )}
+                      <div className="mp-card-info" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '16px', flex: 1 }}>
+                        <div className="mp-card-header-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
+                          <div style={{ flex: 1, paddingRight: '12px' }}>
+                            <div className="mp-card-name" style={{ fontSize: '16px', fontWeight: '700', color: '#0f172a', marginBottom: '4px' }}>{proj.name}</div>
+                            <div className="mp-card-sub" style={{ fontSize: '12px', color: '#64748b', marginBottom: '12px', lineHeight: '1.4' }}>{proj.company} | {proj.plant}</div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              {proj.isUserClosed && proj.userLeadLagLabel ? (
+                                <>
+                                  <span style={{ fontSize: '12px', color: '#64748b', fontWeight: '500' }}>Schedule:</span>
+                                  <span style={{ 
+                                    backgroundColor: proj.userLeadLagColor + '15', 
+                                    color: proj.userLeadLagColor,
+                                    padding: '2px 8px',
+                                    borderRadius: '12px',
+                                    fontSize: '10px',
+                                    fontWeight: '700',
+                                    letterSpacing: '0.3px',
+                                    textTransform: 'uppercase'
+                                  }}>{proj.userLeadLagLabel}</span>
+                                </>
+                              ) : (
+                                <>
+                                  <span style={{ fontSize: '12px', color: '#64748b', fontWeight: '500' }}>Priority:</span>
+                                  <span style={{ 
+                                    backgroundColor: proj.priorityMeta?.bgColor || (priorityColor(proj.priority) + '15'), 
+                                    color: proj.priorityMeta?.color || priorityColor(proj.priority),
+                                    border: proj.priorityMeta?.borderColor ? `1px solid ${proj.priorityMeta.borderColor}` : 'none',
+                                    padding: '2px 8px',
+                                    borderRadius: '12px',
+                                    fontSize: '10px',
+                                    fontWeight: '700',
+                                    letterSpacing: '0.3px',
+                                    textTransform: 'uppercase'
+                                  }}>{proj.priority}</span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                          <div className="mp-card-circle" style={{ flexShrink: 0, display: 'flex', justifyContent: 'flex-end', width: '100px' }}>
+                            <CircularProgress pct={proj.progress} color={progressColor(proj.progress)} />
+                          </div>
+                        </div>
+                        
+                        <div className="mp-card-footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #f1f5f9', paddingTop: '12px', marginTop: 'auto' }}>
+                          <div style={{ display: 'flex', gap: '20px' }}>
+                            <div className="mp-card-stat" style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                              <span className="mp-stat-label" style={{ fontSize: '11px', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Tasks</span>
+                              <span className="mp-stat-value" style={{ fontSize: '15px', fontWeight: '700', color: '#1e293b' }}>{proj.tasksAssigned}</span>
+                            </div>
+                            <div className="mp-card-stat" style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                              <span className="mp-stat-label" style={{ fontSize: '11px', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Open</span>
+                              <span className="mp-stat-value" style={{ fontSize: '15px', fontWeight: '700', color: '#1e293b' }}>{proj.openTasks}</span>
+                            </div>
+                            <div className="mp-card-stat" style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                              <span className="mp-stat-label" style={{ fontSize: '11px', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Closed</span>
+                              <span className="mp-stat-value" style={{ fontSize: '15px', fontWeight: '700', color: '#1e293b' }}>{proj.closedTasks}</span>
+                            </div>
+                          </div>
+                          <span style={{
+                            backgroundColor: statusColor(proj.status) + '15',
+                            color: statusColor(proj.status),
+                            padding: '6px 12px',
+                            borderRadius: '16px',
+                            fontSize: '11px',
+                            fontWeight: '700',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.3px',
+                            display: 'inline-block'
+                          }}>
+                            {proj.status}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
 
               {/* Pagination */}
               <div className="mp-pagination">
-                <span>Showing 1 to {filtered.length} of {filtered.length} projects</span>
+                <span>{filtered.length === 0 ? "Showing 0 of 0 projects" : `Showing 1 to ${filtered.length} of ${filtered.length} projects`}</span>
                 <div className="mp-pag-controls">
                   <button disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)}><ChevronLeft size={14} /></button>
                   <span className="mp-pag-page">{currentPage}</span>
@@ -625,12 +664,13 @@ const MyProjects = ({ userRole, onLogout }) => {
                         </>
                       ) : (
                         <>
-                          <AlertCircle size={14} style={{ color: priorityColor(selectedProject.priority) }} />
+                          <AlertCircle size={14} style={{ color: selectedProject.priorityMeta?.bgColor || priorityColor(selectedProject.priority) }} />
                           <div>
                             <span className="mp-meta-label">Priority</span>
                             <span className="mp-meta-value bold" style={{ 
-                              color: priorityColor(selectedProject.priority), 
-                              backgroundColor: priorityColor(selectedProject.priority) + '15',
+                              color: selectedProject.priorityMeta?.color || priorityColor(selectedProject.priority), 
+                              backgroundColor: selectedProject.priorityMeta?.bgColor || (priorityColor(selectedProject.priority) + '15'),
+                              border: selectedProject.priorityMeta?.borderColor ? `1px solid ${selectedProject.priorityMeta.borderColor}` : 'none',
                               padding: '5px 14px',
                               borderRadius: '14px',
                               fontSize: '12px',

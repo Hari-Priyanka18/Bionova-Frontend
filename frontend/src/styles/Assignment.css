@@ -78,27 +78,29 @@
 }
 .cit-badge.priority-high {
   background-color: #fef2f2;
-  color: #dc2626;
+  color: #ef4444;
 }
 .cit-badge.priority-medium {
-  background-color: #fefce8;
-  color: #ca8a04;
+  background-color: #fff7ed;
+  color: #f59e0b;
 }
 .cit-badge.priority-low {
   background-color: #f0fdf4;
-  color: #16a34a;
+  color: #22c55e;
 }
 .cit-badge.priority-normal {
-  background-color: #f1f5f9;
-  color: #475569;
+  background-color: #eff6ff;
+  color: #3b82f6;
 }
 .cit-badge.priority-critical {
-  background-color: #fef2f2;
-  color: #dc2626;
+  background-color: #b91c1c;
+  color: #ffffff;
 }
-.cit-badge.priority-atmost-critical {
+.cit-badge.priority-atmost-critical,
+.cit-badge.priority-at-most-critical,
+.cit-badge.priority-atmost_critical {
   background-color: #7f1d1d;
-  color: #fef2f2;
+  color: #ffffff;
 }
 
 /* Action Buttons */

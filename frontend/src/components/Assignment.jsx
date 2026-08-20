@@ -11,7 +11,7 @@ import '../styles/CompanyMaster.css';
 import AlertModal from './AlertModal';
 import { getScreenPermission } from '../utils/permissions';
 import GoLiveCalendar from './Projectmanager/GoLiveCalendar';
-
+import { getPriorityMetadata } from '../utils/priority';
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL;
 
 const getAuthHeaders = () => ({
@@ -27,6 +27,13 @@ const formatListDate = (dateString) => {
   const month = String(d.getMonth() + 1).padStart(2, '0');
   const year = d.getFullYear();
   return `${day}/${month}/${year}`;
+};
+
+const getTaskPriorityText = (task) => {
+  const p = task?.priority?.priorityNm || task?.priority || task?.taskPrty || task?.taskprty || task?.prty || task?.Priority;
+  if (!p) return 'High';
+  if (typeof p === 'object') return p.priorityNm || 'High';
+  return String(p);
 };
 
 // ============================================================
@@ -406,6 +413,7 @@ const Assignment = ({ userRole, onLogout }) => {
   const [dueDate, setDueDate] = useState("");
   const [dateError, setDateError] = useState("");
   const [description, setDescription] = useState("");
+  const [originalDates, setOriginalDates] = useState(null);
 
   const [assignedEmployee, setAssignedEmployee] = useState("");
   const [enableWorkflow, setEnableWorkflow] = useState(false);
@@ -621,6 +629,7 @@ const Assignment = ({ userRole, onLogout }) => {
 
       if (tasksRes.ok) {
         let rawTasks = await tasksRes.json();
+        console.log("DEBUG: Raw assignments from API:", rawTasks.slice(0, 5));
         if (assignedByRes && assignedByRes.ok) {
           const assignedByTasks = await assignedByRes.json();
           const existingIds = new Set(rawTasks.map(t => t.empTaskId || t.id));
@@ -779,6 +788,9 @@ const Assignment = ({ userRole, onLogout }) => {
     setChecklist([]);
     setAttachments([]);
     setExistingAttachments([]);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
 
     try {
       const res = await fetch(`${apiBaseUrl}/api/assignments/next-code`, { headers: getAuthHeaders() });
@@ -799,28 +811,33 @@ const Assignment = ({ userRole, onLogout }) => {
     setEditId(task.empTaskId || task.id);
     setTaskCode(task.taskCd || "");
     setTaskTitle(task.taskNm || "");
-    const p = task.priority || task.Priority || "HIGH";
-    setPriority(p.charAt(0).toUpperCase() + p.slice(1).toLowerCase());
-    setStatus(task.taskSts === 'HOLD' ? 'Draft' : 'To-Do');
+    const rawP = getTaskPriorityText(task);
+    setPriority(rawP.charAt(0).toUpperCase() + rawP.slice(1).toLowerCase());
+    const actualStatus = task.taskSts?.statusNm || task.taskSts || 'To-Do';
+    setStatus(actualStatus === 'HOLD' ? 'Draft' : actualStatus);
 
     let sd = task.stDt ? String(task.stDt).substring(0, 10) : "";
     let dd = task.endDt ? String(task.endDt).substring(0, 10) : "";
     setStartDate(sd);
     setDueDate(dd);
 
+    let calculatedDuration = "";
     if (task.plnDys || task.noOfDays || task.duration) {
-      setDuration(String(task.plnDys || task.noOfDays || task.duration));
+      calculatedDuration = String(task.plnDys || task.noOfDays || task.duration);
+      setDuration(calculatedDuration);
     } else if (sd && dd) {
       const start = new Date(sd);
       const end = new Date(dd);
       const diff = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
-      setDuration(diff >= 0 ? String(diff + 1) : "0");
+      calculatedDuration = diff >= 0 ? String(diff + 1) : "0";
+      setDuration(calculatedDuration);
     } else {
       setDuration("");
     }
 
     setAssignedEmployee(task.empId ? String(task.empId) : "");
     setDescription(task.taskDesc || "");
+    setOriginalDates({ stDt: sd, endDt: dd, duration: calculatedDuration });
 
     // Set workflow based on task's prcsFlg
     const workflowEnabled = task.prcsFlg === true || task.prcsFlg === 'YES' || task.prcsFlg === 1 || task.prcsFlg === 'true';
@@ -1066,8 +1083,20 @@ const Assignment = ({ userRole, onLogout }) => {
     const pltId = emp ? (emp.pltId || emp.plantId) : null;
     const isPlantEmployee = !!pltId;
 
+    if (
+      editId && 
+      originalDates && 
+      originalDates.stDt === startDate && 
+      originalDates.endDt === dueDate && 
+      String(originalDates.duration) === String(duration)
+    ) {
+      executeTaskSave({ mode: 'existing' });
+      return;
+    }
+
     setGoLiveTask({
       projectName: taskTitle,
+      taskCd: taskCode,
       startDate: startDate,
       endDate: dueDate,
       totalProjectDays: duration,
@@ -1108,6 +1137,8 @@ const Assignment = ({ userRole, onLogout }) => {
     const existingTaskObj = editId ? (tasks || []).find(t => String(t.empTaskId || t.id) === String(editId)) : null;
     const currentSts = existingTaskObj ? (existingTaskObj.taskSts?.statusNm || existingTaskObj.taskSts || 'ASSIGNED') : 'ASSIGNED';
     const hasAtta = (attachments && attachments.length > 0) || (existingAttachments && existingAttachments.length > 0);
+    const finalPriorityString = priority.toUpperCase();
+    const pMeta = getPriorityMetadata(finalPriorityString);
 
     const taskPayload = {
       empTaskId: editId || null,
@@ -1118,7 +1149,8 @@ const Assignment = ({ userRole, onLogout }) => {
       assignedBy: currentUser?.empId || currentUser?.id || parseInt(sessionStorage.getItem("empId")) || 1,
       taskAsgnTo: 'INTERNAL',
       stDt: startDate ? startDate : null,
-      priority: priority.toUpperCase(),
+      priority: finalPriorityString,
+      priorityId: pMeta.priorityId,
       taskSts: currentSts,
       attaFlg: hasAtta,
       chkFlg: checklist.length > 0,
@@ -1133,6 +1165,7 @@ const Assignment = ({ userRole, onLogout }) => {
 
     const payload = {
       task: taskPayload,
+      priority: finalPriorityString,
       excludeSat,
       excludeSun,
       includeMandatory,
@@ -1146,18 +1179,18 @@ const Assignment = ({ userRole, onLogout }) => {
 
     try {
       const url = `${apiBaseUrl}/api/assignments/assign-with-calendar`;
-      const response = await fetch(url, {
-        method: "POST",
+      const res = await fetch(url, {
+        method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify(payload)
       });
-      
-      if (response.ok) {
-        const savedTask = await response.json();
-        const taskId = savedTask.empTaskId || savedTask.id;
+
+      if (res.ok) {
+        const savedData = await res.json();
+        const taskId = savedData.empTaskId || savedData.id || editId;
         
         if (!taskId) {
-          triggerAlert("error", "Task ID Missing", "The backend did not return a valid Task ID. Response: " + JSON.stringify(savedTask));
+          triggerAlert("error", "Task ID Missing", "The backend did not return a valid Task ID. Response: " + JSON.stringify(savedData));
           return;
         }
 
@@ -1182,8 +1215,8 @@ const Assignment = ({ userRole, onLogout }) => {
           } catch (e) { triggerAlert("error", "Checklist Exception", e.message); }
         }
 
-        // Save Attachments
-        if (attachments && attachments.length > 0) {
+        // Save Attachments - ONLY when user explicitly placed/selected files
+        if (attachments && Array.isArray(attachments) && attachments.length > 0) {
           for (let file of attachments) {
             try {
               const formData = new FormData();
@@ -1292,12 +1325,24 @@ const Assignment = ({ userRole, onLogout }) => {
           console.error("Failed to send some notifications:", e);
         }
 
-        triggerAlert("success", "Success", `Task '${taskTitle}' has been successfully assigned! Notifications sent to Assignee, Reviewer, and Approver.`);
+        let notifyRoles = ["Assignee"];
+        const validReviewers = reviewer.filter(r => r.trim() !== '');
+        const validApprovers = approver.filter(a => a.trim() !== '');
+        if (enableWorkflow) {
+          if (validReviewers.length > 0) notifyRoles.push("Reviewer");
+          if (validApprovers.length > 0) notifyRoles.push("Approver");
+        }
+        let rolesStr = notifyRoles.join(", ");
+        if (notifyRoles.length > 1) {
+          rolesStr = notifyRoles.slice(0, -1).join(", ") + ", and " + notifyRoles[notifyRoles.length - 1];
+        }
+
+        triggerAlert("success", "Success", `Task '${taskTitle}' has been successfully assigned! Notifications sent to ${rolesStr}.`);
         setView("list");
         handleResetForm();
         fetchAllData();
       } else {
-        const errorText = await response.text();
+        const errorText = await res.text();
         triggerAlert("error", "Failed to assignment", errorText || "An error occurred.");
       }
     } catch (err) {
@@ -1429,9 +1474,14 @@ const Assignment = ({ userRole, onLogout }) => {
                             <td>{task.taskNm}</td>
                             <td>{displayName}</td>
                             <td>
-                              <span className={`cit-badge priority-${(task.priority || task.Priority || '').toLowerCase().replace(/\s+/g, '-')}`}>
-                                {task.priority || task.Priority || 'None'}
-                              </span>
+                              {(() => {
+                                const pText = getTaskPriorityText(task);
+                                return (
+                                  <span className={`cit-badge priority-${pText.toLowerCase().replace(/\s+/g, '-')}`}>
+                                    {pText}
+                                  </span>
+                                );
+                              })()}
                             </td>
                             <td>
                               <span style={{ 

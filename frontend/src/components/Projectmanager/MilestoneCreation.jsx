@@ -3215,7 +3215,24 @@ const MilestoneCreation = ({ onLogout, userRole }) => {
         <div className="mc-table-panel">
           <div className="mc-table-header">
             <div><h2>Milestone & Tasks</h2><p>View and manage all milestone records (Draft + Live)</p></div>
-            <button type="button" className="mc-add-btn" onClick={() => { resetMilestoneForm(); setView("form"); window.scrollTo({ top: 0, behavior: "smooth" }); }}><Plus size={16} /> New Milestone</button>
+            <button 
+              type="button" 
+              className="mc-add-btn" 
+              disabled={filterType === "LIVE" || filterType === "CLOSED"}
+              style={{
+                opacity: (filterType === "LIVE" || filterType === "CLOSED") ? 0.5 : 1,
+                cursor: (filterType === "LIVE" || filterType === "CLOSED") ? 'not-allowed' : 'pointer',
+                pointerEvents: (filterType === "LIVE" || filterType === "CLOSED") ? 'none' : 'auto'
+              }}
+              onClick={() => { 
+                if (filterType === "LIVE" || filterType === "CLOSED") return;
+                resetMilestoneForm(); 
+                setView("form"); 
+                window.scrollTo({ top: 0, behavior: "smooth" }); 
+              }}
+            >
+              <Plus size={16} /> New Milestone
+            </button>
           </div>
           <div className="mc-table-filters">
             <div className="mc-filter-group">

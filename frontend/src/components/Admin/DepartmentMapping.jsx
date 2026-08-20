@@ -13,9 +13,7 @@ import {
   Trash2,
   Eye,
   Plus,
-  MoreVertical,
-  Calendar,
-  Building
+  MoreVertical
 } from "lucide-react";
 import "../../styles/DepartmentMapping.css";
 
@@ -135,7 +133,6 @@ const DepartmentMapping = ({ onLogout, userRole }) => {
   const [editingId, setEditingId] = useState(null);
   const [activeDropdown, setActiveDropdown] = useState(null);
   const [dropdownPos, setDropdownPos] = useState({ top: 0, right: 0 });
-  const [mappingLevel, setMappingLevel] = useState("both");
 
   // Scroll handler to reposition dropdown dynamically
   useEffect(() => {
@@ -166,21 +163,6 @@ const DepartmentMapping = ({ onLogout, userRole }) => {
   const [tableSearchQuery, setTableSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [loading, setLoading] = useState(true);
-
-  const generateDepartmentCode = (dList) => {
-    let maxNum = 0;
-    if (Array.isArray(dList)) {
-      dList.forEach(d => {
-        const code = d.deptCd || d.code || d.deptCode || "";
-        const match = code.match(/^DEPT-(\d+)$/i);
-        if (match) {
-          const num = parseInt(match[1], 10);
-          if (!isNaN(num) && num > maxNum) maxNum = num;
-        }
-      });
-    }
-    return `DEPT-${String(maxNum + 1).padStart(3, '0')}`;
-  };
 
   // Department Creation Popup States
   const [showDeptPopup, setShowDeptPopup] = useState(false);
@@ -233,16 +215,7 @@ const DepartmentMapping = ({ onLogout, userRole }) => {
 
       if (compRes.ok) setCompanies(await compRes.json());
       if (plantRes.ok) setPlants(await plantRes.json());
-      if (deptRes.ok) {
-        const rawDepts = await deptRes.json();
-        const mappedDepts = rawDepts.map(d => ({
-          ...d,
-          deptId: d.deptId || d.id,
-          deptNm: d.deptNm || d.name,
-          deptCd: d.deptCd || d.deptCode || d.code,
-        }));
-        setDepartments(mappedDepts);
-      }
+      if (deptRes.ok) setDepartments(await deptRes.json());
     } catch (err) {
       console.error("Error fetching metadata:", err);
     } finally {
@@ -255,8 +228,8 @@ const DepartmentMapping = ({ onLogout, userRole }) => {
     fetchMappings();
   }, []);
 
-  // Filter plants based on selected mappingLevel and company
-  const filteredPlants = mappingLevel === "plant" ? plants : plants.filter(p => String(p.coyId) === String(formData.coyId));
+  // Filter plants based on selected company
+  const filteredPlants = plants.filter(p => String(p.coyId) === String(formData.coyId));
 
   // Find info helper
   const selectedDept = departments.find(d => String(d.deptId) === String(formData.deptId));
@@ -285,7 +258,6 @@ const DepartmentMapping = ({ onLogout, userRole }) => {
       deptId: "",
       sts: true
     });
-    setMappingLevel("both");
   };
 
   const handleCreateDept = async () => {
@@ -327,16 +299,10 @@ const DepartmentMapping = ({ onLogout, userRole }) => {
         // Re-fetch all departments
         const deptRes = await fetch(`${API_BASE}/departments`, { headers: authHeaders() });
         if (deptRes.ok) {
-          const rawDepts = await deptRes.json();
-          const freshDepts = rawDepts.map(d => ({
-            ...d,
-            deptId: d.deptId || d.id,
-            deptNm: d.deptNm || d.name,
-            deptCd: d.deptCd || d.deptCode || d.code,
-          }));
+          const freshDepts = await deptRes.json();
           setDepartments(freshDepts);
           const newlyCreated = freshDepts.find(d => {
-            const apiCode = d.deptCd || "";
+            const apiCode = d.deptCd || d.deptCode || "";
             return apiCode.toUpperCase() === newDeptData.deptCode.trim().toUpperCase();
           });
           if (newlyCreated) {
@@ -362,17 +328,13 @@ const DepartmentMapping = ({ onLogout, userRole }) => {
   };
 
   const handleSave = async () => {
-    if (mappingLevel === "company" || mappingLevel === "both") {
-      if (!formData.coyId) {
-        triggerAlert("error", "Validation Error", "Company selection is required.");
-        return;
-      }
+    if (!formData.coyId) {
+      triggerAlert("error", "Validation Error", "Company selection is required.");
+      return;
     }
-    if (mappingLevel === "plant" || mappingLevel === "both") {
-      if (!formData.pltId) {
-        triggerAlert("error", "Validation Error", "Plant selection is required.");
-        return;
-      }
+    if (!formData.pltId) {
+      triggerAlert("error", "Validation Error", "Plant selection is required.");
+      return;
     }
     if (!formData.deptId) {
       triggerAlert("error", "Validation Error", "Department selection is required.");
@@ -380,8 +342,8 @@ const DepartmentMapping = ({ onLogout, userRole }) => {
     }
 
     const payload = {
-      coyId: mappingLevel === "plant" ? null : Number(formData.coyId),
-      pltId: mappingLevel === "company" ? null : Number(formData.pltId),
+      coyId: Number(formData.coyId),
+      pltId: Number(formData.pltId),
       deptId: Number(formData.deptId),
       sts: formData.sts
     };
@@ -419,16 +381,11 @@ const DepartmentMapping = ({ onLogout, userRole }) => {
 
   const handleEdit = (mapping) => {
     setFormData({
-      coyId: mapping.coyId || "",
-      pltId: mapping.pltId || "",
-      deptId: mapping.deptId || "",
+      coyId: mapping.coyId,
+      pltId: mapping.pltId,
+      deptId: mapping.deptId,
       sts: mapping.sts
     });
-    if (mapping.coyId && mapping.pltId) setMappingLevel("both");
-    else if (mapping.coyId) setMappingLevel("company");
-    else if (mapping.pltId) setMappingLevel("plant");
-    else setMappingLevel("both");
-
     setIsEditing(true);
     setIsViewing(false);
     setEditingId(mapping.mapId);
@@ -438,16 +395,11 @@ const DepartmentMapping = ({ onLogout, userRole }) => {
 
   const handleView = (mapping) => {
     setFormData({
-      coyId: mapping.coyId || "",
-      pltId: mapping.pltId || "",
-      deptId: mapping.deptId || "",
+      coyId: mapping.coyId,
+      pltId: mapping.pltId,
+      deptId: mapping.deptId,
       sts: mapping.sts
     });
-    if (mapping.coyId && mapping.pltId) setMappingLevel("both");
-    else if (mapping.coyId) setMappingLevel("company");
-    else if (mapping.pltId) setMappingLevel("plant");
-    else setMappingLevel("both");
-
     setIsEditing(false);
     setIsViewing(true);
     setEditingId(mapping.mapId);
@@ -509,7 +461,6 @@ const DepartmentMapping = ({ onLogout, userRole }) => {
 
   // Helper names resolver
   const getCompanyName = (id) => {
-    if (!id) return "N/A";
     const found = companies.find(c => String(c.coyId) === String(id));
     return found ? found.coyNm : `Company ID: ${id}`;
   };
@@ -520,7 +471,6 @@ const DepartmentMapping = ({ onLogout, userRole }) => {
   };
 
   const getPlantName = (id) => {
-    if (!id) return "N/A";
     const found = plants.find(p => String(p.pltId) === String(id));
     return found ? found.pltNm : `Plant ID: ${id}`;
   };
@@ -573,9 +523,9 @@ const DepartmentMapping = ({ onLogout, userRole }) => {
           
           {view === "form" ? (
             /* ================= VIEW: FORM MODE ================= */
-            <div className="cc-form-card" style={{ backgroundColor: "white", borderRadius: "8px", border: "1px solid #e2e8f0", boxShadow: "0 1px 3px rgba(0,0,0,0.05)", overflow: "visible" }}>
+            <div className="cc-form-card" style={{ backgroundColor: "white", borderRadius: "8px", border: "1px solid #e2e8f0", boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
               {/* Form Title & Back Bar */}
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "20px 24px", borderBottom: "1px solid #e2e8f0", backgroundColor: "#fafbfc", borderTopLeftRadius: "8px", borderTopRightRadius: "8px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "20px 24px", borderBottom: "1px solid #e2e8f0", backgroundColor: "#fafbfc" }}>
                 <div>
                   <h2 style={{ fontSize: "20px", fontWeight: "700", color: "#0f172a", margin: 0 }}>
                     {isViewing ? "View Department Mapping" : isEditing ? "Edit Department Mapping" : "Department Mapping"}
@@ -644,24 +594,8 @@ const DepartmentMapping = ({ onLogout, userRole }) => {
                   <>
                     {/* Selection Header */}
                     <div>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "24px", flexWrap: "wrap", gap: "16px" }}>
-                        <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                          <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#1e293b", margin: 0 }}>Mapping Selection</h3>
-                          <div style={{ display: "flex", alignItems: "center", gap: "20px", flexWrap: "wrap" }}>
-                            <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "14px", color: "#475569", cursor: "pointer" }}>
-                              <input type="radio" name="mappingLevel" value="company" checked={mappingLevel === "company"} onChange={(e) => { setMappingLevel(e.target.value); setFormData(p => ({ ...p, pltId: "" })); }} disabled={isEditing || isViewing} />
-                              Company Level
-                            </label>
-                            <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "14px", color: "#475569", cursor: "pointer" }}>
-                              <input type="radio" name="mappingLevel" value="plant" checked={mappingLevel === "plant"} onChange={(e) => { setMappingLevel(e.target.value); setFormData(p => ({ ...p, coyId: "" })); }} disabled={isEditing || isViewing} />
-                              Plant Level
-                            </label>
-                            <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "14px", color: "#475569", cursor: "pointer" }}>
-                              <input type="radio" name="mappingLevel" value="both" checked={mappingLevel === "both"} onChange={(e) => setMappingLevel(e.target.value)} disabled={isEditing || isViewing} />
-                              Company & Plant Level
-                            </label>
-                          </div>
-                        </div>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+                        <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#1e293b", margin: 0 }}>Mapping Selection</h3>
                         
                         {/* Status Toggle Bar */}
                         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
@@ -700,26 +634,26 @@ const DepartmentMapping = ({ onLogout, userRole }) => {
 
                       <div className="cc-form-layout-row columns-3">
                         <label className="cc-field-item">
-                          <span>Company {mappingLevel !== "plant" && <b style={{ color: "#ef4444" }}>*</b>}</span>
+                          <span>Company <b style={{ color: "#ef4444" }}>*</b></span>
                           <SearchableSelect 
                             name="coyId" 
                             value={formData.coyId} 
                             onChange={handleInputChange} 
                             placeholder="Select Company"
                             options={companies.map(c => ({ value: c.coyId, label: c.coyNm }))}
-                            disabled={isViewing || mappingLevel === "plant" || isEditing}
+                            disabled={isViewing}
                           />
                         </label>
 
                         <label className="cc-field-item">
-                          <span>Plant {mappingLevel !== "company" && <b style={{ color: "#ef4444" }}>*</b>}</span>
+                          <span>Plant <b style={{ color: "#ef4444" }}>*</b></span>
                           <SearchableSelect 
                             name="pltId" 
                             value={formData.pltId} 
                             onChange={handleInputChange} 
-                            placeholder={mappingLevel === "plant" ? "Select Plant" : (formData.coyId ? "Select Plant" : "Select Company First")}
+                            placeholder={formData.coyId ? "Select Plant" : "Select Company First"}
                             options={filteredPlants.map(p => ({ value: p.pltId, label: p.pltNm }))}
-                            disabled={isViewing || mappingLevel === "company" || (mappingLevel === "both" && !formData.coyId) || isEditing}
+                            disabled={!formData.coyId || isViewing}
                           />
                         </label>
 
@@ -731,12 +665,8 @@ const DepartmentMapping = ({ onLogout, userRole }) => {
                             onChange={handleInputChange} 
                             placeholder="Select Department"
                             options={departments.map(d => ({ value: d.deptId, label: d.deptNm }))}
-                            onCreate={!isViewing ? () => {
-                              const autoCode = generateDepartmentCode(departments);
-                              setNewDeptData({ deptCode: autoCode, deptNm: "", descr: "", sts: true });
-                              setShowDeptPopup(true);
-                            } : undefined}
-                            disabled={isViewing || isEditing}
+                            onCreate={!isViewing ? () => setShowDeptPopup(true) : undefined}
+                            disabled={isViewing}
                           />
                         </label>
                       </div>
@@ -834,9 +764,9 @@ const DepartmentMapping = ({ onLogout, userRole }) => {
                     <tr>
                       <th style={{ width: "50px", padding: "14px 20px", fontSize: "11px", color: "#64748b", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.5px" }}>S.NO</th>
                       <th style={{ padding: "14px 20px", fontSize: "11px", color: "#64748b", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.5px" }}>Department Code</th>
-                      <th style={{ padding: "14px 20px", fontSize: "11px", color: "#64748b", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.5px" }}>Department</th>
                       <th style={{ padding: "14px 20px", fontSize: "11px", color: "#64748b", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.5px" }}>Company</th>
                       <th style={{ padding: "14px 20px", fontSize: "11px", color: "#64748b", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.5px" }}>Plant</th>
+                      <th style={{ padding: "14px 20px", fontSize: "11px", color: "#64748b", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.5px" }}>Department</th>
                       <th style={{ padding: "14px 20px", fontSize: "11px", color: "#64748b", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.5px" }}>Status</th>
                       <th style={{ textAlign: "center", width: "100px", padding: "14px 20px", fontSize: "11px", color: "#64748b", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.5px" }}>Actions</th>
                     </tr>
@@ -851,9 +781,9 @@ const DepartmentMapping = ({ onLogout, userRole }) => {
                               {getDeptCode(item.deptId)}
                             </span>
                           </td>
-                          <td style={{ padding: "14px 20px", fontSize: "14px", color: "#334155" }}>{getDeptName(item.deptId)}</td>
                           <td style={{ padding: "14px 20px", fontSize: "14px", color: "#334155" }}><strong>{getCompanyName(item.coyId)}</strong></td>
                           <td style={{ padding: "14px 20px", fontSize: "14px", color: "#334155" }}>{getPlantName(item.pltId)}</td>
+                          <td style={{ padding: "14px 20px", fontSize: "14px", color: "#334155" }}>{getDeptName(item.deptId)}</td>
                           <td style={{ padding: "14px 20px", fontSize: "14px", color: "#334155" }}>
                             <span style={{ padding: "4px 12px", borderRadius: "12px", fontSize: "12px", fontWeight: "600", display: "inline-block", backgroundColor: item.sts === true ? "#dcfce7" : "#fee2e2", color: item.sts === true ? "#166534" : "#991b1b" }}>
                               {item.sts === true ? "Active" : "Inactive"}
@@ -1029,30 +959,23 @@ const DepartmentMapping = ({ onLogout, userRole }) => {
             <div style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "16px" }}>
               <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
                 <label style={{ fontSize: "14px", fontWeight: "600", color: "#475569" }}>Department Code <b style={{ color: "#ef4444" }}>*</b></label>
-                <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
-                  <Calendar size={16} style={{ position: "absolute", left: "12px", color: "#94a3b8" }} />
-                  <input 
-                    type="text" 
-                    value={newDeptData.deptCode}
-                    readOnly
-                    style={{ width: "100%", boxSizing: "border-box", padding: "10px 12px 10px 36px", border: "1px solid #cbd5e1", borderRadius: "6px", fontSize: "14px", outline: "none", backgroundColor: "#f1f5f9", cursor: "not-allowed", color: "#64748b" }}
-                    placeholder="Auto-generated code"
-                  />
-                </div>
-                <div style={{ color: '#64748b', fontSize: '12px', marginTop: '2px' }}>Department code must be unique.</div>
+                <input 
+                  type="text" 
+                  value={newDeptData.deptCode}
+                  readOnly
+                  style={{ padding: "10px 12px", border: "1px solid #cbd5e1", borderRadius: "6px", fontSize: "14px", outline: "none" }}
+                  placeholder="Auto-generated code"
+                />
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
                 <label style={{ fontSize: "14px", fontWeight: "600", color: "#475569" }}>Department Name <b style={{ color: "#ef4444" }}>*</b></label>
-                <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
-                  <Building size={16} style={{ position: "absolute", left: "12px", color: "#94a3b8" }} />
-                  <input 
-                    type="text" 
-                    value={newDeptData.deptNm}
-                    onChange={(e) => setNewDeptData(p => ({...p, deptNm: e.target.value}))}
-                    style={{ width: "100%", boxSizing: "border-box", padding: "10px 12px 10px 36px", border: "1px solid #cbd5e1", borderRadius: "6px", fontSize: "14px", outline: "none" }}
-                    placeholder="e.g. Human Resources"
-                  />
-                </div>
+                <input 
+                  type="text" 
+                  value={newDeptData.deptNm}
+                  onChange={(e) => setNewDeptData(p => ({...p, deptNm: e.target.value}))}
+                  style={{ padding: "10px 12px", border: "1px solid #cbd5e1", borderRadius: "6px", fontSize: "14px", outline: "none" }}
+                  placeholder="e.g. Human Resources"
+                />
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
                 <label style={{ fontSize: "14px", fontWeight: "600", color: "#475569" }}>Description</label>

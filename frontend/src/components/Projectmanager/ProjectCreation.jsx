@@ -143,7 +143,7 @@ const SearchableSelect = ({ options, value, onChange, placeholder, name, style, 
 };
 
 // ========== Custom DatePicker (with calendar icon) ==========
-const DatePicker = ({ value, onChange, placeholder, name, minDate }) => {
+const DatePicker = ({ value, onChange, placeholder, name, minDate, onError }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [displayValue, setDisplayValue] = useState('');
   const [viewDate, setViewDate] = useState(new Date());
@@ -173,20 +173,27 @@ const DatePicker = ({ value, onChange, placeholder, name, minDate }) => {
   }, []);
 
   const isBeforeMin = (date) => {
-    if (!minDate || !date) return false;
-    const parts = minDate.split('-');
-    if (parts.length !== 3) return false;
-    const minYear = parseInt(parts[0], 10);
-    const minMonth = parseInt(parts[1], 10) - 1;
-    const minDay = parseInt(parts[2], 10);
+    if (!date) return false;
+    const currentYear = new Date().getFullYear();
+    if (date.getFullYear() !== currentYear) return true;
 
-    const min = new Date(minYear, minMonth, minDay);
-    min.setHours(0, 0, 0, 0);
+    if (minDate) {
+      const parts = minDate.split('-');
+      if (parts.length === 3) {
+        const minYear = parseInt(parts[0], 10);
+        const minMonth = parseInt(parts[1], 10) - 1;
+        const minDay = parseInt(parts[2], 10);
 
-    const current = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-    current.setHours(0, 0, 0, 0);
+        const min = new Date(minYear, minMonth, minDay);
+        min.setHours(0, 0, 0, 0);
 
-    return current < min;
+        const current = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+        current.setHours(0, 0, 0, 0);
+
+        if (current < min) return true;
+      }
+    }
+    return false;
   };
 
   const parseTypedDate = (str) => {
@@ -197,6 +204,9 @@ const DatePicker = ({ value, onChange, placeholder, name, minDate }) => {
       const day = parseInt(match[1], 10);
       const month = parseInt(match[2], 10);
       const year = parseInt(match[3], 10);
+      const currentYear = new Date().getFullYear();
+      if (year !== currentYear) return null;
+
       if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
         const d = new Date(year, month - 1, day);
         if (d.getFullYear() === year && d.getMonth() === month - 1 && d.getDate() === day) {
@@ -246,6 +256,7 @@ const DatePicker = ({ value, onChange, placeholder, name, minDate }) => {
     const parsed = parseTypedDate(formatted);
     if (parsed) {
       if (isBeforeMin(parsed)) {
+        if (onError) onError("Past and future years will not be accepted. Please enter a date in the present year.");
         onChange({ target: { name, value: '' } });
       } else {
         const year = parsed.getFullYear();
@@ -256,6 +267,9 @@ const DatePicker = ({ value, onChange, placeholder, name, minDate }) => {
         setViewDate(parsed);
       }
     } else {
+      if (formatted.length === 10 && onError) {
+        onError("Past and future years will not be accepted. Please enter a date in the present year.");
+      }
       onChange({ target: { name, value: '' } });
     }
   };
@@ -272,7 +286,10 @@ const DatePicker = ({ value, onChange, placeholder, name, minDate }) => {
   };
 
   const handleDateSelect = (date) => {
-    if (isBeforeMin(date)) return;
+    if (isBeforeMin(date)) {
+      if (onError) onError("Past and future years will not be accepted. Please select a date in the present year.");
+      return;
+    }
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
@@ -330,7 +347,10 @@ const DatePicker = ({ value, onChange, placeholder, name, minDate }) => {
   const changeMonth = (delta) => {
     const newDate = new Date(viewDate);
     newDate.setMonth(newDate.getMonth() + delta);
-    setViewDate(newDate);
+    const currentYear = new Date().getFullYear();
+    if (newDate.getFullYear() === currentYear) {
+      setViewDate(newDate);
+    }
   };
 
   return (
@@ -715,7 +735,25 @@ const ProjectCreation = ({ userRole, onLogout }) => {
   };
 
   const handleToggleStatus = (e) => {
-    setForm(prev => ({ ...prev, status: e.target.checked ? "Live" : "Draft" }));
+    const isCheckingLive = e.target.checked;
+    if (isCheckingLive) {
+      const currentYear = new Date().getFullYear();
+      if (form.startDate) {
+        const sYear = parseInt(form.startDate.split('-')[0], 10);
+        if (sYear < currentYear) {
+          triggerAlert("warning", "Cannot Move to Live", "Project with start date in a past year cannot be set to Live status.");
+          return;
+        }
+      }
+      if (form.endDate) {
+        const eYear = parseInt(form.endDate.split('-')[0], 10);
+        if (eYear < currentYear) {
+          triggerAlert("warning", "Cannot Move to Live", "Project with end date in a past year cannot be set to Live status.");
+          return;
+        }
+      }
+    }
+    setForm(prev => ({ ...prev, status: isCheckingLive ? "Live" : "Draft" }));
   };
 
   const handleImageChange = async (e) => {
@@ -853,13 +891,39 @@ const ProjectCreation = ({ userRole, onLogout }) => {
     }
 
     if (form.startDate && form.endDate) {
+      const currentYear = new Date().getFullYear();
       const startParts = form.startDate.split('-');
       const endParts = form.endDate.split('-');
       if (startParts.length === 3 && endParts.length === 3) {
-        const start = new Date(parseInt(startParts[0], 10), parseInt(startParts[1], 10) - 1, parseInt(startParts[2], 10));
-        const end = new Date(parseInt(endParts[0], 10), parseInt(endParts[1], 10) - 1, parseInt(endParts[2], 10));
+        const startYear = parseInt(startParts[0], 10);
+        const endYear = parseInt(endParts[0], 10);
+        if (startYear !== currentYear || endYear !== currentYear) {
+          triggerAlert("error", "Validation Error", `Start Date and End Date must be in the present year (${currentYear}). Past and future years are not allowed.`);
+          return;
+        }
+        const start = new Date(startYear, parseInt(startParts[1], 10) - 1, parseInt(startParts[2], 10));
+        const end = new Date(endYear, parseInt(endParts[1], 10) - 1, parseInt(endParts[2], 10));
         if (end < start) {
           triggerAlert("error", "Validation Error", "Tentative End Date cannot be earlier than Tentative Start Date.");
+          return;
+        }
+      }
+    }
+
+    const isLive = form.status === "Live" || form.status === "LIVE";
+    if (isLive) {
+      const currentYear = new Date().getFullYear();
+      if (form.startDate) {
+        const sYear = parseInt(form.startDate.split('-')[0], 10);
+        if (sYear < currentYear) {
+          triggerAlert("error", "Validation Error", "Project with start date in a past year cannot be saved as Live status.");
+          return;
+        }
+      }
+      if (form.endDate) {
+        const eYear = parseInt(form.endDate.split('-')[0], 10);
+        if (eYear < currentYear) {
+          triggerAlert("error", "Validation Error", "Project with end date in a past year cannot be saved as Live status.");
           return;
         }
       }
@@ -1092,6 +1156,24 @@ const ProjectCreation = ({ userRole, onLogout }) => {
 
   const handleStatusChange = async (project, newStatus) => {
     if (project.status === newStatus) return;
+
+    if (newStatus === "LIVE" || newStatus === "Live") {
+      const currentYear = new Date().getFullYear();
+      if (project.startDate) {
+        const sYear = parseInt(project.startDate.split('-')[0], 10);
+        if (sYear < currentYear) {
+          triggerAlert("warning", "Cannot Move to Live", "Project with start date in a past year cannot be moved to Live status.");
+          return;
+        }
+      }
+      if (project.endDate) {
+        const eYear = parseInt(project.endDate.split('-')[0], 10);
+        if (eYear < currentYear) {
+          triggerAlert("warning", "Cannot Move to Live", "Project with end date in a past year cannot be moved to Live status.");
+          return;
+        }
+      }
+    }
 
     if (project._type === "draft" && newStatus === "LIVE") {
       setGoLiveProject(project);
@@ -1540,6 +1622,7 @@ const ProjectCreation = ({ userRole, onLogout }) => {
                             name="startDate"
                             value={form.startDate}
                             onChange={handleChange}
+                            onError={(msg) => triggerAlert("warning", "Invalid Year", msg)}
                             placeholder="dd/mm/yyyy"
                           />
                         </label>
@@ -1549,6 +1632,7 @@ const ProjectCreation = ({ userRole, onLogout }) => {
                             name="endDate"
                             value={form.endDate}
                             onChange={handleChange}
+                            onError={(msg) => triggerAlert("warning", "Invalid Year", msg)}
                             placeholder="dd/mm/yyyy"
                             minDate={form.startDate}
                           />

@@ -172,6 +172,9 @@
 }
 
 .ut-status-completed { background: #dcfce7; color: #16a34a; }
+.ut-status-completed-lead { background: #dcfce7; color: #16a34a; }
+.ut-status-completed-ontime { background: #eff6ff; color: #2563eb; }
+.ut-status-completed-lag { background: #fef2f2; color: #dc2626; }
 .ut-status-overdue { background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; }
 .ut-status-inprogress { background: #dbeafe; color: #2563eb; }
 .ut-status-notstarted { background: #f3f4f6; color: #6b7280; }
