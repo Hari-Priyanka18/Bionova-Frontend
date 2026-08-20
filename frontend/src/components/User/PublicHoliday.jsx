@@ -438,38 +438,13 @@ const PublicHoliday = ({ userRole, onLogout }) => {
                   <div className="ph-form-group">
                     <label>Holiday Date <span>*</span></label>
                     <div style={{ position: 'relative', display: 'flex', alignItems: 'center', width: '100%' }}>
-                      <DatePicker
-                        ref={datePickerRef}
-                        selected={formData.date ? new Date(formData.date + "T00:00:00") : null}
-                        onChange={(date) => {
-                          if (date) {
-                            const year = date.getFullYear();
-                            const month = String(date.getMonth() + 1).padStart(2, '0');
-                            const day = String(date.getDate()).padStart(2, '0');
-                            setFormData({ ...formData, date: `${year}-${month}-${day}` });
-                          } else {
-                            setFormData({ ...formData, date: "" });
-                          }
-                        }}
-                        dateFormat="dd/MM/yyyy"
-                        placeholderText="dd/mm/yyyy"
+                      <input
+                        type="date"
+                        max="9999-12-31"
                         className="ph-input"
-                        wrapperClassName="ph-datepicker-wrapper"
-                      />
-                      <Calendar
-                        size={18}
-                        onClick={() => {
-                          if (datePickerRef.current) {
-                            datePickerRef.current.setOpen(true);
-                          }
-                        }}
-                        style={{
-                          position: 'absolute',
-                          right: '12px',
-                          color: '#64748b',
-                          cursor: 'pointer',
-                          zIndex: 2
-                        }}
+                        value={formData.date}
+                        onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                        style={{ width: '100%', cursor: 'pointer' }}
                       />
                     </div>
                   </div>
