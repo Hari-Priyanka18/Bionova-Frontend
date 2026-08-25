@@ -538,8 +538,8 @@ const EmployeeCreation = ({ userRole, onLogout }) => {
       const emailVal = value.trim();
       if (!emailVal) {
         error = "Email is required.";
-      } else if (!emailVal.toLowerCase().endsWith("@gmail.com")) {
-        error = "Email must end with @gmail.com.";
+      } else if (!/^[a-zA-Z0-9._%+-]+@gmail\.com$/i.test(emailVal)) {
+        error = "Please enter a valid @gmail.com email address with a username.";
       }
     } else if (name === "password") {
       if (!value) {
@@ -994,8 +994,8 @@ const EmployeeCreation = ({ userRole, onLogout }) => {
       return;
     }
     const emailVal = form.email.trim();
-    if (!emailVal.includes("@") || !emailVal.toLowerCase().endsWith(".com")) {
-      triggerAlert("error", "Validation Error", "Please enter a valid Employee Email address (must contain @ and end with .com).");
+    if (!/^[a-zA-Z0-9._%+-]+@gmail\.com$/i.test(emailVal)) {
+      triggerAlert("error", "Validation Error", "Please enter a valid @gmail.com Employee Email address with a username.");
       return;
     }
 

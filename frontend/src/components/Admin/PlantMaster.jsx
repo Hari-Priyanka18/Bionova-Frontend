@@ -377,7 +377,11 @@ const PlantCreation = ({ userRole, onLogout }) => {
       } else if (value.length > 100) {
         error = "Plant Email cannot exceed 100 characters.";
       } else {
+<<<<<<< Updated upstream
         const emailRegex = /^([a-zA-Z0-9._%+-]*@)[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/i;
+=======
+        const emailRegex = /^([a-zA-Z0-9._%+-]+@)?[a-zA-Z0-9.-]+\.(com|in|org|net|co)$/i;
+>>>>>>> Stashed changes
         if (!emailRegex.test(value.trim())) {
           error = "Plant Email must be a valid email or domain containing '@'.";
         }
@@ -522,7 +526,11 @@ const PlantCreation = ({ userRole, onLogout }) => {
     }
 
     // Strict email check
+<<<<<<< Updated upstream
     const emailRegex = /^([a-zA-Z0-9._%+-]*@)[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/i;
+=======
+    const emailRegex = /^([a-zA-Z0-9._%+-]+@)?[a-zA-Z0-9.-]+\.(com|in|org|net|co)$/i;
+>>>>>>> Stashed changes
     if (!emailRegex.test(form.email.trim())) {
       triggerAlert("error", "Validation Error", "Plant Email must be a valid email or domain containing '@'.");
       return;
