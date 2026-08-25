@@ -485,7 +485,9 @@ const CompanyCreation = ({ onLogout, userRole }) => {
       if (!value.trim()) error = "Company Email is required.";
       else if (value.length > 100) error = "Company Email cannot exceed 100 characters.";
       else {
+        
         const emailRegex = /^([a-zA-Z0-9._%+-]+@)?[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/i;
+
         if (!emailRegex.test(value.trim())) {
           error = "Company Email must be a valid email or domain.";
         }

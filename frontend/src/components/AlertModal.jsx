@@ -3,6 +3,17 @@ import { CheckCircle2, AlertTriangle, AlertCircle, Info } from "lucide-react";
 import "../styles/alertModal.css";
 
 const AlertModal = ({ isOpen, type = "info", title, message, onClose, onConfirm, confirmText, cancelText }) => {
+  React.useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   // Icon mapping depending on alert type
