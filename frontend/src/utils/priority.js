@@ -27,45 +27,45 @@ export const getPriorityMetadata = (name, id = null) => {
       return {
         priority: 'LOW',
         priorityId: id || 1,
-        color: '#10b981',
-        bgColor: '#dcfce7',
-        borderColor: '#bbf7d0',
+        color: '#22C55E',
+        bgColor: '#f0fdf4',
+        borderColor: '#22c55e40',
         badgeClass: 'low'
       };
     case 'NORMAL':
       return {
         priority: 'NORMAL',
         priorityId: id || 2,
-        color: '#3b82f6',
-        bgColor: '#dbeafe',
-        borderColor: '#bfdbfe',
+        color: '#3B82F6',
+        bgColor: '#eff6ff',
+        borderColor: '#3b82f640',
         badgeClass: 'normal'
       };
     case 'MEDIUM':
       return {
         priority: 'MEDIUM',
         priorityId: id || 3,
-        color: '#f59e0b',
-        bgColor: '#fef3c7',
-        borderColor: '#fde68a',
+        color: '#F59E0B',
+        bgColor: '#fff7ed',
+        borderColor: '#f59e0b40',
         badgeClass: 'medium'
       };
     case 'HIGH':
       return {
         priority: 'HIGH',
         priorityId: id || 4,
-        color: '#ea580c',
-        bgColor: '#ffedd5',
-        borderColor: '#fed7aa',
+        color: '#EF4444',
+        bgColor: '#fef2f2',
+        borderColor: '#ef444440',
         badgeClass: 'high'
       };
     case 'CRITICAL':
       return {
         priority: 'CRITICAL',
         priorityId: id || 5,
-        color: '#dc2626',
-        bgColor: '#fee2e2',
-        borderColor: '#fca5a5',
+        color: '#FFFFFF',
+        bgColor: '#B91C1C',
+        borderColor: '#b91c1c',
         badgeClass: 'critical'
       };
     case 'ATMOST CRITICAL':
@@ -73,9 +73,9 @@ export const getPriorityMetadata = (name, id = null) => {
       return {
         priority: 'ATMOST CRITICAL',
         priorityId: id || 6,
-        color: '#7f1d1d',
-        bgColor: '#ffe4e6',
-        borderColor: '#fda4af',
+        color: '#FFFFFF',
+        bgColor: '#7F1D1D',
+        borderColor: '#7f1d1d',
         badgeClass: 'atmost-critical'
       };
     default:

@@ -172,12 +172,12 @@ const getPriorityColor = (priority) => {
   const p = String(priority || '').toLowerCase().trim();
   switch(p) {
     case 'atmost critical':
-    case 'atmost_critical': return '#7f1d1d';
-    case 'critical': return '#dc2626';
-    case 'high': return '#ea580c';
-    case 'medium': return '#f59e0b';
-    case 'normal': return '#3b82f6';
-    case 'low': return '#10b981';
+    case 'atmost_critical': return '#7F1D1D';
+    case 'critical': return '#B91C1C';
+    case 'high': return '#EF4444';
+    case 'medium': return '#F59E0B';
+    case 'normal': return '#3B82F6';
+    case 'low': return '#22C55E';
     default: return '#64748b';
   }
 };

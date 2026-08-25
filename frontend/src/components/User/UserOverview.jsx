@@ -1,6 +1,6 @@
 // UserOverview.jsx
 import React from 'react';
-import { BarChart2, Users, CheckCircle2, PlayCircle, Clock, Calendar } from 'lucide-react';
+import { BarChart2, Users, CheckCircle2, PlayCircle, Clock, Calendar, ClipboardCheck } from 'lucide-react';
 import '../../styles/UserOverview.css';
 
 // Donut chart for project progress panel
@@ -38,10 +38,10 @@ const DonutChart = ({ completedPct, inProgressPct, yetToStartPct, overallPct }) 
 };
 
 const UserOverview = ({ selectedProject }) => {
-  const total = selectedProject.taskSummary?.assigned || 0;
-  const completedCount = selectedProject.taskSummary?.completed || 0;
-  const wipCount = selectedProject.taskSummary?.inProgress || 0;
-  const openCount = selectedProject.taskSummary?.openTasks || 0;
+  const total = selectedProject?.taskSummary?.assigned || 0;
+  const completedCount = selectedProject?.taskSummary?.completed || 0;
+  const wipCount = selectedProject?.taskSummary?.inProgress || 0;
+  const openCount = selectedProject?.taskSummary?.openTasks || 0;
   const reviewCount = Math.max(0, total - completedCount - wipCount - openCount);
 
   const completedPct = total > 0 ? Math.round((completedCount / total) * 100) : 0;
@@ -72,7 +72,7 @@ const UserOverview = ({ selectedProject }) => {
         <table className="mp-info-table">
           <tbody>
             <tr><td>Role</td><td>{selectedProject.role}</td></tr>
-            <tr><td>Department</td><td>{selectedProject.department}</td></tr>
+            <tr><td>Department</td><td>{typeof selectedProject.userDepartment === 'string' && selectedProject.userDepartment !== "N/A" ? selectedProject.userDepartment : (typeof selectedProject.department === 'object' && selectedProject.department !== null ? (selectedProject.department.deptNm || selectedProject.department.deptName || selectedProject.department.name || "N/A") : (selectedProject.userDepartment || selectedProject.department || "N/A"))}</td></tr>
              </tbody>
         </table>
       </div>
@@ -95,23 +95,23 @@ const UserOverview = ({ selectedProject }) => {
         <div className="mp-card-title"><CheckCircle2 size={15} /> TASK SUMMARY</div>
         <div className="mp-task-summary-grid">
           <div className="mp-task-stat">
-            <div className="mp-task-icon mp-icon-gray"><CheckCircle2 size={20} /></div>
-            <div className="mp-task-num">{selectedProject.taskSummary.assigned}</div>
+            <div className="mp-task-icon mp-icon-purple"><ClipboardCheck size={20} /></div>
+            <div className="mp-task-num">{selectedProject?.taskSummary?.assigned ?? 0}</div>
             <div className="mp-task-label">Tasks Assigned</div>
           </div>
           <div className="mp-task-stat">
-            <div className="mp-task-icon mp-icon-blue"><PlayCircle size={20} /></div>
-            <div className="mp-task-num">{selectedProject.taskSummary.inProgress}</div>
+            <div className="mp-task-icon mp-icon-orange"><PlayCircle size={20} /></div>
+            <div className="mp-task-num">{selectedProject?.taskSummary?.inProgress ?? 0}</div>
             <div className="mp-task-label">In Progress</div>
           </div>
           <div className="mp-task-stat">
-            <div className="mp-task-icon mp-icon-orange"><Clock size={20} /></div>
-            <div className="mp-task-num">{selectedProject.taskSummary.openTasks}</div>
+            <div className="mp-task-icon mp-icon-blue"><Clock size={20} /></div>
+            <div className="mp-task-num">{selectedProject?.taskSummary?.openTasks ?? 0}</div>
             <div className="mp-task-label">Open Tasks</div>
           </div>
           <div className="mp-task-stat">
             <div className="mp-task-icon mp-icon-green"><CheckCircle2 size={20} /></div>
-            <div className="mp-task-num">{selectedProject.taskSummary.completed}</div>
+            <div className="mp-task-num">{selectedProject?.taskSummary?.completed ?? 0}</div>
             <div className="mp-task-label">Closed</div>
           </div>
         </div>
@@ -121,18 +121,29 @@ const UserOverview = ({ selectedProject }) => {
       <div className="mp-overview-card mp-milestones-card">
         <div className="mp-card-title-row">
           <div className="mp-card-title"><Calendar size={15} /> UPCOMING MILESTONES</div>
-          <button className="mp-view-all-btn">View all</button>
         </div>
         <table className="mp-milestone-table">
           <tbody>
             {(() => {
+              const isProjClosed = (selectedProject.status || "").toUpperCase() === "CLOSED" || selectedProject.isUserClosed;
+              if (isProjClosed) {
+                return (
+                  <tr>
+                    <td colSpan="2" style={{ textAlign: "center", color: "#94a3b8", padding: "24px 0", fontSize: "14px" }}>
+                      No upcoming milestones
+                    </td>
+                  </tr>
+                );
+              }
               const today = new Date();
               today.setHours(0, 0, 0, 0);
               const upcoming = (selectedProject.milestones || []).filter(m => {
+                const s = (m.status || "").toUpperCase();
+                if (s === "CLOSED" || s === "COMPLETED") return false;
                 if (!m.start || m.start === "N/A" || m.start === "No Start Date") return true;
                 const mDate = new Date(m.start);
                 if (isNaN(mDate.getTime())) return true;
-                return mDate >= today || (m.status && m.status.toUpperCase() !== "CLOSED");
+                return mDate >= today || s === "WIP" || s === "IN_PROGRESS" || s === "OPEN" || s === "NOT STARTED";
               });
               if (upcoming.length === 0) {
                 return (
@@ -146,7 +157,7 @@ const UserOverview = ({ selectedProject }) => {
               return upcoming.map((m, i) => (
                 <tr key={i}>
                   <td>{m.name}</td>
-                  <td>{m.date || m.start}</td>
+                  <td>{m.start || m.date}</td>
                 </tr>
               ));
             })()}

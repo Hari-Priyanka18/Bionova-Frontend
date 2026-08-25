@@ -3,7 +3,7 @@ import {
   Building2, Factory, FolderOpen, Users, 
   ClipboardList, Hourglass, Flag, CheckSquare, 
   FileText, Briefcase, Activity, TrendingUp, AlertCircle,
-  ChevronRight, ChevronDown
+  ChevronRight, ChevronDown, Search
 } from "lucide-react";
 import Sidebar from "../Sidebar.jsx"; 
 import Header from "../Header.jsx";
@@ -16,16 +16,54 @@ const authHeaders = () => ({
   "Authorization": `Bearer ${getAuthToken()}`
 });
 
+const formatDateDDMMYYYY = (dateVal) => {
+  if (!dateVal) return 'No Deadline';
+  try {
+    const str = String(dateVal).trim();
+    const cleanStr = str.split('T')[0];
+    const ymdMatch = cleanStr.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/);
+    if (ymdMatch) {
+      const [, y, m, d] = ymdMatch;
+      return `${d.padStart(2, '0')}/${m.padStart(2, '0')}/${y}`;
+    }
+    const dmyMatch = cleanStr.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
+    if (dmyMatch) {
+      const [, d, m, y] = dmyMatch;
+      return `${d.padStart(2, '0')}/${m.padStart(2, '0')}/${y}`;
+    }
+    const dateObj = new Date(dateVal);
+    if (!isNaN(dateObj.getTime())) {
+      const day = String(dateObj.getDate()).padStart(2, '0');
+      const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+      const year = dateObj.getFullYear();
+      return `${day}/${month}/${year}`;
+    }
+    return str;
+  } catch (e) {
+    return String(dateVal);
+  }
+};
+
 // ===== CUSTOM DROPDOWN COMPONENT =====
-const CustomDropdown = ({ value, options, onChange, label }) => {
+const CustomDropdown = ({ value, options, onChange, label, enableSearch = true }) => {
   const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
   const ref = useRef(null);
 
   useEffect(() => {
-    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    const handler = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) {
+        setOpen(false);
+        setSearch("");
+      }
+    };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, []);
+
+  const filteredOptions = (options || []).filter(opt =>
+    String(opt).toLowerCase().includes(search.toLowerCase())
+  );
 
   return (
     <div ref={ref} style={{ position: 'relative', display: 'inline-block' }}>
@@ -47,24 +85,54 @@ const CustomDropdown = ({ value, options, onChange, label }) => {
           position: 'absolute', top: 'calc(100% + 4px)', right: 0,
           background: '#fff', border: '1px solid #e2e8f0',
           borderRadius: '8px', boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
-          zIndex: 999, minWidth: '140px', overflow: 'hidden'
+          zIndex: 999, minWidth: '180px', maxWidth: '250px', overflow: 'hidden'
         }}>
-          {options.map(opt => (
-            <div
-              key={opt}
-              onClick={() => { onChange(opt); setOpen(false); }}
-              style={{
-                padding: '10px 16px', fontSize: '13px', fontWeight: '500',
-                cursor: 'pointer', color: opt === value ? '#fff' : '#374151',
-                background: opt === value ? '#2563eb' : 'transparent',
-                transition: 'background 0.15s'
-              }}
-              onMouseEnter={e => { if (opt !== value) e.currentTarget.style.background = '#f1f5f9'; }}
-              onMouseLeave={e => { if (opt !== value) e.currentTarget.style.background = 'transparent'; }}
-            >
-              {opt}
+          {enableSearch && options.length > 3 && (
+            <div style={{ padding: '8px', borderBottom: '1px solid #f1f5f9', background: '#f8fafc' }}>
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: '6px',
+                background: '#ffffff', border: '1px solid #cbd5e1',
+                borderRadius: '6px', padding: '4px 8px'
+              }}>
+                <Search size={14} color="#64748b" />
+                <input
+                  type="text"
+                  placeholder="Search..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  style={{
+                    border: 'none', outline: 'none', background: 'transparent',
+                    width: '100%', fontSize: '12px', color: '#0f172a'
+                  }}
+                  autoFocus
+                />
+              </div>
             </div>
-          ))}
+          )}
+          <div style={{ maxHeight: '220px', overflowY: 'auto' }}>
+            {filteredOptions.length > 0 ? (
+              filteredOptions.map(opt => (
+                <div
+                  key={opt}
+                  onClick={() => { onChange(opt); setOpen(false); setSearch(""); }}
+                  style={{
+                    padding: '8px 14px', fontSize: '13px', fontWeight: '500',
+                    cursor: 'pointer', color: opt === value ? '#fff' : '#374151',
+                    background: opt === value ? '#2563eb' : 'transparent',
+                    transition: 'background 0.15s'
+                  }}
+                  onMouseEnter={e => { if (opt !== value) e.currentTarget.style.background = '#f1f5f9'; }}
+                  onMouseLeave={e => { if (opt !== value) e.currentTarget.style.background = 'transparent'; }}
+                >
+                  {opt}
+                </div>
+              ))
+            ) : (
+              <div style={{ padding: '10px 14px', fontSize: '12px', color: '#94a3b8', textAlign: 'center' }}>
+                No results found
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -96,6 +164,14 @@ const AdminDashboard = ({ userRole, onLogout }) => {
   // Selected Member Performance Modal State
   const [selectedMemberModal, setSelectedMemberModal] = useState(null);
 
+  useEffect(() => {
+    if (selectedMemberModal) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+  }, [selectedMemberModal]);
+
   // Employees & Person Filter State
   const [employeesList, setEmployeesList] = useState([]);
   const [personFilter, setPersonFilter] = useState("All Persons");
@@ -116,7 +192,6 @@ const AdminDashboard = ({ userRole, onLogout }) => {
       if (resMetrics.ok) {
         const data = await resMetrics.json();
         setMetrics(data);
-        console.log("Admin Dashboard Metrics:", data);
       }
       if (resCompanies.ok) {
         const companies = await resCompanies.json();
@@ -148,7 +223,6 @@ const AdminDashboard = ({ userRole, onLogout }) => {
   };
 
   useEffect(() => {
-    // 1. Fetch user info from Login Session
     const email = sessionStorage.getItem("userEmail");
     if (email) {
       let namePart = email.split("@")[0];
@@ -160,17 +234,13 @@ const AdminDashboard = ({ userRole, onLogout }) => {
          setUserName(namePart);
       }
     }
-
-    // 2. Fetch from real backend API
     fetchMetrics();
   }, []);
 
-  // Dropdown Options Map (Keys only, values unused)
   const projectDataMap = { "All Projects": {}, "This Month": {}, "This Year": {} };
   const milestoneDataMap = { "This Month": {}, "Last Month": {}, "All Time": {} };
   const taskDataMap = { "All Tasks": {}, "This Week": {}, "This Month": {} };
 
-  // Helper date boundary functions
   const getStartOfWeek = (d) => {
     const date = new Date(d);
     const day = date.getDay();
@@ -211,7 +281,6 @@ const AdminDashboard = ({ userRole, onLogout }) => {
     return date;
   };
 
-  // Helper matching functions for dynamic filters
   const projectMatchesFilter = (prj, filter) => {
     if (filter === "All Projects") return true;
     const now = new Date();
@@ -389,39 +458,6 @@ const AdminDashboard = ({ userRole, onLogout }) => {
   const progressOnTime = Math.max(0, td.progress - overdueWip);
   const todoOnTime = Math.max(0, td.todo - overdueTodo);
 
-  // Calculate milestone progress based on milestone status to remain consistent with backend and legend
-  const getMilestoneProgressPercentage = () => {
-    if (filteredMilestones.length === 0) return 0;
-    
-    let totalProgress = 0;
-    filteredMilestones.forEach(m => {
-      const mStatus = (m.mlstnSts || "").toUpperCase();
-      if (mStatus === "COMPLETED" || mStatus === "CLOSED") {
-        totalProgress += 100;
-      } else {
-        const mId = m.mid || m.mId || m.id || m.mlstnId;
-        const mTasks = filteredTasks.filter(t => 
-          t.mid === mId || t.mId === mId || t.m_id === mId || 
-          t.drftMId === mId || t.drft_m_id === mId
-        );
-        if (mTasks.length > 0) {
-          let mTaskProgress = 0;
-          mTasks.forEach(t => {
-            if ((t.taskSts || "").toUpperCase() === "COMPLETED" || (t.taskSts || "").toUpperCase() === "CLOSED") {
-              mTaskProgress += 100;
-            } else {
-              const partial = parseFloat(t.progress || t.progressPercent || t.pctComplete || 0);
-              mTaskProgress += isNaN(partial) ? 0 : partial;
-            }
-          });
-          totalProgress += (mTaskProgress / mTasks.length);
-        }
-      }
-    });
-    
-    return Math.round(totalProgress / filteredMilestones.length);
-  };
-
   const getProjGradient = () => {
     const total = pd.total || 1;
     let p1 = (pd.track / total) * 100;
@@ -570,10 +606,24 @@ const AdminDashboard = ({ userRole, onLogout }) => {
       let empName = null;
       if (t.empId && empMapById[String(t.empId)]) {
         empName = empMapById[String(t.empId)];
-      } else {
-        empName = t.executorNm || t.assignedByNm || t.createdByName || t.assignedTo;
+      } else if (t.executorNm && t.executorNm.trim()) {
+        empName = t.executorNm.trim();
+      } else if (t.assignedTo && t.assignedTo.trim()) {
+        empName = t.assignedTo.trim();
+      } else if (t.createdByName && t.createdByName.trim()) {
+        empName = t.createdByName.trim();
+      } else if (t.assignedByNm && t.assignedByNm.trim()) {
+        empName = t.assignedByNm.trim();
       }
-      if (!empName || empName.trim() === "") empName = "Unassigned / Team";
+
+      if (!empName || empName.trim() === "" || empName.toLowerCase().includes("unassigned")) {
+        const empMatch = (employeesList || []).find(e => String(e.empId || e.id) === String(t.empId || t.executorId || ''));
+        if (empMatch) {
+          empName = `${empMatch.fstNm || ''} ${empMatch.lstNm || ''}`.trim() || empMatch.empCode || `Employee #${empMatch.empId}`;
+        } else {
+          empName = t.empCode ? `Employee (${t.empCode})` : (t.empId ? `Employee #${t.empId}` : "Team Member");
+        }
+      }
 
       if (!empMap[empName]) {
         empMap[empName] = {
@@ -633,7 +683,6 @@ const AdminDashboard = ({ userRole, onLogout }) => {
 
       <div className="db-shell">
         
-        {/* ===== INTEGRATED HEADER COMPONENT ===== */}
         <Header 
           title="Dashboard" 
           showSearch={false} 
@@ -644,9 +693,7 @@ const AdminDashboard = ({ userRole, onLogout }) => {
 
         <main className="db-main">
           
-          {/* ===== ERP ENTERPRISE KPI GRID ===== */}
           <div className="erp-kpi-grid">
-            
             <div className="erp-kpi-card">
               <div className="kpi-icon-box bg-green"><Building2 size={26} color="#ffffff"/></div>
               <div className="kpi-content">
@@ -654,7 +701,6 @@ const AdminDashboard = ({ userRole, onLogout }) => {
                 <h2>{companyCount}</h2>
               </div>
             </div>
-
             <div className="erp-kpi-card">
               <div className="kpi-icon-box bg-blue"><Factory size={26} color="#ffffff"/></div>
               <div className="kpi-content">
@@ -662,7 +708,6 @@ const AdminDashboard = ({ userRole, onLogout }) => {
                 <h2>{plantCount}</h2>
               </div>
             </div>
-
             <div className="erp-kpi-card">
               <div className="kpi-icon-box bg-purple"><FolderOpen size={26} color="#ffffff"/></div>
               <div className="kpi-content">
@@ -670,7 +715,6 @@ const AdminDashboard = ({ userRole, onLogout }) => {
                 <h2>{metrics ? metrics.activeProjectsCount : 0}</h2>
               </div>
             </div>
-
             <div className="erp-kpi-card">
               <div className="kpi-icon-box bg-orange"><Users size={26} color="#ffffff"/></div>
               <div className="kpi-content">
@@ -678,7 +722,6 @@ const AdminDashboard = ({ userRole, onLogout }) => {
                 <h2>{metrics ? metrics.employeeCount : 0}</h2>
               </div>
             </div>
-
             <div className="erp-kpi-card">
               <div className="kpi-icon-box bg-cyan"><ClipboardList size={26} color="#ffffff"/></div>
               <div className="kpi-content">
@@ -686,7 +729,6 @@ const AdminDashboard = ({ userRole, onLogout }) => {
                 <h2>{td.total}</h2>
               </div>
             </div>
-
             <div className="erp-kpi-card">
               <div className="kpi-icon-box bg-red"><Hourglass size={26} color="#ffffff"/></div>
               <div className="kpi-content">
@@ -694,10 +736,8 @@ const AdminDashboard = ({ userRole, onLogout }) => {
                 <h2>{td.overdue}</h2>
               </div>
             </div>
-
           </div>
 
-          {/* ===== DYNAMIC CHARTS SECTION ===== */}
           <div className="db-charts-grid">
             <div className="db-card">
               <div className="db-card-header">
@@ -775,12 +815,10 @@ const AdminDashboard = ({ userRole, onLogout }) => {
             </div>
           </div>
 
-          {/* ===== LISTS SECTION ===== */}
           <div className="db-lists-grid">
             <div className="db-card list-card">
               <div className="db-card-header">
                 <h3>Recent Activities</h3>
-                <a href="#" className="view-all"></a>
               </div>
               <div className="db-list">
                 {activitiesToRender.map((act, idx) => {
@@ -813,7 +851,6 @@ const AdminDashboard = ({ userRole, onLogout }) => {
             <div className="db-card list-card">
               <div className="db-card-header">
                 <h3>Upcoming Deadlines</h3>
-                <a href="#" className="view-all"></a>
               </div>
               <div className="db-list">
                 {deadlinesToRender.map((dl, idx) => {
@@ -849,7 +886,6 @@ const AdminDashboard = ({ userRole, onLogout }) => {
             <div className="db-card list-card">
               <div className="db-card-header">
                 <h3>Top Projects by Progress</h3>
-                <a href="#" className="view-all"></a>
               </div>
               <div className="db-list project-progress-list">
                 {topProjectsToRender.map((p, idx) => (
@@ -869,8 +905,7 @@ const AdminDashboard = ({ userRole, onLogout }) => {
             <div className="db-card list-card" style={{ gridColumn: 'span 3 / span 3' }}>
               <div className="db-card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
-                  <h3 style={{ margin: 0 }}>Team Performance & Bottlenecks (Lead / Lag)</h3>
-                  <span style={{ fontSize: '12px', color: '#64748b' }}>Select a person or click any card for detailed performance breakdown</span>
+                  <h3 style={{ margin: 0 }}>Team Performance & Bottlenecks</h3>
                 </div>
                 <CustomDropdown
                   value={personFilter}
@@ -926,7 +961,6 @@ const AdminDashboard = ({ userRole, onLogout }) => {
         </main>
       </div>
 
-      {/* ===== EMPLOYEE PERFORMANCE DETAIL MODAL ===== */}
       {selectedMemberModal && (
         <div style={{
           position: 'fixed',
@@ -939,7 +973,7 @@ const AdminDashboard = ({ userRole, onLogout }) => {
           zIndex: 9999,
           display: 'flex',
           alignItems: 'center',
-          justify: 'center',
+          justifyContent: 'center',
           padding: '20px'
         }}>
           <div style={{
@@ -947,29 +981,33 @@ const AdminDashboard = ({ userRole, onLogout }) => {
             borderRadius: '16px',
             width: '100%',
             maxWidth: '650px',
-            maxHeight: '90vh',
-            overflowY: 'auto',
+            maxHeight: '85vh',
+            display: 'flex',
+            flexDirection: 'column',
             boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-            border: '1px solid #e2e8f0'
+            border: '1px solid #e2e8f0',
+            overflow: 'hidden'
           }}>
-            {/* Modal Header */}
             <div style={{
               padding: '20px 24px',
               borderBottom: '1px solid #f1f5f9',
               display: 'flex',
-              justify: 'space-between',
+              justifyContent: 'space-between',
               alignItems: 'center',
               background: '#f8fafc',
               borderTopLeftRadius: '16px',
-              borderTopRightRadius: '16px'
+              borderTopRightRadius: '16px',
+              width: '100%',
+              boxSizing: 'border-box',
+              flexShrink: 0
             }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <div style={{ width: '42px', height: '42px', borderRadius: '50%', background: 'linear-gradient(135deg, #2563eb, #1d4ed8)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px', fontWeight: 'bold' }}>
-                  {selectedMemberModal.name.charAt(0).toUpperCase()}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, minWidth: 0 }}>
+                <div style={{ width: '42px', height: '42px', borderRadius: '50%', background: 'linear-gradient(135deg, #2563eb, #1d4ed8)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px', fontWeight: 'bold', flexShrink: 0 }}>
+                  {(selectedMemberModal.name || "T").charAt(0).toUpperCase()}
                 </div>
-                <div>
-                  <h3 style={{ margin: 0, fontSize: '18px', color: '#0f172a', fontWeight: '700' }}>{selectedMemberModal.name}</h3>
-                  <span style={{ fontSize: '12px', color: '#64748b' }}>Team Member Performance & Schedule Health</span>
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <h3 style={{ margin: 0, fontSize: '18px', color: '#0f172a', fontWeight: '700', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{selectedMemberModal.name || "Unassigned"}</h3>
+                  <span style={{ fontSize: '12px', color: '#64748b', display: 'block' }}>Team Member Performance & Schedule Health</span>
                 </div>
               </div>
               <button
@@ -985,16 +1023,16 @@ const AdminDashboard = ({ userRole, onLogout }) => {
                   color: '#64748b',
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'center'
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                  marginLeft: 'auto'
                 }}
               >
                 ✕
               </button>
             </div>
 
-            {/* Modal Body */}
-            <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-              {/* Performance Score Summary Pill */}
+            <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px', overflowY: 'auto', flex: 1 }}>
               <div style={{
                 background: selectedMemberModal.statusBg,
                 border: `1px solid ${selectedMemberModal.statusColor}33`,
@@ -1055,7 +1093,7 @@ const AdminDashboard = ({ userRole, onLogout }) => {
                           <div>
                             <strong style={{ fontSize: '13px', color: '#1e293b', display: 'block' }}>{t.taskNm || t.name || 'Task'}</strong>
                             <span style={{ fontSize: '11px', color: '#64748b' }}>
-                              Due: {t.endDt ? new Date(t.endDt).toLocaleDateString() : 'No Deadline'}
+                              Due: {t.endDt ? formatDateDDMMYYYY(t.endDt) : 'No Deadline'}
                             </span>
                           </div>
                           <span style={{

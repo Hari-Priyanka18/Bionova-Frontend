@@ -663,12 +663,6 @@ const AgriLandAllocation = ({ userRole, onLogout }) => {
   const handleSave = async (e) => {
     e.preventDefault();
 
-    const hasErrors = Object.values(formErrors).some(err => err && err !== "");
-    if (hasErrors) {
-      triggerAlert("error", "Validation Error", "Please fix all validation errors before saving.");
-      return;
-    }
-
     // 1. Land Code check
     if (!form.landCode.trim()) {
       triggerAlert("error", "Validation Error", "Land Code is required.");
@@ -736,16 +730,7 @@ const AgriLandAllocation = ({ userRole, onLogout }) => {
     }
 
     // 6. Land Owner Name check
-    let currentOwnerNames = [...(form.landOwnerName || [])];
-    const pendingOwnerInput = form.ownerInput?.trim();
-    if (pendingOwnerInput) {
-      if (!currentOwnerNames.includes(pendingOwnerInput)) {
-        currentOwnerNames.push(pendingOwnerInput);
-        setForm(prev => ({ ...prev, landOwnerName: currentOwnerNames, ownerInput: '' }));
-      }
-    }
-
-    if (!currentOwnerNames || currentOwnerNames.length === 0) {
+    if (!form.landOwnerName || form.landOwnerName.length === 0) {
       triggerAlert("error", "Validation Error", "At least one Land Owner Name is required. Enter a name and press Enter/comma.");
       return;
     }
@@ -781,10 +766,6 @@ const AgriLandAllocation = ({ userRole, onLogout }) => {
       triggerAlert("error", "Validation Error", "District is required.");
       return;
     }
-    if (!/^[a-zA-Z\s]+$/.test(form.district.trim())) {
-      triggerAlert("error", "Validation Error", "District should contain only letters.");
-      return;
-    }
     if (form.district.length > 30) {
       triggerAlert("error", "Validation Error", "District cannot exceed 30 characters.");
       return;
@@ -795,10 +776,6 @@ const AgriLandAllocation = ({ userRole, onLogout }) => {
       triggerAlert("error", "Validation Error", "Mandal is required.");
       return;
     }
-    if (!/^[a-zA-Z\s]+$/.test(form.mandal.trim())) {
-      triggerAlert("error", "Validation Error", "Mandal should contain only letters.");
-      return;
-    }
     if (form.mandal.length > 30) {
       triggerAlert("error", "Validation Error", "Mandal cannot exceed 30 characters.");
       return;
@@ -807,10 +784,6 @@ const AgriLandAllocation = ({ userRole, onLogout }) => {
     // 10. Village check
     if (!form.village || !String(form.village).trim()) {
       triggerAlert("error", "Validation Error", "Village is required.");
-      return;
-    }
-    if (!/^[a-zA-Z\s]+$/.test(form.village.trim())) {
-      triggerAlert("error", "Validation Error", "Village should contain only letters.");
       return;
     }
     if (form.village.length > 50) {
@@ -909,8 +882,8 @@ const AgriLandAllocation = ({ userRole, onLogout }) => {
     const landPayload = {
       landCd: form.landCode.trim(),
       pltId: Number(form.plant),
-      surveyNo: currentSurveyNos.join(","),
-      landOwners: currentOwnerNames.join(","),
+      surveyNo: form.surveyNo.join(","),
+      landOwners: form.landOwnerName.join(","),
       mobNum: form.mobileNo.trim(),
       landSize: Number(form.landArea),
       allotedFor: alcTypVal,
@@ -941,8 +914,8 @@ const AgriLandAllocation = ({ userRole, onLogout }) => {
     })
       .then(async (response) => {
         if (!response.ok) {
-          await response.text(); // Consume error body but do not use it to avoid backend messages
-          throw new Error("Failed to save land record due to a server error. Please check your data.");
+          const errorText = await response.text();
+          throw new Error(errorText || "Failed to save land record.");
         }
         triggerAlert("success", "Success", isEditing ? "Land record updated successfully!" : "Land record created successfully!");
         fetchLands();
@@ -953,7 +926,7 @@ const AgriLandAllocation = ({ userRole, onLogout }) => {
       })
       .catch((err) => {
         console.error("Save land failed:", err);
-        triggerAlert("error", "Error", "Something went wrong! Please check the details you have entered.");
+        triggerAlert("error", "Error", err.message || "Could not save land record.");
       })
       .finally(() => {
         setLoading(false);
@@ -1697,7 +1670,7 @@ const AgriLandAllocation = ({ userRole, onLogout }) => {
                                 name="leaseStartDate"
                                 value={form.leaseStartDate || ''}
                                 onChange={handleChange}
-                                max={form.leaseEndDate || '9999-12-31'}
+                                max={form.leaseEndDate || ''}
                                 style={{
                                   width: '100%',
                                   padding: '8px 12px',
@@ -1718,7 +1691,6 @@ const AgriLandAllocation = ({ userRole, onLogout }) => {
                                 value={form.leaseEndDate || ''}
                                 onChange={handleChange}
                                 min={form.leaseStartDate || ''}
-                                max="9999-12-31"
                                 style={{
                                   width: '100%',
                                   padding: '8px 12px',

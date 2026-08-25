@@ -119,6 +119,14 @@ const ProjectManagerDashboard = ({ userRole, onLogout }) => {
     }, 400);
   };
 
+  const handleViewAllMilestonesClick = (e) => {
+    if (e) e.preventDefault();
+    setIsViewAllLoading(true);
+    setTimeout(() => {
+      navigate('/milestone-creation', { state: { fromDashboard: true } });
+    }, 400);
+  };
+
   const [loading, setLoading] = useState(false);
   const [dashboardData, setDashboardData] = useState(null);
 
@@ -1265,7 +1273,7 @@ const ProjectManagerDashboard = ({ userRole, onLogout }) => {
               <div className="pm-table-header">
                 <span className="pm-card-title">Delayed Milestones</span>
                 <button
-                  onClick={handleViewAllClick}
+                  onClick={handleViewAllMilestonesClick}
                   disabled={isViewAllLoading}
                   style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: '13px', fontWeight: '500', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}
                   className="pm-view-all"
@@ -1311,7 +1319,7 @@ const ProjectManagerDashboard = ({ userRole, onLogout }) => {
               <div className="pm-table-header">
                 <span className="pm-card-title">Upcoming Milestones <span className="pm-card-sub">(Next 30 Days)</span></span>
                 <button
-                  onClick={handleViewAllClick}
+                  onClick={handleViewAllMilestonesClick}
                   disabled={isViewAllLoading}
                   style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: '13px', fontWeight: '500', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}
                   className="pm-view-all"

@@ -129,7 +129,7 @@ const GoLiveCalendar = ({ project, onCancel, onPreview }) => {
   const [expandedRows, setExpandedRows] = useState(new Set(['project']));
 
   const toggleMaster = (day) => setConsiderOnly(p => ({ ...p, [day]: { ...p[day], active: !p[day].active } }));
-  const toggleSub = (day, field) => setConsiderOnly(p => ({ ...p, [day]: { ...p[day], [field]: !p[field] } }));
+  const toggleSub = (day, field) => setConsiderOnly(p => ({ ...p, [day]: { ...p[day], [field]: !p[day][field] } }));
   
   const toggleRow = (id) => {
     const next = new Set(expandedRows);
@@ -198,7 +198,7 @@ const GoLiveCalendar = ({ project, onCancel, onPreview }) => {
         skipSun = considerOnly.sunday.active;
       }
 
-      const skipPub = calendarMode === 'existing' ? true : considerOnly.publicHolidays.active;
+      const skipPubRequested = calendarMode === 'existing' ? true : considerOnly.publicHolidays.active;
 
       let publicHolidayDates = [];
       try {
@@ -218,7 +218,7 @@ const GoLiveCalendar = ({ project, onCancel, onPreview }) => {
             });
             publicHolidayDates = filteredHols.map(c => c.calDt).filter(Boolean);
           } else {
-            if (skipPub) {
+            if (skipPubRequested) {
               const filteredHols = calData.filter(c => {
                 if (c.holTyp === 'MANDATORY') return true;
                 if (considerOnly.publicHolidays.company && coyId && c.coyId === Number(coyId) && c.calType === 'COMPANY') return true;
@@ -233,6 +233,8 @@ const GoLiveCalendar = ({ project, onCancel, onPreview }) => {
       } catch (e) {
         console.warn("Failed to fetch public holidays:", e);
       }
+
+      const skipPub = skipPubRequested && publicHolidayDates.length > 0;
 
       const projStart = project.startDate || project.tentStDt || project.tent_st_dt || project.start_date || '';
       const projEnd   = project.endDate   || project.tentEndDt  || project.tent_end_dt  || project.end_date   || '';
@@ -591,7 +593,7 @@ const GoLiveCalendar = ({ project, onCancel, onPreview }) => {
               <div className="glm-sub-cards">
                 {['company','plant','external'].map(opt => (
                   <div key={opt} className={`glm-sub-card ${existingSelection[opt] ? 'selected' : ''}`} onClick={() => setExistingSelection(prev => ({ ...prev, [opt]: !prev[opt] }))}>
-                    <input type="checkbox" readOnly checked={!!existingSelection[opt]} className="glm-checkbox-sm"/>
+                    <input type="checkbox" checked={!!existingSelection[opt]} onChange={(e) => { e.stopPropagation(); setExistingSelection(prev => ({ ...prev, [opt]: e.target.checked })); }} style={{ pointerEvents: 'none' }} className="glm-checkbox-sm"/>
                     {opt === 'company' && <Building2 size={22} className="glm-sub-icon"/>}
                     {opt === 'plant'   && <Factory   size={22} className="glm-sub-icon"/>}
                     {opt === 'external'&& <CalendarIcon size={22} className="glm-sub-icon"/>}
