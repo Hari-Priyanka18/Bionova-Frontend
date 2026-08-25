@@ -313,6 +313,14 @@ const DepartmentCreation = ({ userRole, onLogout }) => {
       triggerAlert("error", "Validation Error", "Department Name cannot exceed 100 characters.");
       return;
     }
+    if (/^[0-9\s]+$/.test(form.name.trim())) {
+      triggerAlert("error", "Validation Error", "Department Name cannot contain only numbers.");
+      return;
+    }
+    if (!/^[a-zA-Z0-9\s]+$/.test(form.name.trim())) {
+      triggerAlert("error", "Validation Error", "Department Name can only contain letters and numbers.");
+      return;
+    }
 
     // 3. Description check (optional but max 255 chars)
     if (form.description && form.description.length > 255) {
