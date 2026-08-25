@@ -279,6 +279,26 @@ const ProjectOverview = ({ project }) => {
     fetchData();
   }, [project]);
 
+  const formatDate = (dateStr) => {
+    if (!dateStr || dateStr === 'N/A' || dateStr === '—') return dateStr || 'N/A';
+    try {
+      const cleanStr = String(dateStr).split('T')[0].trim();
+      const parts = cleanStr.split('-');
+      if (parts.length === 3 && parts[0].length === 4) {
+        const [year, month, day] = parts;
+        return `${String(day).padStart(2, '0')}/${String(month).padStart(2, '0')}/${year}`;
+      }
+      const d = new Date(dateStr);
+      if (!isNaN(d.getTime())) {
+        const day = String(d.getDate()).padStart(2, '0');
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const year = d.getFullYear();
+        return `${day}/${month}/${year}`;
+      }
+    } catch (e) {}
+    return dateStr;
+  };
+
   const getStatusClass = (status, isTaskOverdue = false) => {
     if (isTaskOverdue) return 'st-overdue';
     if (!status) return 'st-default';
@@ -297,6 +317,8 @@ const ProjectOverview = ({ project }) => {
       case 'IN PROGRESS':
       case 'WIP':
         return 'st-in-progress';
+      case 'LIVE':
+        return 'st-live';
       case 'LOCKED':
         return 'st-locked';
       case 'NOT STARTED':
@@ -522,8 +544,8 @@ const ProjectOverview = ({ project }) => {
                   <td className="pd-code-col">{m.code}</td>
                   <td>{m.title}</td>
                   <td>{m.duration}</td>
-                  <td>{m.start}</td>
-                  <td>{m.end}</td>
+                  <td>{formatDate(m.start)}</td>
+                  <td>{formatDate(m.end)}</td>
                   <td><span className={`pd-status-badge ${getStatusClass(m.status)}`}>{m.status}</span></td>
                   <td>
                     <div className="pd-progress-wrap">
@@ -674,8 +696,8 @@ const ProjectOverview = ({ project }) => {
                     <td>{t.name}</td>
                     <td>{t.milestone}</td>
                     <td>{t.assignee}</td>
-                    <td>{t.start}</td>
-                    <td style={{ color: isOverdue ? '#dc2626' : 'inherit', fontWeight: isOverdue ? '600' : 'normal' }}>{t.end}</td>
+                    <td>{formatDate(t.start)}</td>
+                    <td style={{ color: isOverdue ? '#dc2626' : 'inherit', fontWeight: isOverdue ? '600' : 'normal' }}>{formatDate(t.end)}</td>
                     <td><span className={`pd-status-badge ${getStatusClass(t.status, isOverdue)}`}>{displayStatus}</span></td>
                     <td>
                       <div className="pd-progress-wrap">

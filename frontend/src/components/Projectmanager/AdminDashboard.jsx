@@ -577,8 +577,10 @@ const AdminDashboard = ({ userRole, onLogout }) => {
   const empMapById = React.useMemo(() => {
     const map = {};
     (employeesList || []).forEach(e => {
-      const name = `${e.fstNm || ''} ${e.lstNm || ''}`.trim() || e.empCode || `Employee #${e.empId}`;
-      map[String(e.empId)] = name;
+      const name = `${e.fstNm || e.firstName || ''} ${e.lstNm || e.lastName || ''}`.trim() || e.empNm || e.name || e.empCode || `Employee #${e.empId || e.id}`;
+      if (e.empId !== undefined && e.empId !== null) map[String(e.empId)] = name;
+      if (e.id !== undefined && e.id !== null) map[String(e.id)] = name;
+      if (e.empCode) map[String(e.empCode)] = name;
     });
     return map;
   }, [employeesList]);
@@ -586,12 +588,13 @@ const AdminDashboard = ({ userRole, onLogout }) => {
   const allPersonNames = React.useMemo(() => {
     const names = new Set();
     (employeesList || []).forEach(e => {
-      const name = `${e.fstNm || ''} ${e.lstNm || ''}`.trim();
+      const name = `${e.fstNm || e.firstName || ''} ${e.lstNm || e.lastName || ''}`.trim() || e.empNm || e.name;
       if (name) names.add(name);
     });
     tasksList.forEach(t => {
-      if (t.empId && empMapById[String(t.empId)]) {
-        names.add(empMapById[String(t.empId)]);
+      const targetId = t.empId || t.empid || t.executorId || t.executor_id;
+      if (targetId && empMapById[String(targetId)]) {
+        names.add(empMapById[String(targetId)]);
       }
     });
     return Array.from(names).sort();
@@ -604,11 +607,21 @@ const AdminDashboard = ({ userRole, onLogout }) => {
 
     tasksList.forEach(t => {
       let empName = null;
-      if (t.empId && empMapById[String(t.empId)]) {
-        empName = empMapById[String(t.empId)];
+      const targetEmpId = t.empId || t.empid || t.executorId || t.executor_id;
+
+      if (targetEmpId && empMapById[String(targetEmpId)]) {
+        empName = empMapById[String(targetEmpId)];
+      } else if (t.empCode && empMapById[String(t.empCode)]) {
+        empName = empMapById[String(t.empCode)];
       } else if (t.executorNm && t.executorNm.trim()) {
         empName = t.executorNm.trim();
-      } else if (t.assignedTo && t.assignedTo.trim()) {
+      } else if (t.executor_nm && t.executor_nm.trim()) {
+        empName = t.executor_nm.trim();
+      } else if (t.extEmpNm && t.extEmpNm.trim()) {
+        empName = t.extEmpNm.trim();
+      } else if (t.ext_emp_nm && t.ext_emp_nm.trim()) {
+        empName = t.ext_emp_nm.trim();
+      } else if (t.assignedTo && typeof t.assignedTo === 'string' && t.assignedTo.trim() && isNaN(t.assignedTo)) {
         empName = t.assignedTo.trim();
       } else if (t.createdByName && t.createdByName.trim()) {
         empName = t.createdByName.trim();
@@ -616,14 +629,19 @@ const AdminDashboard = ({ userRole, onLogout }) => {
         empName = t.assignedByNm.trim();
       }
 
-      if (!empName || empName.trim() === "" || empName.toLowerCase().includes("unassigned")) {
-        const empMatch = (employeesList || []).find(e => String(e.empId || e.id) === String(t.empId || t.executorId || ''));
+      if (!empName || empName.trim() === "" || empName.toLowerCase().includes("unassigned") || empName.toLowerCase() === "team member") {
+        const empMatch = (employeesList || []).find(e => 
+          String(e.empId || e.id) === String(targetEmpId || '') ||
+          (t.empCode && (e.empCode === t.empCode || e.code === t.empCode))
+        );
         if (empMatch) {
-          empName = `${empMatch.fstNm || ''} ${empMatch.lstNm || ''}`.trim() || empMatch.empCode || `Employee #${empMatch.empId}`;
+          empName = `${empMatch.fstNm || empMatch.firstName || ''} ${empMatch.lstNm || empMatch.lastName || ''}`.trim() || empMatch.empNm || empMatch.name || empMatch.empCode || `Employee #${empMatch.empId || empMatch.id}`;
         } else {
-          empName = t.empCode ? `Employee (${t.empCode})` : (t.empId ? `Employee #${t.empId}` : "Team Member");
+          empName = t.empCode ? `Employee (${t.empCode})` : (targetEmpId ? `Employee #${targetEmpId}` : null);
         }
       }
+
+      if (!empName) return;
 
       if (!empMap[empName]) {
         empMap[empName] = {
@@ -1075,40 +1093,112 @@ const AdminDashboard = ({ userRole, onLogout }) => {
                 <h4 style={{ margin: '0 0 12px 0', fontSize: '14px', color: '#1e293b' }}>Assigned Tasks Breakdown ({selectedMemberModal.taskList?.length || 0})</h4>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '250px', overflowY: 'auto' }}>
                   {selectedMemberModal.taskList && selectedMemberModal.taskList.length > 0 ? (
-                    selectedMemberModal.taskList.map((t, idx) => {
-                      const sts = (t.taskSts || "").toUpperCase();
-                      const isDone = sts === "CLOSED" || sts === "COMPLETED";
-                      const isLate = !isDone && t.endDt && new Date(t.endDt).setHours(23, 59, 59, 999) < now.getTime();
+                    [...selectedMemberModal.taskList]
+                      .sort((a, b) => {
+                        const getInfo = (t) => {
+                          const raw = (t.taskSts?.statusNm || t.taskSts || t.tasksts || t.status || "OPEN").toString().toUpperCase().trim();
+                          const isDone = raw === "COMPLETED" || raw === "CLOSED" || raw === "4";
+                          const isHold = raw === "HOLD" || raw === "ON_HOLD" || raw === "ON HOLD";
+                          const isDraft = raw === "DRAFT";
+                          const isInProgress = raw === "WIP" || raw === "IN_PROGRESS" || raw === "IN PROGRESS" || raw === "UNDER_REVIEW" || raw === "SUBMIT_REVIEW" || raw === "REWORK";
+                          const isLate = !isDone && t.endDt && new Date(t.endDt).setHours(23, 59, 59, 999) < now.getTime();
+                          const isOpen = !isDone && !isHold && !isDraft && !isInProgress;
 
-                      return (
-                        <div key={idx} style={{
-                          padding: '10px 14px',
-                          borderRadius: '8px',
-                          background: isLate ? '#fef2f2' : isDone ? '#f0fdf4' : '#f8fafc',
-                          border: isLate ? '1px solid #fecaca' : isDone ? '1px solid #bbf7d0' : '1px solid #e2e8f0',
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center'
-                        }}>
-                          <div>
-                            <strong style={{ fontSize: '13px', color: '#1e293b', display: 'block' }}>{t.taskNm || t.name || 'Task'}</strong>
-                            <span style={{ fontSize: '11px', color: '#64748b' }}>
-                              Due: {t.endDt ? formatDateDDMMYYYY(t.endDt) : 'No Deadline'}
+                          let rank = 1;
+                          if (isLate) rank = 6;
+                          else if (isOpen) rank = 1;
+                          else if (isInProgress) rank = 2;
+                          else if (isHold) rank = 3;
+                          else if (isDone) rank = 4;
+                          else if (isDraft) rank = 5;
+
+                          return rank;
+                        };
+
+                        return getInfo(a) - getInfo(b);
+                      })
+                      .map((t, idx) => {
+                        const raw = (t.taskSts?.statusNm || t.taskSts || t.tasksts || t.status || "OPEN").toString().toUpperCase().trim();
+                        const isDone = raw === "COMPLETED" || raw === "CLOSED" || raw === "4";
+                        const isHold = raw === "HOLD" || raw === "ON_HOLD" || raw === "ON HOLD";
+                        const isDraft = raw === "DRAFT";
+                        const isInProgress = raw === "WIP" || raw === "IN_PROGRESS" || raw === "IN PROGRESS" || raw === "UNDER_REVIEW" || raw === "SUBMIT_REVIEW" || raw === "REWORK";
+                        const isLate = !isDone && t.endDt && new Date(t.endDt).setHours(23, 59, 59, 999) < now.getTime();
+
+                        let statusLabel = "OPEN";
+                        let badgeColor = "#2563EB";
+                        let badgeBg = "#eff6ff";
+                        let cardBg = "#f8fafc";
+                        let cardBorder = "#e2e8f0";
+
+                        if (isLate) {
+                          statusLabel = "OVERDUE (LAG)";
+                          badgeColor = "#dc2626";
+                          badgeBg = "#fee2e2";
+                          cardBg = "#fef2f2";
+                          cardBorder = "#fecaca";
+                        } else if (isDone) {
+                          statusLabel = "COMPLETED";
+                          badgeColor = "#16A34A";
+                          badgeBg = "#dcfce7";
+                          cardBg = "#f0fdf4";
+                          cardBorder = "#bbf7d0";
+                        } else if (isHold) {
+                          statusLabel = "HOLD";
+                          badgeColor = "#7C3AED";
+                          badgeBg = "#f3e8ff";
+                          cardBg = "#faf5ff";
+                          cardBorder = "#e9d5ff";
+                        } else if (isInProgress) {
+                          statusLabel = "IN PROGRESS";
+                          badgeColor = "#F59E0B";
+                          badgeBg = "#fef3c7";
+                          cardBg = "#fffbe6";
+                          cardBorder = "#fde68a";
+                        } else if (isDraft) {
+                          statusLabel = "DRAFT";
+                          badgeColor = "#9CA3AF";
+                          badgeBg = "#f3f4f6";
+                          cardBg = "#f9fafb";
+                          cardBorder = "#e5e7eb";
+                        } else {
+                          // Open
+                          statusLabel = "OPEN";
+                          badgeColor = "#2563EB";
+                          badgeBg = "#eff6ff";
+                          cardBg = "#f8fafc";
+                          cardBorder = "#bfdbfe";
+                        }
+
+                        return (
+                          <div key={idx} style={{
+                            padding: '10px 14px',
+                            borderRadius: '8px',
+                            background: cardBg,
+                            border: `1px solid ${cardBorder}`,
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center'
+                          }}>
+                            <div>
+                              <strong style={{ fontSize: '13px', color: '#1e293b', display: 'block' }}>{t.taskNm || t.name || 'Task'}</strong>
+                              <span style={{ fontSize: '11px', color: '#64748b' }}>
+                                Due: {t.endDt ? formatDateDDMMYYYY(t.endDt) : 'No Deadline'}
+                              </span>
+                            </div>
+                            <span style={{
+                              fontSize: '11px',
+                              fontWeight: '600',
+                              padding: '3px 8px',
+                              borderRadius: '10px',
+                              background: badgeBg,
+                              color: badgeColor
+                            }}>
+                              {statusLabel}
                             </span>
                           </div>
-                          <span style={{
-                            fontSize: '11px',
-                            fontWeight: '600',
-                            padding: '3px 8px',
-                            borderRadius: '10px',
-                            background: isLate ? '#fee2e2' : isDone ? '#dcfce7' : '#e2e8f0',
-                            color: isLate ? '#991b1b' : isDone ? '#166534' : '#475569'
-                          }}>
-                            {isLate ? 'OVERDUE (LAG)' : isDone ? 'COMPLETED' : 'IN PROGRESS'}
-                          </span>
-                        </div>
-                      );
-                    })
+                        );
+                      })
                   ) : (
                     <div style={{ fontSize: '13px', color: '#64748b' }}>No tasks assigned.</div>
                   )}

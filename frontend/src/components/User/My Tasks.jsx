@@ -1025,8 +1025,11 @@ const MyTasks = ({ userRole, onLogout }) => {
       mapped = mapped.map(task => {
         let progress = 0;
         const taskSts = String(task.rawStatus || task.status || "").toUpperCase();
+        const currentProcess = String(task.rawTask?.prcsYesActn || task.prcsYesActn || "NONE").toUpperCase();
 
-        if (taskSts === 'COMPLETED' || taskSts === 'CLOSED') {
+        if (taskSts === 'REASSIGN' || taskSts === 'REASSIGNED' || currentProcess === 'REASSIGN') {
+          progress = 0;
+        } else if (taskSts === 'COMPLETED' || taskSts === 'CLOSED') {
           progress = 100;
         } else if (taskSts === 'WIP' || taskSts === 'IN_PROGRESS' || taskSts === 'UNDER_REVIEW') {
           progress = 50;
@@ -2228,6 +2231,10 @@ const MyTasks = ({ userRole, onLogout }) => {
       ? (rawSts.statusNm || rawSts.status_nm || "OPEN")
       : (rawSts || "OPEN");
     const taskSts = String(stsStr).toUpperCase();
+    const currentProcess = String(rawTask.prcsYesActn || task?.prcsYesActn || "NONE").toUpperCase();
+
+    // Reassigned task -> 0% progress
+    if (taskSts === 'REASSIGN' || taskSts === 'REASSIGNED' || currentProcess === 'REASSIGN') return 0;
 
     // Always 100 for closed tasks
     if (taskSts === 'COMPLETED' || taskSts === 'CLOSED') return 100;
@@ -2244,7 +2251,6 @@ const MyTasks = ({ userRole, onLogout }) => {
     }
 
     // ─── Has dependency: executor fills 0–80%, reviewer +10%, approver +10% ───
-    const currentProcess = (rawTask.prcsYesActn || "NONE").toUpperCase();
 
     // Approver stage done → 100%
     if (taskSts === 'COMPLETED' || taskSts === 'CLOSED') return 100;
