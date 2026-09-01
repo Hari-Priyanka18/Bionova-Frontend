@@ -413,6 +413,7 @@
 
 .mt-status-badge.st-completed { background: #dcfce7; color: #166534; }
 .mt-status-badge.st-in-progress { background: #dbeafe; color: #2563eb; }
+.mt-status-badge.st-live { background: #dcfce7; color: #15803d; border: 1px solid #86efac; }
 .mt-status-badge.st-not-started { background: #f1f5f9; color: #475569; }
 .mt-status-badge.st-locked { background: #fffbeb; color: #b45309; border: 1px solid #fde68a; }
 .mt-status-badge.st-hold { background: #ffedd5; color: #c2410c; }

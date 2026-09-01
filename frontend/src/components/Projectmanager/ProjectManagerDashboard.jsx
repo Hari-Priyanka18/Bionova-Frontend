@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import {
   FolderOpen, Play, BarChart2, Clock, CalendarCheck, AlertTriangle,
   Download, Filter, ChevronDown, Plus, Flag, CheckSquare,
-  TrendingUp, TrendingDown, ArrowRight, Shield, AlertCircle, Eye, Loader2
+  TrendingUp, TrendingDown, ArrowRight, Shield, AlertCircle, Eye, Loader2, Search
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import Sidebar from "../Sidebar.jsx";
@@ -12,12 +12,24 @@ import "../../styles/projectManagerDashboard.css";
 // ===== REUSABLE CUSTOM DROPDOWN =====
 const CustomDropdown = ({ value, options, onChange }) => {
   const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
   const ref = useRef(null);
+
   useEffect(() => {
-    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    const handler = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) {
+        setOpen(false);
+        setSearch("");
+      }
+    };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, []);
+
+  const filteredOptions = (options || []).filter(opt =>
+    String(opt).toLowerCase().includes(search.toLowerCase())
+  );
+
   return (
     <div ref={ref} style={{ position: 'relative', display: 'inline-block' }}>
       <button
@@ -27,36 +39,66 @@ const CustomDropdown = ({ value, options, onChange }) => {
           border: '1px solid #e2e8f0', borderRadius: '8px',
           padding: '6px 12px', fontSize: '13px', fontWeight: '500',
           color: '#475569', background: '#fff', cursor: 'pointer',
-          fontFamily: 'Inter, sans-serif', minWidth: '180px',
+          fontFamily: 'Inter, sans-serif', minWidth: '200px',
           justifyContent: 'space-between'
         }}
       >
-        {value} <ChevronDown size={14} />
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '220px' }}>
+          {value}
+        </span>
+        <ChevronDown size={14} style={{ flexShrink: 0 }} />
       </button>
       {open && (
         <div style={{
           position: 'absolute', top: 'calc(100% + 4px)', left: 0,
           background: '#fff', border: '1px solid #e2e8f0',
           borderRadius: '8px', boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
-          zIndex: 999, minWidth: '200px', maxHeight: '300px', overflowY: 'auto',
-          padding: '4px 0'
+          zIndex: 999, minWidth: '240px', maxWidth: '320px', overflow: 'hidden'
         }}>
-          {options.map(opt => (
-            <div
-              key={opt}
-              onClick={() => { onChange(opt); setOpen(false); }}
-              style={{
-                padding: '8px 16px', fontSize: '13px', fontWeight: '500',
-                cursor: 'pointer', color: opt === value ? '#fff' : '#374151',
-                background: opt === value ? '#2563eb' : 'transparent',
-                transition: 'background 0.15s'
-              }}
-              onMouseEnter={e => { if (opt !== value) e.currentTarget.style.background = '#f1f5f9'; }}
-              onMouseLeave={e => { if (opt !== value) e.currentTarget.style.background = 'transparent'; }}
-            >
-              {opt}
+          <div style={{ padding: '8px', borderBottom: '1px solid #f1f5f9', background: '#f8fafc' }}>
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: '6px',
+              background: '#ffffff', border: '1px solid #cbd5e1',
+              borderRadius: '6px', padding: '6px 10px'
+            }}>
+              <Search size={14} color="#64748b" style={{ flexShrink: 0 }} />
+              <input
+                type="text"
+                placeholder="Search projects..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                style={{
+                  border: 'none', outline: 'none', background: 'transparent',
+                  width: '100%', fontSize: '12px', color: '#0f172a'
+                }}
+                autoFocus
+              />
             </div>
-          ))}
+          </div>
+          <div style={{ maxHeight: '240px', overflowY: 'auto', padding: '4px 0' }}>
+            {filteredOptions.length > 0 ? (
+              filteredOptions.map(opt => (
+                <div
+                  key={opt}
+                  onClick={() => { onChange(opt); setOpen(false); setSearch(""); }}
+                  style={{
+                    padding: '8px 16px', fontSize: '13px', fontWeight: '500',
+                    cursor: 'pointer', color: opt === value ? '#fff' : '#374151',
+                    background: opt === value ? '#2563eb' : 'transparent',
+                    transition: 'background 0.15s'
+                  }}
+                  onMouseEnter={e => { if (opt !== value) e.currentTarget.style.background = '#f1f5f9'; }}
+                  onMouseLeave={e => { if (opt !== value) e.currentTarget.style.background = 'transparent'; }}
+                >
+                  {opt}
+                </div>
+              ))
+            ) : (
+              <div style={{ padding: '12px 16px', fontSize: '13px', color: '#94a3b8', textAlign: 'center' }}>
+                No projects found
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
