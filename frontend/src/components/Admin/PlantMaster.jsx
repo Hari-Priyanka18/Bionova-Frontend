@@ -377,11 +377,29 @@ const PlantCreation = ({ userRole, onLogout }) => {
       } else if (value.length > 100) {
         error = "Plant Email cannot exceed 100 characters.";
       } else {
+<<<<<<< HEAD
        
         const emailRegex = /^([a-zA-Z0-9._%+-]+@)?[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/i;
 
         if (!emailRegex.test(value.trim())) {
           error = "Plant Email must be a valid email or domain.";
+=======
+<<<<<<< Updated upstream
+<<<<<<< Updated upstream
+        const emailRegex = /^([a-zA-Z0-9._%+-]*@)[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/i;
+=======
+        const emailRegex = /^([a-zA-Z0-9._%+-]+@)?[a-zA-Z0-9.-]+\.(com|in|org|net|co)$/i;
+>>>>>>> Stashed changes
+        if (!emailRegex.test(value.trim())) {
+          error = "Plant Email must be a valid email or domain containing '@'.";
+=======
+       
+        const emailRegex = /^[a-zA-Z0-9._%+-]+@(gmail|bionova|company|mailinator)\.com$/i;
+
+        if (!emailRegex.test(value.trim())) {
+          error = "Please enter a valid email address ending with @gmail.com, @bionova.com, @company.com, or @mailinator.com.";
+>>>>>>> Stashed changes
+>>>>>>> 54fce52 (Update frontend components)
         }
       }
     } else if (name === "addressLine1") {
