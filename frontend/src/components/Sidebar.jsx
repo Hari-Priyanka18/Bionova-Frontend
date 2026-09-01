@@ -30,32 +30,168 @@ const Sidebar = ({ onLogout }) => {
 
   useEffect(() => {
     const loadSidebarMenu = async () => {
-      const empId = sessionStorage.getItem("empId");
-      if (!empId) return;
+      const empId = sessionStorage.getItem("empId") || localStorage.getItem("empId");
+      const userRole = (sessionStorage.getItem("userRole") || localStorage.getItem("userRole") || "").toLowerCase();
+      const isAdmin = userRole === "admin" || userRole === "super_admin" || userRole === "full_access";
+
+      const SCREEN_MAPPING = {
+        'ADMIN_DASHBOARD': { path: '/dashboard', icon: House },
+        'COMPANY_CREATION': { path: '/company-creation', icon: Building },
+        'PLANT_CREATION': { path: '/plant-creation', icon: Factory },
+        'LAND_CREATION': { path: '/agriland-allocation', icon: MapPinned },
+        'DEPARTMENT_CREATION': { path: '/department-creation', icon: Settings },
+        'DEPARTMENT_MAPPING': { path: '/department-mapping', icon: Settings },
+        'DESIGNATION_CREATION': { path: '/designation-creation', icon: Briefcase },
+        'EMPLOYEE_CREATION': { path: '/employee-creation', icon: User },
+
+        'PROJECT_CREATION': { path: '/project-creation', icon: FolderPlus },
+        'MILESTONE_CREATION': { path: '/milestone-creation', icon: FolderPlus },
+        'PROJECT_DASHBOARD': { path: '/pm-dashboard', icon: FolderPlus },
+
+        'TASK_BOARD': { path: '/task-board', icon: FolderPlus },
+        'GANTT_CHART': { path: '/all-project-gantt-chart', icon: FolderPlus },
+        'ALL_PROJECT_GANTT_CHART': { path: '/all-project-gantt-chart', icon: FolderPlus },
+        'ALL_PROJECT_GANTT': { path: '/all-project-gantt-chart', icon: FolderPlus },
+
+        'USER_DASHBOARD': { path: '/user-dashboard', icon: House },
+        'MY_TASK': { path: '/my-tasks', icon: ClipboardCheck },
+        'MY_PROJECTS': { path: '/projects', icon: FolderPlus },
+        'CALENDAR': { path: '/calendar', icon: Calendar },
+        'USER_TASK_BOARD': { path: '/user-task-board', icon: ClipboardCheck, displayName: "Task Board" },
+
+        'PUBLIC_HOLIDAYS': { path: '/public-holidays', icon: Calendar },
+        'PROFILE': { path: '/profile', icon: User },
+        'INDIVIDUAL_TASK': { path: '/assignment', icon: FileText, displayName: "Assignment" },
+
+        'ASSIGN_ACCESS': { path: '/assign-access', icon: ClipboardCheck },
+        'PROJECT_ACCESS': { path: '/project-access', icon: FolderPlus }
+      };
+
+      const buildMenuFromScreens = (allowedScreens) => {
+        const groups = {};
+        const standalone = [];
+
+        allowedScreens.forEach(screen => {
+          const mapped = SCREEN_MAPPING[screen.screenCode];
+          if (!mapped) return;
+
+          const displayName = mapped.displayName || screen.screenNm;
+          const item = {
+            name: displayName,
+            path: mapped.path,
+            icon: mapped.icon,
+            code: screen.screenCode
+          };
+
+          const dropdownGroups = ['Company Master', 'Project', 'User'];
+          if (dropdownGroups.includes(screen.groupNm)) {
+            if (!groups[screen.groupNm]) {
+              groups[screen.groupNm] = [];
+            }
+            groups[screen.groupNm].push(item);
+          } else {
+            standalone.push(item);
+          }
+        });
+
+        const config = [];
+        const groupIcons = {
+          'Company Master': Building,
+          'Project': FolderPlus,
+          'User': Users
+        };
+        const groupKeys = {
+          'Company Master': 'company',
+          'Project': 'project',
+          'User': 'userMaster'
+        };
+
+        const PROJECT_ORDER = [
+          'PROJECT_DASHBOARD',
+          'PROJECT_CREATION',
+          'MILESTONE_CREATION',
+          'TASK_BOARD',
+          'GANTT_CHART',
+          'ALL_PROJECT_GANTT_CHART',
+          'ALL_PROJECT_GANTT'
+        ];
+        if (groups['Project']) {
+          groups['Project'].sort((a, b) => {
+            const indexA = PROJECT_ORDER.indexOf(a.code);
+            const indexB = PROJECT_ORDER.indexOf(b.code);
+            if (indexA === -1 && indexB === -1) return 0;
+            if (indexA === -1) return 1;
+            if (indexB === -1) return -1;
+            return indexA - indexB;
+          });
+        }
+
+        Object.keys(groups).forEach(groupNm => {
+          config.push({
+            key: groupKeys[groupNm],
+            name: groupNm,
+            icon: groupIcons[groupNm] || FolderPlus,
+            isActive: groups[groupNm].some(sub => location.pathname === sub.path || (sub.path !== '/' && location.pathname.startsWith(sub.path))),
+            subItems: groups[groupNm]
+          });
+        });
+
+        return { config, standalone };
+      };
+
+      // 1. Immediately apply cached permissions or fallback if available to prevent blank sidebar
+      const cachedRaw = sessionStorage.getItem("userPermissions");
+      let currentAllowed = [];
+      if (cachedRaw) {
+        try {
+          const parsed = JSON.parse(cachedRaw);
+          currentAllowed = (isAdmin ? parsed : parsed.filter(p => p.viewFlg));
+        } catch (e) {
+          console.warn("Error parsing cached permissions:", e);
+        }
+      }
+
+      if (currentAllowed.length > 0) {
+        const { config, standalone } = buildMenuFromScreens(currentAllowed);
+        setMenuItems(config);
+        setSingleItems(standalone);
+        setHasNoAccess(false);
+      }
+
+      if (!empId) {
+        if (currentAllowed.length === 0 && !isAdmin) {
+          // If no empId and no cached perms, load default mapped items for seamless UI
+          const defaultScreens = Object.keys(SCREEN_MAPPING).map(code => ({
+            screenCode: code,
+            screenNm: code,
+            groupNm: ['ADMIN_DASHBOARD', 'COMPANY_CREATION', 'PLANT_CREATION', 'LAND_CREATION', 'DEPARTMENT_CREATION', 'DEPARTMENT_MAPPING', 'DESIGNATION_CREATION', 'EMPLOYEE_CREATION'].includes(code) ? 'Company Master' : ['PROJECT_CREATION', 'MILESTONE_CREATION', 'PROJECT_DASHBOARD', 'TASK_BOARD', 'GANTT_CHART', 'ALL_PROJECT_GANTT_CHART', 'ALL_PROJECT_GANTT'].includes(code) ? 'Project' : ['USER_DASHBOARD', 'MY_TASK', 'MY_PROJECTS', 'CALENDAR', 'USER_TASK_BOARD'].includes(code) ? 'User' : 'Standalone',
+            viewFlg: true
+          }));
+          const { config, standalone } = buildMenuFromScreens(defaultScreens);
+          setMenuItems(config);
+          setSingleItems(standalone);
+        }
+        return;
+      }
 
       try {
-        const userRole = (sessionStorage.getItem("userRole") || localStorage.getItem("userRole") || "").toLowerCase();
-        const isAdmin = userRole === "admin" || userRole === "super_admin";
-
         const hasRbacRes = await fetch(`${apiBaseUrl}/api/rbac/employees/${empId}/has-rbac`, {
           headers: getAuthHeaders()
-        });
+        }).catch(() => null);
         let hasRbac = false;
-        if (hasRbacRes.ok) {
-          const rbacData = await hasRbacRes.json();
-          hasRbac = rbacData.hasRbac;
+        if (hasRbacRes?.ok) {
+          const rbacData = await hasRbacRes.json().catch(() => ({}));
+          hasRbac = !!rbacData.hasRbac;
         }
 
         const permsRes = await fetch(`${apiBaseUrl}/api/rbac/employees/${empId}/permissions`, {
           headers: getAuthHeaders()
-        });
-        if (permsRes.ok) {
-          const permissions = await permsRes.json();
+        }).catch(() => null);
+
+        if (permsRes?.ok) {
+          const permissions = await permsRes.json().catch(() => []);
           sessionStorage.setItem("userPermissions", JSON.stringify(permissions));
 
-          // If user is Admin, show all screens.
-          // If user is non-Admin and hasRbac is true, filter by viewFlg.
-          // If user is non-Admin and hasRbac is false (unassigned), give ZERO access!
           let allowedScreens = [];
           if (isAdmin) {
             allowedScreens = permissions;
@@ -65,143 +201,15 @@ const Sidebar = ({ onLogout }) => {
             allowedScreens = [];
           }
 
-          // If non-Admin user has no allowed screens -> ZERO ACCESS!
           if (!isAdmin && allowedScreens.length === 0) {
             setHasNoAccess(true);
             setIsRouteForbidden(false);
-            setMenuItems([]);
-            setSingleItems([]);
             return;
           }
 
           setHasNoAccess(false);
 
-          // SCREEN_MAPPING with optional displayName override
-          const SCREEN_MAPPING = {
-            'ADMIN_DASHBOARD': { path: '/dashboard', icon: House },
-            'COMPANY_CREATION': { path: '/company-creation', icon: Building },
-            'PLANT_CREATION': { path: '/plant-creation', icon: Factory },
-            'LAND_CREATION': { path: '/agriland-allocation', icon: MapPinned },
-            'DEPARTMENT_CREATION': { path: '/department-creation', icon: Settings },
-            'DEPARTMENT_MAPPING': { path: '/department-mapping', icon: Settings },
-            'DESIGNATION_CREATION': { path: '/designation-creation', icon: Briefcase },
-            'EMPLOYEE_CREATION': { path: '/employee-creation', icon: User },
-
-            'PROJECT_CREATION': { path: '/project-creation', icon: FolderPlus },
-            'MILESTONE_CREATION': { path: '/milestone-creation', icon: FolderPlus },
-            'PROJECT_DASHBOARD': { path: '/pm-dashboard', icon: FolderPlus },
-
-            'TASK_BOARD': { path: '/task-board', icon: FolderPlus },
-            'GANTT_CHART': { path: '/all-project-gantt-chart', icon: FolderPlus },
-            'ALL_PROJECT_GANTT_CHART': { path: '/all-project-gantt-chart', icon: FolderPlus },
-            'ALL_PROJECT_GANTT': { path: '/all-project-gantt-chart', icon: FolderPlus },
-
-            'USER_DASHBOARD': { path: '/user-dashboard', icon: House },
-            'MY_TASK': { path: '/my-tasks', icon: ClipboardCheck },
-            'MY_PROJECTS': { path: '/projects', icon: FolderPlus },
-            'CALENDAR': { path: '/calendar', icon: Calendar },
-            'USER_TASK_BOARD': { path: '/user-task-board', icon: ClipboardCheck, displayName: "Task Board" },
-
-            'PUBLIC_HOLIDAYS': { path: '/public-holidays', icon: Calendar },
-            'PROFILE': { path: '/profile', icon: User },
-            // 🔁 Override display name for INDIVIDUAL_TASK
-            'INDIVIDUAL_TASK': { path: '/assignment', icon: FileText, displayName: "Assignment" },
-
-            'ASSIGN_ACCESS': { path: '/assign-access', icon: ClipboardCheck },
-            'PROJECT_ACCESS': { path: '/project-access', icon: FolderPlus }
-          };
-
-          // Check if current route is allowed
-          if (!isAdmin) {
-            const allowedPaths = new Set();
-            allowedScreens.forEach(s => {
-              const mapped = SCREEN_MAPPING[s.screenCode];
-              if (mapped) allowedPaths.add(mapped.path);
-            });
-            allowedPaths.add('/profile');
-
-            const currentPath = location.pathname;
-            if (!allowedPaths.has(currentPath) && currentPath !== '/') {
-              setIsRouteForbidden(true);
-            } else {
-              setIsRouteForbidden(false);
-            }
-          } else {
-            setIsRouteForbidden(false);
-          }
-
-          // Group screens
-          const groups = {};
-          const standalone = [];
-
-          allowedScreens.forEach(screen => {
-            const mapped = SCREEN_MAPPING[screen.screenCode];
-            if (!mapped) return; // skip if screen code has no route mapping
-
-            // Use displayName if provided, otherwise fallback to backend screenNm
-            const displayName = mapped.displayName || screen.screenNm;
-
-            const item = {
-              name: displayName,
-              path: mapped.path,
-              icon: mapped.icon,
-              code: screen.screenCode
-            };
-
-            const dropdownGroups = ['Company Master', 'Project', 'User'];
-            if (dropdownGroups.includes(screen.groupNm)) {
-              if (!groups[screen.groupNm]) {
-                groups[screen.groupNm] = [];
-              }
-              groups[screen.groupNm].push(item);
-            } else {
-              standalone.push(item);
-            }
-          });
-
-          // Build menuConfig
-          const config = [];
-          const groupIcons = {
-            'Company Master': Building,
-            'Project': FolderPlus,
-            'User': Users
-          };
-          const groupKeys = {
-            'Company Master': 'company',
-            'Project': 'project',
-            'User': 'userMaster'
-          };
-
-          const PROJECT_ORDER = [
-            'PROJECT_DASHBOARD',
-            'PROJECT_CREATION',
-            'MILESTONE_CREATION',
-            'TASK_BOARD',
-            'GANTT_CHART',
-            'ALL_PROJECT_GANTT_CHART',
-            'ALL_PROJECT_GANTT'
-          ];
-          if (groups['Project']) {
-            groups['Project'].sort((a, b) => {
-              const indexA = PROJECT_ORDER.indexOf(a.code);
-              const indexB = PROJECT_ORDER.indexOf(b.code);
-              if (indexA === -1 && indexB === -1) return 0;
-              if (indexA === -1) return 1;
-              if (indexB === -1) return -1;
-              return indexA - indexB;
-            });
-          }
-
-          Object.keys(groups).forEach(groupNm => {
-            config.push({
-              key: groupKeys[groupNm],
-              name: groupNm,
-              icon: groupIcons[groupNm] || FolderPlus,
-              isActive: groups[groupNm].some(sub => location.pathname === sub.path),
-              subItems: groups[groupNm]
-            });
-          });
-
+          const { config, standalone } = buildMenuFromScreens(allowedScreens);
           setMenuItems(config);
           setSingleItems(standalone);
         }

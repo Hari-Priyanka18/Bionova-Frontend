@@ -334,7 +334,7 @@ const EmployeeCreation = ({ userRole, onLogout }) => {
     companyNm: "",
     photoPath: "",
     repEmpId: "",
-    sts: true
+    sts: ""
   });
   const [isExtEditing, setIsExtEditing] = useState(false);
   const [isExtViewing, setIsExtViewing] = useState(false);
@@ -349,7 +349,7 @@ const EmployeeCreation = ({ userRole, onLogout }) => {
       companyNm: "",
       photoPath: "",
       repEmpId: "",
-      sts: true
+      sts: ""
     });
     setExtFormErrors({});
     setIsExtEditing(false);
@@ -538,8 +538,8 @@ const EmployeeCreation = ({ userRole, onLogout }) => {
       const emailVal = value.trim();
       if (!emailVal) {
         error = "Email is required.";
-      } else if (!/^[a-zA-Z0-9._%+-]+@gmail\.com$/i.test(emailVal)) {
-        error = "Please enter a valid @gmail.com email address with a username.";
+      } else if (!/^[a-zA-Z0-9._%+-]+@(gmail|bionova|company|mailinator)\.com$/i.test(emailVal)) {
+        error = "Please enter a valid email address ending with @gmail.com, @bionova.com, @company.com, or @mailinator.com.";
       }
     } else if (name === "password") {
       if (!value) {
@@ -984,8 +984,8 @@ const EmployeeCreation = ({ userRole, onLogout }) => {
       return;
     }
     const emailVal = form.email.trim();
-    if (!/^[a-zA-Z0-9._%+-]+@gmail\.com$/i.test(emailVal)) {
-      triggerAlert("error", "Validation Error", "Please enter a valid @gmail.com Employee Email address with a username.");
+    if (!/^[a-zA-Z0-9._%+-]+@(gmail|bionova|company|mailinator)\.com$/i.test(emailVal)) {
+      triggerAlert("error", "Validation Error", "Please enter a valid email address ending with @gmail.com, @bionova.com, @company.com, or @mailinator.com.");
       return;
     }
 
@@ -1305,12 +1305,60 @@ const EmployeeCreation = ({ userRole, onLogout }) => {
     setActiveActionsMenu(null);
   };
 
+  const generateDeleteWarningMessage = (empId, isExternal = false) => {
+    const userAssignments = assignments.filter(a => String(a.empId) === String(empId) || (isExternal && String(a.extEmpId || a.ext_emp_id) === String(empId)));
+    const userLiveTasks = liveTasks.filter(t => String(t.empId) === String(empId) || (isExternal && String(t.extEmpId || t.ext_emp_id) === String(empId)));
+    
+    const taskItems = [
+      ...userAssignments.map(t => ({ title: t.taskNm || t.tasknm || t.taskCd || "Unnamed Task", type: "Individual Task" })),
+      ...userLiveTasks.map(t => ({ title: t.taskNm || t.tasknm || t.taskCd || "Unnamed Task", type: "Project Task" }))
+    ];
+
+    if (taskItems.length === 0) {
+      return (
+        <div style={{ textAlign: "left", width: "100%", marginTop: "8px" }}>
+          <h4 style={{ fontSize: "14px", fontWeight: "700", color: "#16a34a", marginBottom: "8px", borderBottom: "1px solid #bbf7d0", paddingBottom: "6px" }}>
+            ✅ Safe to Delete
+          </h4>
+          <p style={{ fontSize: "13px", color: "#334155", marginBottom: "12px" }}>
+            This employee is currently assigned to <strong>0</strong> active tasks.
+          </p>
+          <p style={{ fontSize: "13px", color: "#0f172a", marginTop: "12px", fontWeight: "600" }}>
+            Are you sure you want to proceed with deletion? This action cannot be undone.
+          </p>
+        </div>
+      );
+    }
+
+    return (
+      <div style={{ textAlign: "left", width: "100%", marginTop: "8px" }}>
+        <h4 style={{ fontSize: "14px", fontWeight: "700", color: "#dc2626", marginBottom: "8px", borderBottom: "1px solid #fecaca", paddingBottom: "6px" }}>
+          ⚠️ Warning: Employee has active assignments!
+        </h4>
+        <p style={{ fontSize: "13px", color: "#334155", marginBottom: "12px" }}>
+          This employee is currently assigned to <strong>{taskItems.length}</strong> tasks. Deleting them may cause these tasks to become unassigned.
+        </p>
+        <div style={{ display: "flex", flexDirection: "column", gap: "6px", maxHeight: "200px", overflowY: "auto", paddingRight: "4px", background: "#f8fafc", padding: "8px", borderRadius: "6px", border: "1px solid #e2e8f0" }}>
+          {taskItems.map((item, idx) => (
+            <div key={idx} style={{ display: "flex", justifyContent: "space-between", fontSize: "12px", borderBottom: idx === taskItems.length - 1 ? "none" : "1px solid #e2e8f0", paddingBottom: "4px" }}>
+              <span style={{ color: "#0f172a", fontWeight: "500", wordBreak: "break-word", paddingRight: "8px" }}>{item.title}</span>
+              <span style={{ color: "#64748b", whiteSpace: "nowrap" }}>{item.type}</span>
+            </div>
+          ))}
+        </div>
+        <p style={{ fontSize: "13px", color: "#ef4444", marginTop: "12px", fontWeight: "600" }}>
+          Are you sure you want to proceed with deletion?
+        </p>
+      </div>
+    );
+  };
+
   const handleDelete = (empId) => {
     setAlertConfig({
       isOpen: true,
       type: "warning",
       title: "Confirm Delete",
-      message: "Are you sure you want to delete this employee? This action cannot be undone.",
+      message: generateDeleteWarningMessage(empId, false),
       confirmText: "Delete",
       cancelText: "Cancel",
       onConfirm: async () => {
@@ -1436,7 +1484,7 @@ const EmployeeCreation = ({ userRole, onLogout }) => {
       companyNm: emp.companyNm || "",
       photoPath: emp.photoPath || "",
       repEmpId: emp.repEmpId || "",
-      sts: emp.sts !== undefined ? emp.sts : true
+      sts: emp.sts === true || emp.sts === "Active" ? "Active" : emp.sts === false || emp.sts === "Inactive" ? "Inactive" : ""
     });
     setExtEditId(emp.extEmpId || emp.id);
     setExtFormErrors({});
@@ -1455,7 +1503,7 @@ const EmployeeCreation = ({ userRole, onLogout }) => {
       companyNm: emp.companyNm || "",
       photoPath: emp.photoPath || "",
       repEmpId: emp.repEmpId || "",
-      sts: emp.sts !== undefined ? emp.sts : true
+      sts: emp.sts === true || emp.sts === "Active" ? "Active" : emp.sts === false || emp.sts === "Inactive" ? "Inactive" : ""
     });
     setExtEditId(emp.extEmpId || emp.id);
     setExtFormErrors({});
@@ -1468,7 +1516,7 @@ const EmployeeCreation = ({ userRole, onLogout }) => {
       isOpen: true,
       type: "warning",
       title: "Confirm Delete",
-      message: "Are you sure you want to delete this external employee? This action cannot be undone.",
+      message: generateDeleteWarningMessage(id, true),
       confirmText: "Delete",
       cancelText: "Cancel",
       onConfirm: async () => {
@@ -1569,7 +1617,7 @@ const EmployeeCreation = ({ userRole, onLogout }) => {
           companyNm: extForm.companyNm,
           photoPath: extForm.photoPath,
           repEmpId: extForm.repEmpId ? parseInt(extForm.repEmpId) : null,
-          sts: extForm.sts
+          sts: extForm.sts === "Active"
         })
       });
       if (res.ok) {
@@ -2257,7 +2305,7 @@ const EmployeeCreation = ({ userRole, onLogout }) => {
                       </div>
                       <div>
                         <h2 style={{ margin: '0 0 4px 0', fontSize: '24px', color: '#0f172a', fontWeight: '700' }}>{extForm.extEmpNm}</h2>
-                        <span style={{ padding: '2px 10px', borderRadius: '12px', fontSize: '12px', fontWeight: '600', backgroundColor: extForm.sts ? '#dcfce7' : '#fee2e2', color: extForm.sts ? '#166534' : '#991b1b' }}>{extForm.sts ? 'Active' : 'Inactive'}</span>
+                        <span style={{ padding: '2px 10px', borderRadius: '12px', fontSize: '12px', fontWeight: '600', backgroundColor: extForm.sts === 'Active' || extForm.sts === true ? '#dcfce7' : '#fee2e2', color: extForm.sts === 'Active' || extForm.sts === true ? '#166534' : '#991b1b' }}>{extForm.sts === 'Active' || extForm.sts === true ? 'Active' : 'Inactive'}</span>
                       </div>
                     </div>
 
@@ -2385,7 +2433,7 @@ const EmployeeCreation = ({ userRole, onLogout }) => {
                         <label>Employee Status <span className="emp-req-star">*</span></label>
                         <div className="emp-input-icon-wrap">
                           <span className="emp-input-prefix-icon"><CheckCircle2 size={16} /></span>
-                          <select name="sts" value={extForm.sts ? "Active" : "Inactive"} onChange={(e) => handleExtChange({ target: { name: 'sts', value: e.target.value === 'Active' } })} required disabled={isExtViewing}>
+                          <select name="sts" value={extForm.sts} onChange={(e) => handleExtChange({ target: { name: 'sts', value: e.target.value } })} required disabled={isExtViewing}>
                             <option value="" disabled hidden>Select status</option>
                             <option value="Active">Active</option>
                             <option value="Inactive">Inactive</option>

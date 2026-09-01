@@ -141,6 +141,134 @@ const SearchableSelect = ({ options, value, onChange, placeholder, style, disabl
   );
 };
 
+// ── Date Input Component (Strictly dd/mm/yyyy format) ──────────
+const DdMmYyyyDateInput = ({ value, onChange, title }) => {
+  const isoToDisplay = (isoStr) => {
+    if (!isoStr) return '';
+    if (isoStr.includes('/')) return isoStr;
+    const parts = isoStr.split('-');
+    if (parts.length === 3 && parts[0].length === 4) {
+      return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    }
+    return isoStr;
+  };
+
+  const displayToIso = (dispStr) => {
+    if (!dispStr) return '';
+    const parts = dispStr.split('/');
+    if (parts.length === 3 && parts[0].length <= 2 && parts[1].length <= 2 && parts[2].length === 4) {
+      const d = parts[0].padStart(2, '0');
+      const m = parts[1].padStart(2, '0');
+      const y = parts[2];
+      return `${y}-${m}-${d}`;
+    }
+    return dispStr;
+  };
+
+  const [displayText, setDisplayText] = useState(() => isoToDisplay(value));
+  const hiddenDateRef = useRef(null);
+
+  useEffect(() => {
+    setDisplayText(isoToDisplay(value));
+  }, [value]);
+
+  const handleTextChange = (e) => {
+    let raw = e.target.value.replace(/[^0-9/]/g, '');
+    const cleanDigits = raw.replace(/\//g, '');
+    if (cleanDigits.length > 0 && !raw.includes('/')) {
+      if (cleanDigits.length <= 2) {
+        raw = cleanDigits;
+      } else if (cleanDigits.length <= 4) {
+        raw = `${cleanDigits.slice(0, 2)}/${cleanDigits.slice(2)}`;
+      } else {
+        raw = `${cleanDigits.slice(0, 2)}/${cleanDigits.slice(2, 4)}/${cleanDigits.slice(4, 8)}`;
+      }
+    }
+
+    setDisplayText(raw);
+
+    if (raw.length === 10) {
+      const iso = displayToIso(raw);
+      const testD = new Date(iso);
+      if (!isNaN(testD.getTime())) {
+        onChange(iso);
+      }
+    } else if (raw === '') {
+      onChange('');
+    }
+  };
+
+  const handlePickerChange = (e) => {
+    const isoVal = e.target.value;
+    onChange(isoVal);
+  };
+
+  return (
+    <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
+      <input
+        type="text"
+        placeholder="dd/mm/yyyy"
+        value={displayText}
+        onChange={handleTextChange}
+        maxLength={10}
+        style={{
+          border: '1px solid #e2e8f0',
+          padding: '4px 26px 4px 8px',
+          borderRadius: '6px',
+          fontSize: '12px',
+          width: '100px',
+          color: '#1e293b',
+          outline: 'none',
+          backgroundColor: '#fff'
+        }}
+        title={title}
+      />
+      <button
+        type="button"
+        onClick={() => {
+          if (hiddenDateRef.current) {
+            if (typeof hiddenDateRef.current.showPicker === 'function') {
+              hiddenDateRef.current.showPicker();
+            } else {
+              hiddenDateRef.current.focus();
+              hiddenDateRef.current.click();
+            }
+          }
+        }}
+        style={{
+          position: 'absolute',
+          right: '6px',
+          background: 'none',
+          border: 'none',
+          cursor: 'pointer',
+          padding: 0,
+          display: 'flex',
+          alignItems: 'center',
+          color: '#64748b'
+        }}
+        title="Open Calendar"
+      >
+        <Calendar size={14} />
+      </button>
+      <input
+        ref={hiddenDateRef}
+        type="date"
+        value={displayToIso(displayText)}
+        onChange={handlePickerChange}
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: 0,
+          height: 0,
+          opacity: 0,
+          pointerEvents: 'none'
+        }}
+      />
+    </div>
+  );
+};
+
 export default function AllProjectGanttChart({ userRole, onLogout }) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -623,9 +751,9 @@ export default function AllProjectGanttChart({ userRole, onLogout }) {
                 placeholder="All Projects"
               />
               <div className="gantt-filter-date" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <input type="date" value={startDateFilter} onChange={e => setStartDateFilter(e.target.value)} style={{ border: '1px solid #e2e8f0', padding: '4px 8px', borderRadius: '4px', fontSize: '12px' }} title="Start Date" />
+                <DdMmYyyyDateInput value={startDateFilter} onChange={setStartDateFilter} title="Start Date" />
                 <span style={{ color: '#64748b' }}>-</span>
-                <input type="date" value={endDateFilter} onChange={e => setEndDateFilter(e.target.value)} style={{ border: '1px solid #e2e8f0', padding: '4px 8px', borderRadius: '4px', fontSize: '12px' }} title="End Date" />
+                <DdMmYyyyDateInput value={endDateFilter} onChange={setEndDateFilter} title="End Date" />
               </div>
               <button className="gantt-btn-clear" onClick={() => { setSearchQuery(""); setStatusFilter("All Status"); setProjectFilter("All Projects"); setStartDateFilter(""); setEndDateFilter(""); }}>Clear</button>
               <button className="gantt-btn-today" onClick={() => { 
