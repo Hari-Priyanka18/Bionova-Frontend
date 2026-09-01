@@ -371,15 +371,16 @@ const PlantCreation = ({ userRole, onLogout }) => {
           error = "Format must be e.g. 78.421012 E (2 digits, dot, 6 decimals, space, and E/W).";
         }
       }
-    } else if (name === "email") {
+        } else if (name === "email") {
       if (!value.trim()) {
         error = "Plant Email is required.";
       } else if (value.length > 100) {
         error = "Plant Email cannot exceed 100 characters.";
       } else {
-        const emailRegex = /^([a-zA-Z0-9._%+-]+@)?[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/i;
+        const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/i;
+
         if (!emailRegex.test(value.trim())) {
-          error = "Plant Email must be a valid email or domain.";
+          error = "Please enter a valid email address.";
         }
       }
     } else if (name === "addressLine1") {

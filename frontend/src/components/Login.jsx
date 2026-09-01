@@ -51,10 +51,11 @@ const Login = ({ onLogin }) => {
     setError('');
 
     const emailInput = formData.email.trim();
-    if (!emailInput) {
+       if (!emailInput) {
       setError("Please enter your email address");
       return;
     }
+
     if (!isValidEmailFormat(emailInput)) {
       setError("Invalid Email");
       return;
@@ -146,6 +147,12 @@ const Login = ({ onLogin }) => {
     }
     if (!isValidEmailFormat(resetEmailInput)) {
       setError("Invalid Email");
+      return;
+    }
+
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@(gmail|bionova|company|mailinator)\.com$/i;
+    if (!emailRegex.test(resetEmail.trim())) {
+      setError("Please enter a valid email address (e.g., @gmail.com, @bionova.com, @mailinator.com)");
       return;
     }
 
