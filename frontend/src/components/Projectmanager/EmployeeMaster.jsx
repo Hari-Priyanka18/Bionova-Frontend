@@ -538,8 +538,8 @@ const EmployeeCreation = ({ userRole, onLogout }) => {
       const emailVal = value.trim();
       if (!emailVal) {
         error = "Email is required.";
-      } else if (!/^[a-zA-Z0-9._%+-]+@gmail\.com$/i.test(emailVal)) {
-        error = "Please enter a valid @gmail.com email address with a username.";
+      } else if (!/^[a-zA-Z0-9._%+-]+@(gmail|bionova|company|mailinator)\.com$/i.test(emailVal)) {
+        error = "Please enter a valid email address ending with @gmail.com, @bionova.com, @company.com, or @mailinator.com.";
       }
     } else if (name === "password") {
       if (!value) {
@@ -984,8 +984,8 @@ const EmployeeCreation = ({ userRole, onLogout }) => {
       return;
     }
     const emailVal = form.email.trim();
-    if (!/^[a-zA-Z0-9._%+-]+@gmail\.com$/i.test(emailVal)) {
-      triggerAlert("error", "Validation Error", "Please enter a valid @gmail.com Employee Email address with a username.");
+    if (!/^[a-zA-Z0-9._%+-]+@(gmail|bionova|company|mailinator)\.com$/i.test(emailVal)) {
+      triggerAlert("error", "Validation Error", "Please enter a valid email address ending with @gmail.com, @bionova.com, @company.com, or @mailinator.com.");
       return;
     }
 

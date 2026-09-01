@@ -440,10 +440,16 @@ const PublicHoliday = ({ userRole, onLogout }) => {
                     <div style={{ position: 'relative', display: 'flex', alignItems: 'center', width: '100%' }}>
                       <input
                         type="date"
+<<<<<<< Updated upstream
                         max="9999-12-31"
                         className="ph-input"
                         value={formData.date}
                         onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+=======
+                        value={formData.date || ""}
+                        onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                        className="ph-input"
+>>>>>>> Stashed changes
                         style={{ width: '100%', cursor: 'pointer' }}
                       />
                     </div>
