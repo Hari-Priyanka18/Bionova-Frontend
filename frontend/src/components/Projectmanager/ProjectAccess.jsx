@@ -7,7 +7,7 @@ import {
   CheckCircle, AlertCircle, Save, Building2, Settings,
   Check, ArrowLeft, Pencil, Trash2, User, Calendar, Clock,
   Grid, List, LayoutGrid, UserCheck, UserX, UserCog, UserCheck as UserApprover,
-  PauseCircle, TrendingUp, TrendingDown, Minus, RefreshCw, AlertTriangle, Loader2
+  PauseCircle, TrendingUp, TrendingDown, Minus, RefreshCw, AlertTriangle, Loader2, RotateCcw
 } from 'lucide-react';
 import Sidebar from '../Sidebar';
 import Header from '../Header';
@@ -75,16 +75,41 @@ const PERMISSION_STATES = {
 };
 
 const getStatusColor = (status) => {
-  const colors = { 
-    'Completed': 'green', 
-    'In Progress': 'orange', 
-    'Pending': 'gray',
-    'Under Review': 'purple',
-    'Rework': 'orange',
-    'Overdue': 'red',
-    'Due Today': 'orange'
-  };
-  return colors[status] || 'gray';
+  const s = String(status || '').toLowerCase().trim();
+  switch(s) {
+    // 1. Progress Status (Badges Only)
+    case 'open':
+    case 'active':
+    case 'live': return '#2563EB'; // BLUE
+    case 'in progress':
+    case 'in_progress':
+    case 'upcoming': return '#F59E0B'; // AMBER
+    case 'hold':
+    case 'on-hold':
+    case 'on_hold': return '#7C3AED'; // PURPLE
+    case 'completed':
+    case 'closed': return '#16A34A'; // GREEN
+    case 'draft':
+    case 'pending': return '#9CA3AF'; // GRAY
+
+    // 2. Process Status (Icons Only)
+    case 'under review':
+    case 'under_review': return '#8B5CF6'; // PURPLE
+    case 'rework': return '#F97316'; // ORANGE
+    case 'reassign': return '#4F46E5'; // INDIGO
+
+    // 3. Time Status (Icons Only)
+    case 'lead': return '#22C55E'; // GREEN
+    case 'on time':
+    case 'on_time':
+    case 'ontime': return '#3B82F6'; // BLUE
+    case 'due today':
+    case 'due_today': return '#F59E0B'; // AMBER
+    case 'overdue': return '#EF4444'; // RED
+    case 'lag': return '#DC2626'; // DARK RED
+
+    default: return '#9CA3AF';
+  }
 };
 
 const getInitials = (name) => {
@@ -107,60 +132,141 @@ const getAvatarColor = (name) => {
 };
 
 const renderStatusBadge = (status) => {
-  const color = getStatusColor(status);
-  let Icon = AlertCircle;
-  if (status === 'Completed') Icon = CheckCircle;
-  else if (status === 'In Progress') Icon = Clock;
-  else if (status === 'Under Review') Icon = Eye;
-  else if (status === 'Rework') Icon = RefreshCw;
-  else if (status === 'Overdue') Icon = AlertTriangle;
-  else if (status === 'Due Today') Icon = Clock;
+  const s = String(status || '').trim();
+  const lower = s.toLowerCase();
+
+  // 2. Process Status (Icons Only)
+  if (lower === 'under review' || lower === 'under_review') {
+    return <Eye size={16} color="#8B5CF6" title="Under Review" style={{ verticalAlign: 'middle' }} />;
+  }
+  if (lower === 'rework') {
+    return <RefreshCw size={16} color="#F97316" title="Rework" style={{ verticalAlign: 'middle' }} />;
+  }
+  if (lower === 'reassign') {
+    return <RotateCcw size={16} color="#4F46E5" title="Reassign" style={{ verticalAlign: 'middle' }} />;
+  }
+
+  // 3. Time Status (Icons Only)
+  if (lower === 'lead') {
+    return <Clock size={16} color="#22C55E" title="Lead" style={{ verticalAlign: 'middle' }} />;
+  }
+  if (lower === 'on time' || lower === 'on_time' || lower === 'ontime') {
+    return <Clock size={16} color="#3B82F6" title="On Time" style={{ verticalAlign: 'middle' }} />;
+  }
+  if (lower === 'due today' || lower === 'due_today') {
+    return <Clock size={16} color="#F59E0B" title="Due Today" style={{ verticalAlign: 'middle' }} />;
+  }
+  if (lower === 'overdue') {
+    return <Clock size={16} color="#EF4444" title="Overdue" style={{ verticalAlign: 'middle' }} />;
+  }
+  if (lower === 'lag') {
+    return <Clock size={16} color="#DC2626" title="Lag" style={{ verticalAlign: 'middle' }} />;
+  }
+
+  // 1. Progress Status (Badges Only)
+  let bgColor = '#9CA3AF'; // Draft (GRAY)
+  if (lower === 'open' || lower === 'active' || lower === 'live') bgColor = '#2563EB'; // BLUE
+  else if (lower === 'in progress' || lower === 'in_progress' || lower === 'upcoming') bgColor = '#F59E0B'; // AMBER
+  else if (lower === 'hold' || lower === 'on hold' || lower === 'on-hold' || lower === 'on_hold') bgColor = '#7C3AED'; // PURPLE
+  else if (lower === 'completed' || lower === 'closed') bgColor = '#16A34A'; // GREEN
+  else if (lower === 'draft' || lower === 'pending') bgColor = '#9CA3AF'; // GRAY
 
   return (
-    <span className={`pac-status-badge pac-status-${color}`} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-      <Icon size={12} style={{ flexShrink: 0 }} />
+    <span className="pac-status-badge" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', backgroundColor: bgColor, color: '#ffffff', padding: '3px 10px', borderRadius: '12px', fontSize: '11px', fontWeight: '600' }}>
       <span>{status}</span>
     </span>
   );
 };
 
 const getProjectStatusColor = (status) => {
-  const colors = { 
-    'active': 'green', 
-    'live': 'green', 
-    'upcoming': 'orange', 
-    'completed': 'blue',
-    'closed': 'blue',
-    'on-hold': 'red',
-    'hold': 'red'
-  };
-  return colors[status] || 'gray';
+  const s = String(status || '').toLowerCase().trim();
+  switch(s) {
+    case 'open':
+    case 'active':
+    case 'live': return '#2563EB'; // BLUE
+    case 'in progress':
+    case 'in_progress':
+    case 'upcoming': return '#F59E0B'; // AMBER
+    case 'hold':
+    case 'on-hold':
+    case 'on_hold': return '#7C3AED'; // PURPLE
+    case 'completed':
+    case 'closed': return '#16A34A'; // GREEN
+    case 'draft': return '#9CA3AF'; // GRAY
+    default: return '#2563EB';
+  }
 };
 
 const getProjectStatusIcon = (status) => {
-  switch(status) {
+  const s = String(status || '').toLowerCase().trim();
+  switch(s) {
+    case 'open':
     case 'active':
-    case 'live': return '🟢';
+    case 'live': return '🔵';
+    case 'in progress':
+    case 'in_progress':
     case 'upcoming': return '🟠';
     case 'completed':
-    case 'closed': return '🔵';
+    case 'closed': return '🟢';
+    case 'hold':
     case 'on-hold':
-    case 'hold': return '🔴';
-    default: return '⚪';
+    case 'on_hold': return '🟣';
+    case 'draft': return '⚪';
+    default: return '🔵';
   }
 };
 
 const getProjectStatusLabel = (status) => {
-  switch(status) {
+  const s = String(status || '').toLowerCase().trim();
+  switch(s) {
+    case 'open':
     case 'active':
-    case 'live': return 'Active';
-    case 'upcoming': return 'Upcoming';
+    case 'live': return 'Open';
+    case 'in progress':
+    case 'in_progress':
+    case 'upcoming': return 'In Progress';
     case 'completed':
-    case 'closed': return 'Completed';
+    case 'closed': return 'Closed';
+    case 'hold':
     case 'on-hold':
-    case 'hold': return 'On Hold';
+    case 'on_hold': return 'Hold';
+    case 'draft': return 'Draft';
     default: return status;
   }
+};
+
+const getProjectTimeStatus = (project) => {
+  if (!project) return { status: 'On Time', label: 'On Time', color: '#3B82F6' };
+  
+  if (project.timeStatus) {
+    const ts = String(project.timeStatus).toLowerCase().trim();
+    if (ts === 'lead') return { status: 'Lead', label: 'Lead', color: '#22C55E' };
+    if (ts === 'lag' || ts === 'overdue' || ts === 'behind') return { status: 'Lag', label: 'Lag', color: '#DC2626' };
+    return { status: 'On Time', label: 'On Time', color: '#3B82F6' };
+  }
+
+  if (project.endDate) {
+    const end = new Date(project.endDate);
+    const actualEnd = project.actCmpDt || project.actualEndDate ? new Date(project.actCmpDt || project.actualEndDate) : new Date();
+    
+    if (!isNaN(end.getTime()) && !isNaN(actualEnd.getTime())) {
+      end.setHours(0,0,0,0);
+      actualEnd.setHours(0,0,0,0);
+      
+      const diffTime = actualEnd.getTime() - end.getTime();
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      
+      if (diffDays < 0) {
+        return { status: 'Lead', label: 'Lead', color: '#22C55E' };
+      } else if (diffDays === 0) {
+        return { status: 'On Time', label: 'On Time', color: '#3B82F6' };
+      } else {
+        return { status: 'Lag', label: 'Lag', color: '#DC2626' };
+      }
+    }
+  }
+  
+  return { status: 'On Time', label: 'On Time', color: '#3B82F6' };
 };
 
 const getPermissionStateColor = (state) => {
@@ -172,13 +278,14 @@ const getPriorityColor = (priority) => {
   const p = String(priority || '').toLowerCase().trim();
   switch(p) {
     case 'atmost critical':
-    case 'atmost_critical': return '#7F1D1D';
-    case 'critical': return '#B91C1C';
-    case 'high': return '#EF4444';
-    case 'medium': return '#F59E0B';
-    case 'normal': return '#3B82F6';
-    case 'low': return '#22C55E';
-    default: return '#64748b';
+    case 'atmost_critical':
+    case 'at most critical': return '#7F1D1D'; // DARK MAROON
+    case 'critical': return '#B91C1C'; // DARK RED
+    case 'high': return '#EF4444'; // RED
+    case 'medium': return '#F59E0B'; // AMBER
+    case 'normal': return '#3B82F6'; // BLUE
+    case 'low': return '#22C55E'; // GREEN
+    default: return '#3B82F6';
   }
 };
 
@@ -186,7 +293,8 @@ const getPriorityLabel = (priority) => {
   const p = String(priority || '').toLowerCase().trim();
   switch(p) {
     case 'atmost critical':
-    case 'atmost_critical': return 'Atmost Critical';
+    case 'atmost_critical':
+    case 'at most critical': return 'Atmost Critical';
     case 'critical': return 'Critical';
     case 'high': return 'High';
     case 'medium': return 'Medium';
@@ -201,6 +309,7 @@ const getPriorityIcon = (priority) => {
   switch(p) {
     case 'atmost critical':
     case 'atmost_critical':
+    case 'at most critical':
     case 'critical':
     case 'high': return <TrendingUp size={14} />;
     case 'medium':
@@ -1330,7 +1439,7 @@ const ProjectAccess = ({ userRole, onLogout }) => {
     const statusGroups = [
       { key: 'active', label: 'Active Projects', icon: Folder, color: 'green' },
       { key: 'upcoming', label: 'Upcoming Projects', icon: Calendar, color: 'orange' },
-      { key: 'completed', label: 'Completed Projects', icon: CheckCircle, color: 'blue' },
+      { key: 'completed', label: 'Closed Projects', icon: CheckCircle, color: 'blue' },
       { key: 'onHold', label: 'On-Hold Projects', icon: PauseCircle, color: 'red' }
     ];
 
@@ -1440,35 +1549,37 @@ const ProjectAccess = ({ userRole, onLogout }) => {
 
   // ── Project Card - Grid View (Dynamic & Attractive) ──
   const renderProjectCardGrid = (project) => {
+    const rawStatus = String(project.status || '').toLowerCase().trim();
+    const isClosed = rawStatus === 'completed' || rawStatus === 'closed';
     const statusColor = getProjectStatusColor(project.status);
     const priorityColor = getPriorityColor(project.priority);
     const statusIcon = getProjectStatusIcon(project.status);
     const statusLabel = getProjectStatusLabel(project.status);
-    const progressColor = project.status === 'completed' ? '#10b981' :
-                          project.status === 'upcoming' ? '#94a3b8' :
-                          project.status === 'on-hold' ? '#ef4444' :
-                          '#2563eb';
+    const timeStatus = isClosed ? getProjectTimeStatus(project) : null;
+    const progressColor = statusColor;
     
     // Card gradient based on status
     const getCardGradient = (status) => {
-      switch(status) {
-        case 'active': return 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)';
+      const s = String(status || '').toLowerCase().trim();
+      switch(s) {
+        case 'open':
+        case 'active':
+        case 'live': return 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)';
+        case 'in progress':
+        case 'in_progress':
         case 'upcoming': return 'linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)';
+        case 'closed':
         case 'completed': return 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)';
-        case 'on-hold': return 'linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%)';
+        case 'hold':
+        case 'on-hold': return 'linear-gradient(135deg, #f3e8ff 0%, #e9d5ff 100%)';
+        case 'draft': return 'linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%)';
         default: return 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)';
       }
     };
 
     // Status border color
     const getBorderColor = (status) => {
-      switch(status) {
-        case 'active': return '#2563eb';
-        case 'upcoming': return '#f59e0b';
-        case 'completed': return '#10b981';
-        case 'on-hold': return '#ef4444';
-        default: return '#94a3b8';
-      }
+      return getProjectStatusColor(status);
     };
 
     return (
@@ -1482,16 +1593,23 @@ const ProjectAccess = ({ userRole, onLogout }) => {
           borderWidth: '2px'
         }}
       >
-        {/* Card Top - Status & Priority */}
+        {/* Card Top - Status & Priority / Time Status */}
         <div className="pac-card-top">
-          <div className="pac-card-status">
-            <span className={`pac-status-dot ${statusColor}`}></span>
+          <div className="pac-card-status" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+            <span className="pac-status-dot" style={{ background: statusColor, display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%' }}></span>
             <span className="pac-status-label">{statusLabel}</span>
           </div>
-          <div className="pac-card-priority" style={{ background: priorityColor }}>
-            {getPriorityIcon(project.priority)}
-            <span>{getPriorityLabel(project.priority)}</span>
-          </div>
+          {isClosed && timeStatus ? (
+            <div className="pac-card-priority" style={{ background: timeStatus.color, color: '#ffffff', padding: '3px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: '600', display: 'inline-flex', alignItems: 'center', gap: '4px', textTransform: 'uppercase' }}>
+              <Clock size={12} color="#ffffff" />
+              <span>{timeStatus.label}</span>
+            </div>
+          ) : (
+            <div className="pac-card-priority" style={{ background: priorityColor, color: '#ffffff', padding: '3px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: '600', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+              {getPriorityIcon(project.priority)}
+              <span>{getPriorityLabel(project.priority)}</span>
+            </div>
+          )}
         </div>
 
         {/* Card Header */}
@@ -1573,14 +1691,14 @@ const ProjectAccess = ({ userRole, onLogout }) => {
 
   // ── Project Card - List View ──
   const renderProjectCardList = (project) => {
+    const rawStatus = String(project.status || '').toLowerCase().trim();
+    const isClosed = rawStatus === 'completed' || rawStatus === 'closed';
     const statusColor = getProjectStatusColor(project.status);
     const priorityColor = getPriorityColor(project.priority);
     const statusIcon = getProjectStatusIcon(project.status);
     const statusLabel = getProjectStatusLabel(project.status);
-    const progressColor = project.status === 'completed' ? '#10b981' :
-                          project.status === 'upcoming' ? '#94a3b8' :
-                          project.status === 'on-hold' ? '#ef4444' :
-                          '#2563eb';
+    const timeStatus = isClosed ? getProjectTimeStatus(project) : null;
+    const progressColor = statusColor;
 
     return (
       <div 
@@ -1588,21 +1706,12 @@ const ProjectAccess = ({ userRole, onLogout }) => {
         className="pac-project-card pac-project-card-list"
         onClick={() => openProjectDetail(project)}
       >
-        <div className="pac-project-card-list-content">
-          <div className="pac-list-left">
-            <div className="pac-list-header">
-              <div className="pac-list-title-group">
-                <h4>{project.name}</h4>
-                <span className="pac-project-code">{project.code}</span>
-              </div>
-              <div className="pac-list-badges">
-                <span className={`pac-status-badge pac-status-${statusColor}`}>
-                  {statusIcon} {statusLabel}
-                </span>
-                <span className="pac-priority-badge" style={{ background: priorityColor }}>
-                  {getPriorityLabel(project.priority)}
-                </span>
-              </div>
+        <div className="pac-project-card-list-grid">
+          {/* Col 1: Project Title & Meta */}
+          <div className="pac-list-col-info">
+            <div className="pac-list-title-group">
+              <h4 className="pac-card-title">{project.name}</h4>
+              <span className="pac-project-code">{project.code}</span>
             </div>
             <div className="pac-list-meta">
               <div className="pac-list-meta-item">
@@ -1616,11 +1725,47 @@ const ProjectAccess = ({ userRole, onLogout }) => {
               </div>
             </div>
           </div>
-          <div className="pac-list-right">
-            <div className="pac-list-progress">
+
+          {/* Col 2: Status & Priority (or Time Status for Closed Projects) */}
+          <div className="pac-list-col-badges">
+            <div className="pac-card-status" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+              <span className="pac-status-dot" style={{ background: statusColor, display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', flexShrink: 0 }}></span>
+              <span className="pac-status-label" style={{ fontSize: '13px', fontWeight: '500', color: '#334155' }}>{statusLabel}</span>
+            </div>
+            {isClosed && timeStatus ? (
+              <span 
+                className="pac-time-status-pill" 
+                style={{ 
+                  display: 'inline-flex', 
+                  alignItems: 'center', 
+                  gap: '4px', 
+                  color: '#ffffff', 
+                  backgroundColor: timeStatus.color, 
+                  padding: '4px 10px', 
+                  borderRadius: '6px', 
+                  fontSize: '11px', 
+                  fontWeight: '700',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px',
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                <Clock size={12} color="#ffffff" />
+                <span>{timeStatus.label}</span>
+              </span>
+            ) : (
+              <span className="pac-priority-badge" style={{ background: priorityColor, color: '#ffffff', padding: '4px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>
+                {getPriorityLabel(project.priority)}
+              </span>
+            )}
+          </div>
+
+          {/* Col 3: Progress & Dates */}
+          <div className="pac-list-col-right">
+            <div className="pac-list-progress" style={{ width: '100%' }}>
               <div className="pac-progress-header">
-                <span>Progress</span>
-                <span style={{ color: progressColor }}>{project.progress}%</span>
+                <span className="pac-progress-label">Progress</span>
+                <span className="pac-progress-value" style={{ color: progressColor }}>{project.progress}%</span>
               </div>
               <div className="pac-progress-bar">
                 <div 
@@ -1635,7 +1780,7 @@ const ProjectAccess = ({ userRole, onLogout }) => {
             <div className="pac-list-dates">
               <Calendar size={14} />
               <span>{project.startDate}</span>
-              <span>→</span>
+              <span className="pac-date-arrow">→</span>
               <span>{project.endDate}</span>
             </div>
           </div>

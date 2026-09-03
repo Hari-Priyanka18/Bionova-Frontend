@@ -239,7 +239,7 @@ const UserTaskBoard = ({ userRole, onLogout }) => {
         apiGet("/api/assignments").catch(() => []),
         apiGet("/api/profile").catch(() => ({})),
         apiGet("/api/employees").catch(() => []),
-        apiGet("/api/user-dashboard/my-tasks").catch(() => [])
+        apiGet("/api/user-dashboard/my-tasks").catch(() => apiGet("/api/task-live/my-tasks").catch(() => []))
       ]);
 
       const empId = profileRes?.empId;
@@ -321,6 +321,8 @@ const UserTaskBoard = ({ userRole, onLogout }) => {
           milestone: milestone ? (milestone.mlstnTtl || milestone.mlstnttl) : "Unknown Milestone",
           priority: priority,
           priorityMeta: dynamicPrio,
+          startDate: stDt || t.stDt || t.stdt || t.startDate || t.st_dt || t.tentStrtDt || "",
+          endDate: endDt || t.endDt || t.enddt || t.endDate || t.end_dt || t.tentEndDt || "",
           due: endDt || "",
           submittedOn: t.sbmtDt || t.sbmtdt || "",
           completedOn: t.actCmpDt || t.actcmpdt || t.completedTs || t.completed_ts || t.completedOn || t.act_cmp_dt || t.updtDt || t.updtdt || "",
@@ -355,6 +357,8 @@ const UserTaskBoard = ({ userRole, onLogout }) => {
           project: "Individual Task",
           milestone: "-",
           priority: priority,
+          startDate: stDt || t.stDt || t.stdt || t.startDate || t.st_dt || t.tentStrtDt || "",
+          endDate: endDt || t.endDt || t.enddt || t.endDate || t.end_dt || t.tentEndDt || "",
           due: endDt || "",
           submittedOn: t.sbmtDt || t.sbmtdt || "",
           completedOn: t.actCmpDt || t.actcmpdt || t.completedTs || t.completed_ts || t.completedOn || t.act_cmp_dt || t.updtDt || t.updtdt || "",
@@ -501,13 +505,7 @@ const UserTaskBoard = ({ userRole, onLogout }) => {
           const isIndividual = task.isIndividual || task.project === "Individual Task" || task.rawTask?.taskSource === "INDIVIDUAL" || task.rawTask?.entityTyp === "INDIVIDUAL_TASK" || (!task.rawTask?.prjId && (!task.project || task.project === "Individual Task" || task.project === "-"));
           
           if (isIndividual) {
-            return (
-              <div className="utb-card-details">
-                <div className="utb-card-detail-item" style={{ color: '#4f46e5', fontWeight: '600', fontSize: '13px' }}>
-                  Individual Task
-                </div>
-              </div>
-            );
+            return null;
           }
           
           return (
@@ -519,9 +517,14 @@ const UserTaskBoard = ({ userRole, onLogout }) => {
         })()}
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: '12px' }}>
-          {!isCompleted && task.due && (
+          {task.startDate && (
+            <div className="utb-card-meta" style={{ marginBottom: 0 }}>
+              <Calendar size={14} /> Start Date: {formatDate(task.startDate)}
+            </div>
+          )}
+          {!isCompleted && (task.endDate || task.due) && (
             <div className={`utb-card-meta ${task.isOverdue ? 'overdue-text' : ''}`} style={{ marginBottom: 0, fontWeight: task.isOverdue ? 'bold' : 'normal', color: task.isOverdue ? '#ef4444' : 'inherit' }}>
-              <Calendar size={14} /> {task.isOverdue ? 'Overdue:' : 'Due:'} {formatDate(task.due)}
+              <Calendar size={14} /> {task.isOverdue ? 'Overdue:' : 'End Date:'} {formatDate(task.endDate || task.due)}
             </div>
           )}
           {task.submittedOn && !isCompleted && (
@@ -752,16 +755,24 @@ const UserTaskBoard = ({ userRole, onLogout }) => {
                 <label>Title</label>
                 <p>{selectedTask.title}</p>
               </div>
-              <div className="utb-modal-row">
-                <div className="utb-modal-field">
-                  <label>Project</label>
-                  <p>{selectedTask.project}</p>
-                </div>
-                <div className="utb-modal-field">
-                  <label>Milestone</label>
-                  <p>{selectedTask.milestone}</p>
-                </div>
-              </div>
+              {(() => {
+                const isIndividual = selectedTask.isIndividual || selectedTask.project === "Individual Task" || selectedTask.rawTask?.taskSource === "INDIVIDUAL" || selectedTask.rawTask?.entityTyp === "INDIVIDUAL_TASK" || (!selectedTask.rawTask?.prjId && (!selectedTask.project || selectedTask.project === "Individual Task" || selectedTask.project === "-"));
+                
+                if (isIndividual) return null;
+
+                return (
+                  <div className="utb-modal-row">
+                    <div className="utb-modal-field">
+                      <label>Project</label>
+                      <p>{selectedTask.project}</p>
+                    </div>
+                    <div className="utb-modal-field">
+                      <label>Milestone</label>
+                      <p>{selectedTask.milestone}</p>
+                    </div>
+                  </div>
+                );
+              })()}
               <div className="utb-modal-row">
                 <div className="utb-modal-field">
                   {(() => {
@@ -802,14 +813,17 @@ const UserTaskBoard = ({ userRole, onLogout }) => {
               </div>
               {(() => {
                 const isClosedTask = selectedTask.status === "Closed" || selectedTask.status === "Completed" || selectedTask.rawStatus === "CLOSED" || selectedTask.rawStatus === "COMPLETED";
+                const startDateVal = selectedTask.startDate || selectedTask.rawTask?.stDt || selectedTask.rawTask?.stdt || selectedTask.rawTask?.st_dt || selectedTask.rawTask?.startDate || selectedTask.rawTask?.tentStrtDt;
+                const endDateVal = selectedTask.endDate || selectedTask.due || selectedTask.rawTask?.endDt || selectedTask.rawTask?.enddt || selectedTask.rawTask?.end_dt || selectedTask.rawTask?.endDate || selectedTask.rawTask?.tentEndDt;
                 const closedDateVal = selectedTask.completedOn || selectedTask.rawTask?.actCmpDt || selectedTask.rawTask?.actcmpdt || selectedTask.rawTask?.completedTs || selectedTask.rawTask?.completed_ts || selectedTask.rawTask?.updtDt || selectedTask.rawTask?.updtdt;
 
                 return (
-                  (selectedTask.due || selectedTask.submittedOn || closedDateVal || isClosedTask) && (
+                  (startDateVal || endDateVal || selectedTask.submittedOn || closedDateVal || isClosedTask) && (
                     <div className="utb-modal-field">
                       <label>Relevant Dates</label>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                        {selectedTask.due && <div>Due: {formatDate(selectedTask.due)}</div>}
+                        {startDateVal && <div>Start Date: {formatDate(startDateVal)}</div>}
+                        {endDateVal && <div>End Date: {formatDate(endDateVal)}</div>}
                         {selectedTask.submittedOn && <div>Submitted: {formatDate(selectedTask.submittedOn)}</div>}
                         {isClosedTask && (
                           <div>Closed: {formatDate(closedDateVal || new Date())}</div>

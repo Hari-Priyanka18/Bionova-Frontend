@@ -927,12 +927,7 @@ const TaskBoard = ({ userRole, onLogout }) => {
                           <CalendarIcon size={12} />
                           <span>{formatDate(task.dueDate)}</span>
                         </div>
-                        {task.subtasksCount > 0 && (
-                          <div className="tb-card-subtasks-count">
-                            <CheckSquare size={11} />
-                            <span>{task.subtasksCompleted}/{task.subtasksCount}</span>
-                          </div>
-                        )}
+
                       </div>
                     </div>
                   ))}
@@ -1012,12 +1007,7 @@ const TaskBoard = ({ userRole, onLogout }) => {
                           <CalendarIcon size={12} />
                           <span>{formatDate(task.dueDate)}</span>
                         </div>
-                        {task.subtasksCount > 0 && (
-                          <div className="tb-card-subtasks-count">
-                            <CheckSquare size={11} />
-                            <span>{task.subtasksCompleted}/{task.subtasksCount}</span>
-                          </div>
-                        )}
+
                       </div>
                     </div>
                   ))}
@@ -1097,12 +1087,7 @@ const TaskBoard = ({ userRole, onLogout }) => {
                           <CalendarIcon size={12} />
                           <span>{formatDate(task.dueDate)}</span>
                         </div>
-                        {task.subtasksCount > 0 && (
-                          <div className="tb-card-subtasks-count">
-                            <CheckSquare size={11} />
-                            <span>{task.subtasksCompleted}/{task.subtasksCount}</span>
-                          </div>
-                        )}
+
                       </div>
                     </div>
                   ))}
@@ -1198,12 +1183,7 @@ const TaskBoard = ({ userRole, onLogout }) => {
                           <CalendarIcon size={12} />
                           <span>{formatDate(task.dueDate)}</span>
                         </div>
-                        {task.subtasksCount > 0 && (
-                          <div className="tb-card-subtasks-count">
-                            <CheckSquare size={11} />
-                            <span>{task.subtasksCompleted}/{task.subtasksCount}</span>
-                          </div>
-                        )}
+
                       </div>
                     </div>
                   ))}
@@ -1283,12 +1263,7 @@ const TaskBoard = ({ userRole, onLogout }) => {
                           <CalendarIcon size={12} />
                           <span>{formatDate(task.dueDate)}</span>
                         </div>
-                        {task.subtasksCount > 0 && (
-                          <div className="tb-card-subtasks-count">
-                            <CheckSquare size={11} />
-                            <span>{task.subtasksCompleted}/{task.subtasksCount}</span>
-                          </div>
-                        )}
+
                       </div>
                     </div>
                   ))}
@@ -1351,10 +1326,12 @@ const TaskBoard = ({ userRole, onLogout }) => {
                 <span className="tb-modal-detail-label">Title</span>
                 <span className="tb-modal-detail-value">{selectedTask.title}</span>
               </div>
-              <div className="tb-modal-detail-row">
-                <span className="tb-modal-detail-label">Milestone</span>
-                <span className="tb-modal-detail-value">{selectedTask.milestone}</span>
-              </div>
+              {!(selectedTask.isIndividual || selectedTask.project === "Individual Task" || selectedTask.milestone === "Individual Task" || selectedTask.milestone === "-") && (
+                <div className="tb-modal-detail-row">
+                  <span className="tb-modal-detail-label">Milestone</span>
+                  <span className="tb-modal-detail-value">{selectedTask.milestone}</span>
+                </div>
+              )}
               <div className="tb-form-row">
                 <div className="tb-modal-detail-row">
                   <span className="tb-modal-detail-label">Executor</span>

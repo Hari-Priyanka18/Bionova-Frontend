@@ -123,23 +123,57 @@ const formatDate = (dateValue) => {
 };
 
 const getStatusColor = (status) => {
-  const s = status?.toUpperCase() || "";
-  if (s === 'COMPLETED' || s === 'DONE' || s === 'CLOSED') return '#16a34a';
-  if (s === 'IN_PROGRESS' || s === 'WIP' || s === 'ACTIVE') return '#f59e0b';
-  if (s === 'HOLD' || s === 'ON_HOLD') return '#7c3aed';
-  if (s === 'DRAFT') return '#9ca3af';
-  if (s === 'OPEN' || s === 'PENDING' || s === 'NOT_STARTED') return '#2563eb';
-  return '#94a3b8';
+  const s = String(status || '').toUpperCase().trim();
+  switch(s) {
+    case 'OPEN':
+    case 'UPCOMING':
+    case 'ACTIVE':
+    case 'LIVE':
+    case 'PENDING':
+    case 'NOT_STARTED':
+    case 'NEW': return '#2563EB'; // Open – #2563EB (BLUE)
+    case 'IN_PROGRESS':
+    case 'IN PROGRESS':
+    case 'WIP':
+    case 'ONGOING': return '#F59E0B'; // In Progress – #F59E0B (AMBER)
+    case 'HOLD':
+    case 'ON_HOLD':
+    case 'ON-HOLD':
+    case 'PAUSED': return '#7C3AED'; // Hold – #7C3AED (PURPLE)
+    case 'COMPLETED':
+    case 'DONE':
+    case 'CLOSED':
+    case 'FINISHED': return '#16A34A'; // Completed – #16A34A (GREEN)
+    case 'DRAFT': return '#9CA3AF'; // Draft - #9CA3AF (GRAY)
+    default: return '#2563EB'; // Default to #2563EB (BLUE)
+  }
 };
 
 const getStatusLabel = (status) => {
-  const s = status?.toUpperCase() || "";
-  if (s === 'COMPLETED' || s === 'DONE' || s === 'CLOSED') return 'Closed';
-  if (s === 'IN_PROGRESS' || s === 'WIP' || s === 'ACTIVE') return 'In Progress';
-  if (s === 'HOLD' || s === 'ON_HOLD') return 'Hold';
-  if (s === 'DRAFT') return 'Draft';
-  if (s === 'OPEN' || s === 'PENDING' || s === 'NOT_STARTED') return 'Open';
-  return 'Open';
+  const s = String(status || '').toUpperCase().trim();
+  switch(s) {
+    case 'OPEN':
+    case 'UPCOMING':
+    case 'ACTIVE':
+    case 'LIVE':
+    case 'PENDING':
+    case 'NOT_STARTED':
+    case 'NEW': return 'Open';
+    case 'IN_PROGRESS':
+    case 'IN PROGRESS':
+    case 'WIP':
+    case 'ONGOING': return 'In Progress';
+    case 'HOLD':
+    case 'ON_HOLD':
+    case 'ON-HOLD':
+    case 'PAUSED': return 'Hold';
+    case 'COMPLETED':
+    case 'DONE':
+    case 'CLOSED':
+    case 'FINISHED': return 'Closed';
+    case 'DRAFT': return 'Draft';
+    default: return status || 'Open';
+  }
 };
 
 const getProcessStatusBadge = (processStatus) => {
