@@ -334,7 +334,7 @@ const EmployeeCreation = ({ userRole, onLogout }) => {
     companyNm: "",
     photoPath: "",
     repEmpId: "",
-    sts: true
+    sts: ""
   });
   const [isExtEditing, setIsExtEditing] = useState(false);
   const [isExtViewing, setIsExtViewing] = useState(false);
@@ -349,7 +349,7 @@ const EmployeeCreation = ({ userRole, onLogout }) => {
       companyNm: "",
       photoPath: "",
       repEmpId: "",
-      sts: true
+      sts: ""
     });
     setExtFormErrors({});
     setIsExtEditing(false);
@@ -1484,7 +1484,7 @@ const EmployeeCreation = ({ userRole, onLogout }) => {
       companyNm: emp.companyNm || "",
       photoPath: emp.photoPath || "",
       repEmpId: emp.repEmpId || "",
-      sts: emp.sts !== undefined ? emp.sts : true
+      sts: emp.sts === true || emp.sts === "Active" ? "Active" : emp.sts === false || emp.sts === "Inactive" ? "Inactive" : ""
     });
     setExtEditId(emp.extEmpId || emp.id);
     setExtFormErrors({});
@@ -1503,7 +1503,7 @@ const EmployeeCreation = ({ userRole, onLogout }) => {
       companyNm: emp.companyNm || "",
       photoPath: emp.photoPath || "",
       repEmpId: emp.repEmpId || "",
-      sts: emp.sts !== undefined ? emp.sts : true
+      sts: emp.sts === true || emp.sts === "Active" ? "Active" : emp.sts === false || emp.sts === "Inactive" ? "Inactive" : ""
     });
     setExtEditId(emp.extEmpId || emp.id);
     setExtFormErrors({});
@@ -1617,7 +1617,7 @@ const EmployeeCreation = ({ userRole, onLogout }) => {
           companyNm: extForm.companyNm,
           photoPath: extForm.photoPath,
           repEmpId: extForm.repEmpId ? parseInt(extForm.repEmpId) : null,
-          sts: extForm.sts
+          sts: extForm.sts === "Active"
         })
       });
       if (res.ok) {
@@ -2305,7 +2305,7 @@ const EmployeeCreation = ({ userRole, onLogout }) => {
                       </div>
                       <div>
                         <h2 style={{ margin: '0 0 4px 0', fontSize: '24px', color: '#0f172a', fontWeight: '700' }}>{extForm.extEmpNm}</h2>
-                        <span style={{ padding: '2px 10px', borderRadius: '12px', fontSize: '12px', fontWeight: '600', backgroundColor: extForm.sts ? '#dcfce7' : '#fee2e2', color: extForm.sts ? '#166534' : '#991b1b' }}>{extForm.sts ? 'Active' : 'Inactive'}</span>
+                        <span style={{ padding: '2px 10px', borderRadius: '12px', fontSize: '12px', fontWeight: '600', backgroundColor: extForm.sts === 'Active' || extForm.sts === true ? '#dcfce7' : '#fee2e2', color: extForm.sts === 'Active' || extForm.sts === true ? '#166534' : '#991b1b' }}>{extForm.sts === 'Active' || extForm.sts === true ? 'Active' : 'Inactive'}</span>
                       </div>
                     </div>
 
@@ -2433,7 +2433,7 @@ const EmployeeCreation = ({ userRole, onLogout }) => {
                         <label>Employee Status <span className="emp-req-star">*</span></label>
                         <div className="emp-input-icon-wrap">
                           <span className="emp-input-prefix-icon"><CheckCircle2 size={16} /></span>
-                          <select name="sts" value={extForm.sts ? "Active" : "Inactive"} onChange={(e) => handleExtChange({ target: { name: 'sts', value: e.target.value === 'Active' } })} required disabled={isExtViewing}>
+                          <select name="sts" value={extForm.sts} onChange={(e) => handleExtChange({ target: { name: 'sts', value: e.target.value } })} required disabled={isExtViewing}>
                             <option value="" disabled hidden>Select status</option>
                             <option value="Active">Active</option>
                             <option value="Inactive">Inactive</option>
