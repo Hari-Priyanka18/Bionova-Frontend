@@ -156,6 +156,12 @@
   color: #3730a3;
 }
 
+.pd-status-badge.st-live {
+  background: #dcfce7;
+  color: #15803d;
+  border: 1px solid #86efac;
+}
+
 .pd-status-badge.st-not-started {
   background: #f1f5f9;
   color: #475569;

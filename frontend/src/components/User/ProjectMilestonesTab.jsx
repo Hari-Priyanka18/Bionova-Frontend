@@ -135,6 +135,7 @@ const ProjectMilestonesTab = ({ project, userRole }) => {
       case 'COMPLETED': return 'st-completed';
       case 'IN PROGRESS':
       case 'WIP': return 'st-in-progress';
+      case 'LIVE': return 'st-live';
       case 'LOCKED': return 'st-locked';
       case 'NOT STARTED':
       case 'OPEN': return 'st-not-started';
@@ -147,13 +148,23 @@ const ProjectMilestonesTab = ({ project, userRole }) => {
   };
 
   const formatDate = (dateStr) => {
-    if (!dateStr) return 'N/A';
-    const d = new Date(dateStr);
-    if (isNaN(d.getTime())) return dateStr;
-    const day = String(d.getDate()).padStart(2, '0');
-    const month = d.toLocaleDateString('en-GB', { month: 'short' });
-    const year = d.getFullYear();
-    return `${day}-${month}-${year}`;
+    if (!dateStr || dateStr === 'N/A' || dateStr === '—') return dateStr || 'N/A';
+    try {
+      const cleanStr = String(dateStr).split('T')[0].trim();
+      const parts = cleanStr.split('-');
+      if (parts.length === 3 && parts[0].length === 4) {
+        const [year, month, day] = parts;
+        return `${String(day).padStart(2, '0')}/${String(month).padStart(2, '0')}/${year}`;
+      }
+      const d = new Date(dateStr);
+      if (!isNaN(d.getTime())) {
+        const day = String(d.getDate()).padStart(2, '0');
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const year = d.getFullYear();
+        return `${day}/${month}/${year}`;
+      }
+    } catch (e) {}
+    return dateStr;
   };
 
   const handleViewTask = (task) => {
