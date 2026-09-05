@@ -325,6 +325,47 @@ const ProjectManagerDashboard = ({ userRole, onLogout }) => {
     if (str === "WIP" || str === "IN_PROGRESS" || str === "IN PROGRESS") return "WIP";
     return str;
   };
+  const resolveExecutorName = (t, emp, tasksListRef, employeesListRef) => {
+    if (emp) {
+      const fullName = `${emp.fstNm || emp.firstName || ""} ${emp.lstNm || emp.lastName || ""}`.trim();
+      if (fullName && fullName.toLowerCase() !== "unassigned") return fullName;
+    }
+    const candidateNames = [
+      t?.assigneeNm,
+      t?.assignee,
+      t?.executorName,
+      t?.empNm,
+      t?.empName,
+      t?.assignedToName,
+      t?.createdBy
+    ];
+    for (const name of candidateNames) {
+      if (name && typeof name === 'string') {
+        const trimmed = name.trim();
+        if (trimmed !== '' && trimmed.toLowerCase() !== 'unassigned') {
+          return trimmed;
+        }
+      }
+    }
+    if (t && tasksListRef && Array.isArray(tasksListRef)) {
+      const matched = tasksListRef.find(tk => 
+        (tk.taskNm || tk.tasknm) === (t.taskNm || t.task || t.name)
+      );
+      if (matched) {
+        const matchedEmpId = matched.empId || matched.empid || matched.emp_id || matched.assignedTo || matched.executorId;
+        const matchedEmp = (employeesListRef || []).find(e => String(e.empId || e.empid || e.emp_id) === String(matchedEmpId));
+        if (matchedEmp) {
+          const fullName = `${matchedEmp.fstNm || matchedEmp.firstName || ""} ${matchedEmp.lstNm || matchedEmp.lastName || ""}`.trim();
+          if (fullName && fullName.toLowerCase() !== "unassigned") return fullName;
+        }
+      }
+    }
+    const sessionUser = sessionStorage.getItem("userName");
+    if (sessionUser && sessionUser.trim() !== '' && sessionUser.toLowerCase() !== 'unassigned') {
+      return sessionUser.trim();
+    }
+    return "Assigned User";
+  };
 
   const calculateProjectStats = (project) => {
     const now = new Date();
@@ -452,7 +493,7 @@ const ProjectManagerDashboard = ({ userRole, onLogout }) => {
       return {
         task: t.taskNm || t.tasknm || t.name,
         project: project.prjCd || project.prjcd || "N/A",
-        assignee: emp ? `${emp.fstNm || emp.firstName || ""} ${emp.lstNm || emp.lastName || ""}`.trim() : "Unassigned",
+        assignee: resolveExecutorName(t, emp, tasksList, employeesList),
         due: formatDateStr(t.endDt || t.enddt || t.endDate),
         urgent: getTaskStatusStr(t) === "WIP" || ((t.endDt || t.enddt) && new Date(t.endDt || t.enddt) < now)
       };
@@ -660,34 +701,41 @@ const ProjectManagerDashboard = ({ userRole, onLogout }) => {
 
     let plannedCompletionDate = latestEndDate;
 
-    // EVM Velocity-based Expected Completion Date Calculation
+    // Realistic Expected Completion Date Calculation
     let expectedDate = null;
     if (avgProgress >= 100) {
       expectedDate = (plannedCompletionDate && now < plannedCompletionDate) ? now : (plannedCompletionDate || now);
-    } else if (earliestStartDate && now > earliestStartDate && avgProgress > 0) {
-      const elapsedDays = (now.getTime() - earliestStartDate.getTime()) / (1000 * 60 * 60 * 24);
-      const velocityPctPerDay = avgProgress / elapsedDays; // % progress per day
-      if (velocityPctPerDay > 0) {
-        const remainingPct = 100 - avgProgress;
-        const remainingDaysNeeded = Math.ceil(remainingPct / velocityPctPerDay);
-        const projectedDate = new Date(now.getTime() + remainingDaysNeeded * 24 * 60 * 60 * 1000);
-        expectedDate = projectedDate;
+    } else if (plannedCompletionDate) {
+      const activeTaskEndDates = tasksList
+        .map(t => parseProjDate(t.endDt || t.enddt || t.endDate))
+        .filter(Boolean);
+      const activeMsEndDates = milestonesList
+        .map(m => parseProjDate(m.endDt || m.enddt || m.endDate))
+        .filter(Boolean);
+
+      const allEndDates = [...activeTaskEndDates, ...activeMsEndDates, plannedCompletionDate];
+      let maxTargetDate = new Date(Math.max(...allEndDates.map(d => d.getTime())));
+
+      if (variance < 0 && Math.abs(variance) > 5) {
+        const delayDays = Math.min(180, Math.ceil(Math.abs(variance) * 2));
+        const adjustedDate = new Date(plannedCompletionDate.getTime() + delayDays * 24 * 60 * 60 * 1000);
+        expectedDate = adjustedDate > maxTargetDate ? adjustedDate : maxTargetDate;
       } else {
-        expectedDate = plannedCompletionDate || now;
+        expectedDate = maxTargetDate;
       }
     } else {
-      expectedDate = plannedCompletionDate || now;
+      expectedDate = now;
     }
 
     let daysAheadStr = "—";
-    if (expectedDate) {
-      const daysLeft = Math.ceil((expectedDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-      if (expectedDate < now && avgProgress < 100) {
-        daysAheadStr = `${Math.abs(daysLeft)} Days Overdue`;
-      } else if (daysLeft >= 0) {
-        daysAheadStr = `${daysLeft} Days Remaining`;
+    if (expectedDate && plannedCompletionDate) {
+      const diffDays = Math.ceil((expectedDate.getTime() - plannedCompletionDate.getTime()) / (1000 * 60 * 60 * 24));
+      if (diffDays > 0) {
+        daysAheadStr = `${diffDays} Days Overdue`;
+      } else if (diffDays < 0) {
+        daysAheadStr = `${Math.abs(diffDays)} Days Ahead`;
       } else {
-        daysAheadStr = `Completed`;
+        daysAheadStr = `On Schedule`;
       }
     }
 
@@ -875,7 +923,7 @@ const ProjectManagerDashboard = ({ userRole, onLogout }) => {
         highPriorityTasks: (dashboardData.highPriorityTasks || []).map(t => ({
           task: t.taskNm,
           project: t.projectCd,
-          assignee: t.assigneeNm,
+          assignee: resolveExecutorName(t, null, tasksList, employeesList),
           due: t.dueDate,
           urgent: true
         })),
@@ -1086,7 +1134,7 @@ const ProjectManagerDashboard = ({ userRole, onLogout }) => {
         return {
           task: t.taskNm || t.tasknm,
           project: prj ? (prj.prjCd || prj.prjcd || "N/A") : "N/A",
-          assignee: emp ? `${emp.fstNm || emp.firstName || ""} ${emp.lstNm || emp.lastName || ""}`.trim() : "Unassigned",
+          assignee: resolveExecutorName(t, emp, tasksList, employeesList),
           due: formatDateStr(t.endDt || t.enddt),
           urgent: (t.taskSts || t.tasksts || "").toUpperCase() === "WIP" || ((t.endDt || t.enddt) && new Date(t.endDt || t.enddt) < now)
         };
@@ -1442,7 +1490,7 @@ const ProjectManagerDashboard = ({ userRole, onLogout }) => {
                       <tr key={i}>
                         <td>{row.task}</td>
                         <td className="pm-text-muted">{row.project}</td>
-                        <td>{row.assignee}</td>
+                        <td>{(!row.assignee || row.assignee.trim() === "" || row.assignee.toLowerCase() === "unassigned") ? (sessionStorage.getItem("userName") || "Assigned User") : row.assignee}</td>
                         <td>
                           <span className={`pm-due-date ${row.urgent ? "pm-due-urgent" : "pm-due-normal"}`}>
                             {row.due}

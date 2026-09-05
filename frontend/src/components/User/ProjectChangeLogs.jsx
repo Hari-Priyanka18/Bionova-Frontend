@@ -90,8 +90,65 @@ export default function ProjectChangeLogs({ project, progressData }) {
           const type = log.statusFrom === 'N/A' || !log.statusFrom ? 'Created' : 'Updated';
           const recordId = `${module.substring(0, 3).toUpperCase()}-${log.entityId}`;
 
-          // Use actual user who made the change (fallback to 'System')
-          const changedBy = log.createdBy || log.modifiedBy || 'System';
+          // Resolve actual user name dynamically without hardcoding static project creator
+          const resolveChangedBy = (logObj, prjObj) => {
+            // 1. Direct log user attributes
+            const logCandidates = [
+              logObj?.createdBy,
+              logObj?.modifiedBy,
+              logObj?.created_by,
+              logObj?.modified_by,
+              logObj?.userName,
+              logObj?.user_name,
+              logObj?.user,
+              logObj?.changedBy,
+              logObj?.changed_by,
+              logObj?.performedBy,
+              logObj?.performed_by,
+              logObj?.usrName,
+              logObj?.usr_name
+            ];
+            for (const name of logCandidates) {
+              if (name && typeof name === 'string') {
+                const trimmed = name.trim();
+                if (trimmed !== '' && trimmed.toLowerCase() !== 'system' && trimmed.toLowerCase() !== 'n/a') {
+                  return trimmed;
+                }
+              }
+            }
+
+            // 2. Active logged-in user
+            const sessionUser = sessionStorage.getItem("userName") || localStorage.getItem("userName");
+            if (sessionUser && sessionUser.trim() !== '' && sessionUser.toLowerCase() !== 'system') {
+              return sessionUser.trim();
+            }
+
+            // 3. Fallback to project attributes if available
+            const projectCandidates = [
+              prjObj?.createdBy,
+              prjObj?.createdByName,
+              prjObj?.projectManager,
+              prjObj?.managerName
+            ];
+            for (const name of projectCandidates) {
+              if (name && typeof name === 'string') {
+                const trimmed = name.trim();
+                if (trimmed !== '' && trimmed.toLowerCase() !== 'system' && trimmed.toLowerCase() !== 'n/a') {
+                  return trimmed;
+                }
+              }
+            }
+
+            const email = sessionStorage.getItem("userEmail") || localStorage.getItem("userEmail");
+            if (email && email.includes("@")) {
+              const prefix = email.split("@")[0];
+              const formatted = prefix.split(/[._]/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+              if (formatted && formatted.toLowerCase() !== 'system') return formatted;
+            }
+            return 'User';
+          };
+
+          const changedBy = resolveChangedBy(log, project);
 
           // Determine what changed – use fieldName if available, else 'Status'
           const whatChanged = log.fieldName || 'Status';
@@ -403,7 +460,7 @@ export default function ProjectChangeLogs({ project, progressData }) {
                   <td style={{ padding: '10px 12px', fontSize: '13px', fontWeight: '500' }}>{log.recordId}</td>
                   <td className="pcl-td-desc" style={{ padding: '10px 12px', fontSize: '13px' }} dangerouslySetInnerHTML={{__html: formatDesc(log.description)}}></td>
                   <td style={{ padding: '10px 12px', textAlign: 'center' }}>
-                    <button className="pcl-action-btn" style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}><Eye size={16} color="#64748b" /></button>
+                    <button className="pcl-action-btn" onClick={(e) => { e.stopPropagation(); setSelectedRecord(log); }} style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}><Eye size={16} color="#64748b" /></button>
                   </td>
                 </tr>
               ))}
@@ -512,9 +569,6 @@ export default function ProjectChangeLogs({ project, progressData }) {
                 <div className="pcl-sb-val text-sm" style={{ fontSize: '12px', color: '#64748b' }}>Update made from {selectedRecord.module} Details screen.</div>
               </div>
 
-              <button className="pcl-view-record-btn" style={{ marginTop: '16px', width: '100%', padding: '8px', background: '#2563eb', color: 'white', border: 'none', borderRadius: '6px', fontSize: '13px', fontWeight: '500', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
-                View Record <span style={{marginLeft: 6}}>↗</span>
-              </button>
             </div>
           </div>
         )}

@@ -16,8 +16,7 @@ import {
   ChevronLeft,
   Search,
   Image as ImageIcon,
-  Calendar,
-  Copy
+  Calendar
 } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import Sidebar from "../Sidebar.jsx";
@@ -2118,15 +2117,6 @@ const ProjectCreation = ({ userRole, onLogout }) => {
                                         </button>
                                         {project._type !== 'live' && (
                                           <>
-                                            <button
-                                              type="button"
-                                              style={{ padding: '10px 16px', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', color: '#2563eb', borderRadius: '4px', margin: '2px 4px' }}
-                                              onClick={() => handleDuplicate(project)}
-                                              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#eff6ff'}
-                                              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                                            >
-                                              <Copy size={15} /> Duplicate (Template)
-                                            </button>
                                             <button
                                               type="button"
                                               style={{ padding: '10px 16px', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', color: '#334155', borderRadius: '4px', margin: '2px 4px' }}

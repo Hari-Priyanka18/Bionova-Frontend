@@ -334,9 +334,11 @@ const ProjectMilestonesTab = ({ project, userRole }) => {
             {collapseAll ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
             {collapseAll ? 'Expand All' : 'Collapse All'}
           </button>
-          <button className="mt-btn-primary" onClick={() => navigate('/milestone-creation', { state: { createMode: true, projectId: project?.id } })}>
-            <Plus size={14} /> Add Milestone
-          </button>
+          {isDraftProject && (
+            <button className="mt-btn-primary" onClick={() => navigate('/milestone-creation', { state: { createMode: true, projectId: project?.id } })}>
+              <Plus size={14} /> Add Milestone
+            </button>
+          )}
         </div>
       </div>
 

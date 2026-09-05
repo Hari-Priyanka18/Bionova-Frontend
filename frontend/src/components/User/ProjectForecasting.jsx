@@ -21,6 +21,7 @@ export default function ProjectForecasting({ project }) {
   const [forecastData, setForecastData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [selectedScenario, setSelectedScenario] = useState("Current Trend");
 
   const isDraft = project?.status === "DRAFT" || project?.status === "Draft" || project?._type === "draft";
 
@@ -210,7 +211,15 @@ export default function ProjectForecasting({ project }) {
           </div>
           <div className="fc-filter-group">
             <label>Scenario</label>
-            <select><option>Current Trend</option></select>
+            <select value={selectedScenario} onChange={(e) => setSelectedScenario(e.target.value)}>
+              {scenarios.length > 0 ? (
+                scenarios.map((sc, i) => (
+                  <option key={i} value={sc.name}>{sc.name}</option>
+                ))
+              ) : (
+                <option value="Current Trend">Current Trend</option>
+              )}
+            </select>
           </div>
           <div className="fc-filter-group">
             <label>Date Range</label>
@@ -352,9 +361,19 @@ export default function ProjectForecasting({ project }) {
             </thead>
             <tbody>
               {scenarios.map((sc, idx) => (
-                <tr key={idx} className={sc.name === "Current Trend" ? "active" : ""}>
+                <tr 
+                  key={idx} 
+                  className={sc.name === selectedScenario ? "active" : ""}
+                  onClick={() => setSelectedScenario(sc.name)}
+                  style={{ cursor: 'pointer' }}
+                >
                   <td>
-                    <input type="radio" checked={sc.name === "Current Trend"} readOnly/> {sc.name}
+                    <input 
+                      type="radio" 
+                      name="forecastScenario"
+                      checked={sc.name === selectedScenario} 
+                      onChange={() => setSelectedScenario(sc.name)}
+                    /> {sc.name}
                   </td>
                   <td>{getHelperDateStr(sc.completionDate)}</td>
                   <td style={{ color: sc.varianceDays > 0 ? '#ef4444' : '#10b981' }}>
@@ -434,14 +453,6 @@ export default function ProjectForecasting({ project }) {
           </table>
         </div>
 
-      </div>
-      
-      {/* FOOTER */}
-      <div className="fc-footer">
-        <div className="fc-notes">
-          <h3 className="fc-panel-title">Forecast Notes</h3>
-          <textarea readOnly className="fc-textarea" value={`Forecast computed automatically using BIONOVA Live DB. Performance speed is ${velocity.toFixed(2)}x of baseline scheduler. Scopes have been matched with Company/Plant holiday configuration.`} />
-        </div>
       </div>
 
     </div>
