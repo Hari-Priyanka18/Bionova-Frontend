@@ -406,7 +406,7 @@ const Assignment = ({ userRole, onLogout }) => {
   // --- Form state ---
   const [taskCode, setTaskCode] = useState("");
   const [taskTitle, setTaskTitle] = useState("");
-  const [priority, setPriority] = useState("High");
+  const [priority, setPriority] = useState("");
   const [status, setStatus] = useState("Draft");
   const [duration, setDuration] = useState("");
   const [startDate, setStartDate] = useState("");
@@ -774,7 +774,7 @@ const Assignment = ({ userRole, onLogout }) => {
   const handleResetForm = async () => {
     setEditId(null);
     setTaskTitle("");
-    setPriority("High");
+    setPriority("");
     setStatus("Draft");
     setDuration("");
     setStartDate("");
@@ -1060,6 +1060,10 @@ const Assignment = ({ userRole, onLogout }) => {
     }
     if (!taskTitle.trim() || !assignedEmployee) {
       triggerAlert("warning", "Missing Fields", "Please fill in task title and assigned employee.");
+      return;
+    }
+    if (!priority) {
+      triggerAlert("warning", "Missing Fields", "Please select Priority.");
       return;
     }
     if (!startDate || !duration || !dueDate) {
@@ -1468,13 +1472,35 @@ const Assignment = ({ userRole, onLogout }) => {
                           return sts === "CLOSED" || sts === "COMPLETED" || id === 4;
                         })();
 
+                        const leadLagStatus = (() => {
+                          if (!isClosedTask) return null;
+                          const rawDue = task.endDt || task.dueDate || task.enddt;
+                          const rawComp = task.actCompDt || task.compDt || task.completedDate || task.updatedAt || task.lstUpdDt || task.updDt;
+                          
+                          if (rawDue) {
+                            const dueD = new Date(rawDue);
+                            dueD.setHours(0, 0, 0, 0);
+                            const cmpD = rawComp ? new Date(rawComp) : new Date();
+                            cmpD.setHours(0, 0, 0, 0);
+                            
+                            if (!isNaN(dueD.getTime()) && !isNaN(cmpD.getTime())) {
+                              if (cmpD < dueD) return "Lead";
+                              if (cmpD > dueD) return "Lag";
+                              return "On Time";
+                            }
+                          }
+                          return "On Time";
+                        })();
+
                         return (
                           <tr key={task.empTaskId || task.id}>
                             <td>{formatTaskCode(task.taskCd)}</td>
                             <td>{task.taskNm}</td>
                             <td>{displayName}</td>
                             <td>
-                              {(() => {
+                              {isClosedTask ? (
+                                <span style={{ color: '#64748b', fontWeight: 600, fontSize: '14px' }}>-</span>
+                              ) : (() => {
                                 const pText = getTaskPriorityText(task);
                                 return (
                                   <span className={`cit-badge priority-${pText.toLowerCase().replace(/\s+/g, '-')}`}>
@@ -1484,17 +1510,30 @@ const Assignment = ({ userRole, onLogout }) => {
                               })()}
                             </td>
                             <td>
-                              <span style={{ 
-                                color: isClosedTask ? "#16a34a" : "#2563eb", 
-                                background: isClosedTask ? "#dcfce7" : "#eff6ff", 
-                                padding: "2px 8px", 
-                                borderRadius: 4, 
-                                fontWeight: 600, 
-                                border: isClosedTask ? "1px solid #bbf7d0" : "1px solid #bfdbfe", 
-                                fontSize: 12 
-                              }}>
-                                {isClosedTask ? "Closed" : (task.taskSts?.statusNm || task.taskSts)}
-                              </span>
+                              <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: 'fit-content' }}>
+                                <span style={{ 
+                                  color: isClosedTask ? "#16a34a" : "#2563eb", 
+                                  background: isClosedTask ? "#dcfce7" : "#eff6ff", 
+                                  padding: "2px 8px", 
+                                  borderRadius: 4, 
+                                  fontWeight: 600, 
+                                  border: isClosedTask ? "1px solid #bbf7d0" : "1px solid #bfdbfe", 
+                                  fontSize: 12,
+                                  textAlign: "center"
+                                }}>
+                                  {isClosedTask ? "Closed" : (task.taskSts?.statusNm || task.taskSts)}
+                                </span>
+                                {isClosedTask && leadLagStatus && (
+                                  <span style={{ 
+                                    fontSize: 11, 
+                                    fontWeight: 600, 
+                                    color: leadLagStatus === "Lead" ? "#10b981" : leadLagStatus === "Lag" ? "#ef4444" : "#3b82f6",
+                                    textAlign: "center"
+                                  }}>
+                                    {leadLagStatus}
+                                  </span>
+                                )}
+                              </div>
                             </td>
                             <td>{formatListDate(task.stDt)}</td>
                             <td>{formatListDate(task.endDt)}</td>
@@ -1621,14 +1660,15 @@ const Assignment = ({ userRole, onLogout }) => {
                               <select 
                                 value={priority} 
                                 onChange={(e) => setPriority(e.target.value)} 
-                                style={{ color: priority === 'High' || priority === 'Critical' ? '#ef4444' : priority === 'Medium' ? '#eab308' : priority === 'Normal' ? '#3b82f6' : '#22c55e', fontWeight: 600 }}
+                                style={{ color: !priority ? '#94a3b8' : (priority === 'High' || priority === 'Critical' ? '#ef4444' : priority === 'Medium' ? '#eab308' : priority === 'Normal' ? '#3b82f6' : '#22c55e'), fontWeight: priority ? 600 : 400 }}
                               >
+                                <option value="" disabled hidden>Select Priority</option>
                                 <option value="High" style={{ color: '#ef4444' }}>High</option>
                                 <option value="Medium" style={{ color: '#eab308' }}>Medium</option>
                                 <option value="Normal" style={{ color: '#3b82f6' }}>Normal</option>
                                 <option value="Low" style={{ color: '#22c55e' }}>Low</option>
                               </select>
-                              <ChevronDown size={14} className="cit-input-icon-right" style={{ color: priority === 'High' || priority === 'Critical' ? '#ef4444' : priority === 'Medium' ? '#eab308' : priority === 'Normal' ? '#3b82f6' : '#22c55e' }} />
+                              <ChevronDown size={14} className="cit-input-icon-right" style={{ color: !priority ? '#64748b' : (priority === 'High' || priority === 'Critical' ? '#ef4444' : priority === 'Medium' ? '#eab308' : priority === 'Normal' ? '#3b82f6' : '#22c55e') }} />
                             </div>
                           </label>
                         </div>

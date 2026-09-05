@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Flag, ListTodo, CheckSquare, RefreshCcw, HelpCircle, Clock, Plus, Filter, Search, Eye, Edit2, Trash2, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, X, Loader2 } from 'lucide-react';
 import '../../styles/project-milestones-tab.css';
 import ProjectGanttChart from './ProjectGanttChart.jsx';
@@ -12,6 +13,7 @@ const authHeaders = () => ({
 });
 
 const ProjectMilestonesTab = ({ project, userRole }) => {
+  const navigate = useNavigate();
   const [milestones, setMilestones] = useState([]);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [collapseAll, setCollapseAll] = useState(false);
@@ -332,7 +334,7 @@ const ProjectMilestonesTab = ({ project, userRole }) => {
             {collapseAll ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
             {collapseAll ? 'Expand All' : 'Collapse All'}
           </button>
-          <button className="mt-btn-primary" onClick={() => window.open('/milestone-creation', '_self')}>
+          <button className="mt-btn-primary" onClick={() => navigate('/milestone-creation', { state: { createMode: true, projectId: project?.id } })}>
             <Plus size={14} /> Add Milestone
           </button>
         </div>

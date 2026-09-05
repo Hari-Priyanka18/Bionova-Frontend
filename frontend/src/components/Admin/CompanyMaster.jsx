@@ -481,7 +481,7 @@ const CompanyCreation = ({ onLogout, userRole }) => {
           error = "Pincode must be 6 digits and cannot start with 0.";
         }
       }
-    } else if (name === "email") {
+       } else if (name === "email") {
       if (!value.trim()) error = "Company Email is required.";
       else if (value.length > 100) error = "Company Email cannot exceed 100 characters.";
       else {

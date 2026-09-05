@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Flag, FileText, CheckCircle, Clock, AlertCircle, AlertTriangle, Plus, Eye } from 'lucide-react';
+import { Flag, FileText, CheckCircle, Clock, AlertCircle, AlertTriangle, Eye } from 'lucide-react';
 import '../../styles/project-overview.css';
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL) + "/api";
@@ -515,12 +515,6 @@ const ProjectOverview = ({ project }) => {
       <div className="pd-section-card">
         <div className="pd-section-header">
           <h3>Milestones</h3>
-          <button
-            className="pd-add-btn"
-            onClick={() => window.open('/milestone-creation', '_self')}
-          >
-            <Plus size={14} /> Add Milestone
-          </button>
         </div>
         <div className="pd-table-responsive">
           <table className="pd-table">

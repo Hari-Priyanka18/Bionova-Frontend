@@ -371,7 +371,7 @@ const PlantCreation = ({ userRole, onLogout }) => {
           error = "Format must be e.g. 78.421012 E (2 digits, dot, 6 decimals, space, and E/W).";
         }
       }
-    } else if (name === "email") {
+        } else if (name === "email") {
       if (!value.trim()) {
         error = "Plant Email is required.";
       } else if (value.length > 100) {
@@ -523,9 +523,7 @@ const PlantCreation = ({ userRole, onLogout }) => {
     }
 
     // Strict email check
- 
     const emailRegex = /^([a-zA-Z0-9._%+-]+@)?[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/i;
-
     if (!emailRegex.test(form.email.trim())) {
       triggerAlert("error", "Validation Error", "Plant Email must be a valid email or domain.");
       return;

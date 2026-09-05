@@ -41,18 +41,23 @@ const Login = ({ onLogin }) => {
     setError('');
   };
 
+  const isValidEmailFormat = (email) => {
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    return emailRegex.test(email);
+  };
+
   const handleLoginSubmit = async (e) => {
     e.preventDefault();
     setError('');
 
-    if (!formData.email.trim()) {
+    const emailInput = formData.email.trim();
+       if (!emailInput) {
       setError("Please enter your email address");
       return;
     }
 
-    const emailRegex = /^[a-zA-Z0-9._%+-]+@(gmail|bionova|company|mailinator)\.com$/i;
-    if (!emailRegex.test(formData.email.trim())) {
-      setError("Please enter a valid email address (e.g., @gmail.com, @bionova.com, @mailinator.com)");
+    if (!isValidEmailFormat(emailInput)) {
+      setError("Invalid Email");
       return;
     }
     if (!formData.password) {
@@ -71,19 +76,24 @@ const Login = ({ onLogin }) => {
           'Accept': 'application/json'
         },
         body: JSON.stringify({
-          email: formData.email.trim(),
+          email: emailInput,
           password: formData.password
         })
       });
 
+      const data = await response.json().catch(() => null);
+
       if (!response.ok) {
+        if (data && data.message && data.message.toLowerCase().includes("user not found")) {
+          setError("Invalid Email");
+          return;
+        }
         throw new Error("Server responded with an error status: " + response.status);
       }
 
-      const data = await response.json();
-      if (data.success) {
+      if (data && data.success) {
         sessionStorage.setItem("isLoggedIn", "true");
-        sessionStorage.setItem("userEmail", formData.email.trim());
+        sessionStorage.setItem("userEmail", emailInput);
         sessionStorage.setItem("userRole", data.role || "full_access");
         if (data.token) {
           sessionStorage.setItem("authToken", data.token);
@@ -92,8 +102,7 @@ const Login = ({ onLogin }) => {
           sessionStorage.setItem("empId", String(data.empId));
         }
         
-        const email = formData.email.trim();
-        const namePart = email.split("@")[0];
+        const namePart = emailInput.split("@")[0];
         const formattedName = namePart
           .split(/[._]/)
           .map(word => word.charAt(0).toUpperCase() + word.slice(1))
@@ -102,7 +111,7 @@ const Login = ({ onLogin }) => {
         localStorage.setItem("userName", formattedName);
         
         if (rememberMe) {
-          localStorage.setItem('rememberedEmail', formData.email.trim());
+          localStorage.setItem('rememberedEmail', emailInput);
           localStorage.setItem('rememberedPassword', formData.password);
         } else {
           localStorage.removeItem('rememberedEmail');
@@ -111,7 +120,12 @@ const Login = ({ onLogin }) => {
 
         onLogin(true, data.role || "full_access");
       } else {
-        setError(data.message || "Invalid Email or Password");
+        const msg = data?.message || "Invalid Email or Password";
+        if (msg.toLowerCase().includes("user not found")) {
+          setError("Invalid Email");
+        } else {
+          setError(msg);
+        }
       }
     } catch (err) {
       console.error("Login failed:", err);
@@ -126,8 +140,13 @@ const Login = ({ onLogin }) => {
     setError('');
     setSuccessMsg('');
 
-    if (!resetEmail.trim()) {
+    const resetEmailInput = resetEmail.trim();
+    if (!resetEmailInput) {
       setError("Please enter your registered email address");
+      return;
+    }
+    if (!isValidEmailFormat(resetEmailInput)) {
+      setError("Invalid Email");
       return;
     }
 
@@ -148,16 +167,21 @@ const Login = ({ onLogin }) => {
           'Accept': 'application/json'
         },
         body: JSON.stringify({
-          email: resetEmail.trim()
+          email: resetEmailInput
         })
       });
 
+      const data = await response.json().catch(() => null);
+
       if (!response.ok) {
+        if (data && data.message && data.message.toLowerCase().includes("user not found")) {
+          setError("Invalid Email");
+          return;
+        }
         throw new Error("Server responded with an error status: " + response.status);
       }
 
-      const data = await response.json();
-      setSuccessMsg(data.message || "Password reset link has been sent to your email.");
+      setSuccessMsg(data?.message || "Password reset link has been sent to your email.");
       setResetEmail('');
     } catch (err) {
       console.error("Forgot password failed:", err);
