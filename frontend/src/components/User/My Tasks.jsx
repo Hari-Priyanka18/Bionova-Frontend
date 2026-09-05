@@ -565,11 +565,12 @@ const MyTasks = ({ userRole, onLogout }) => {
           isExternal: true
         };
 
-        const chks = (data.checklists || []).map(c => ({
-          id: c.chkId,
-          text: (c.chkCd ? `[${c.chkCd}] ` : "") + (c.chkNm || c.chkDesc || ""),
-          completed: !!c.chkSts
+        const chksRaw = (data.checklists || []).map(c => ({
+          id: c.chkId || c.id,
+          text: (c.chkNm || c.chkDesc || c.itemDesc || c.text || c.desc || "").replace(/^\[\s*[xX]?\s*\]\s*|^\(\s*[xX]?\s*\)\s*/i, ""),
+          completed: !!(c.chkSts || c.completed)
         }));
+        const chks = Array.from(new Map(chksRaw.map(c => [c.text.trim().toLowerCase(), c])).values());
 
         const calculatedProgress = computeProgress(chks, taskObj);
         taskObj.progress = calculatedProgress;
@@ -586,8 +587,19 @@ const MyTasks = ({ userRole, onLogout }) => {
         setShowDetailView(true);
         setUpdateChecklist(chks);
         setTaskAttachments(atts);
-        setUpdateRemarks(data.addlRem || "");
+        setUpdateRemarks("");
         setUpdateProgressVal(calculatedProgress);
+
+        // Try fetching process history using standard fetch
+        try {
+          const historyRes = await fetch(`${apiBaseUrl}/api/process/task/${data.taskId}?isIndividual=false`);
+          if (historyRes.ok) {
+            const historyData = await historyRes.json();
+            setProcessHistory(Array.isArray(historyData) ? historyData : []);
+          }
+        } catch (e) {
+          console.error("Failed to load process history for external task", e);
+        }
       }
     } catch (e) {
       console.error("Failed to fetch external task", e);
@@ -1553,16 +1565,30 @@ const MyTasks = ({ userRole, onLogout }) => {
     if (isExternalMode) {
       try {
         setLoadingAction(task.id || task.taskId);
+        const finalRemarks = await processExecutorAttachments(updateRemarks, task.id || task.taskId, task.isIndividual);
+        const existingRem = task.rawTask?.addlRem || task.rawTask?.remarks || "";
+        
+        let newRem = finalRemarks;
+        if (finalRemarks) {
+          if (!finalRemarks.startsWith("[")) {
+            newRem = existingRem ? `${existingRem}\n---\n[Executor]: ${finalRemarks}` : `[Executor]: ${finalRemarks}`;
+          } else {
+            newRem = existingRem ? `${existingRem}\n---\n${finalRemarks}` : finalRemarks;
+          }
+        } else {
+          newRem = existingRem;
+        }
+
         await fetch(`${apiBaseUrl}/api/external-tasks/${externalToken}/update`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ taskSts: "SUBMIT_REVIEW", subStatus: "Under Review", remarks: updateRemarks })
+          body: JSON.stringify({ taskSts: "SUBMIT_REVIEW", subStatus: "Under Review", remarks: newRem })
         });
         setSelectedTask(prev => ({
           ...prev,
           status: "UNDER_REVIEW",
           rawStatus: "UNDER_REVIEW",
-          rawTask: { ...prev.rawTask, taskSts: "UNDER_REVIEW" }
+          rawTask: { ...prev.rawTask, taskSts: "UNDER_REVIEW", addlRem: newRem }
         }));
         triggerAlert("success", "Submitted", "Task submitted for review.");
       } catch (err) {
@@ -1618,16 +1644,30 @@ const MyTasks = ({ userRole, onLogout }) => {
     if (isExternalMode) {
       try {
         setLoadingAction(task.id || task.taskId);
+        const finalRemarks = await processExecutorAttachments(updateRemarks, task.id || task.taskId, task.isIndividual);
+        const existingRem = task.rawTask?.addlRem || task.rawTask?.remarks || "";
+        
+        let newRem = finalRemarks;
+        if (finalRemarks) {
+          if (!finalRemarks.startsWith("[")) {
+            newRem = existingRem ? `${existingRem}\n---\n[Executor]: ${finalRemarks}` : `[Executor]: ${finalRemarks}`;
+          } else {
+            newRem = existingRem ? `${existingRem}\n---\n${finalRemarks}` : finalRemarks;
+          }
+        } else {
+          newRem = existingRem;
+        }
+
         await fetch(`${apiBaseUrl}/api/external-tasks/${externalToken}/update`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ taskSts: "COMPLETED", remarks: updateRemarks })
+          body: JSON.stringify({ taskSts: "COMPLETED", remarks: newRem })
         });
         setSelectedTask(prev => ({
           ...prev,
           status: "COMPLETED",
           rawStatus: "COMPLETED",
-          rawTask: { ...prev.rawTask, taskSts: "COMPLETED" }
+          rawTask: { ...prev.rawTask, taskSts: "COMPLETED", addlRem: newRem }
         }));
         triggerAlert("success", "Completed", "Task completed successfully.");
       } catch (err) {
@@ -2508,11 +2548,12 @@ const MyTasks = ({ userRole, onLogout }) => {
       const items = await apiGet(path);
       const mapped = (items || []).map(item => ({
         id: item.chkId || item.id,
-        text: item.chkNm || item.name || item.text,
+        text: (item.chkNm || item.name || item.text || "").replace(/^\[\s*[xX]?\s*\]\s*|^\(\s*[xX]?\s*\)\s*/i, ""),
         completed: item.chkSts || item.completed || false
       }));
-      setUpdateChecklist(mapped);
-      const progress = computeProgress(mapped, task);
+      const uniqueMapped = Array.from(new Map(mapped.map(item => [item.text.trim().toLowerCase(), item])).values());
+      setUpdateChecklist(uniqueMapped);
+      const progress = computeProgress(uniqueMapped, task);
       setUpdateProgressVal(progress);
     } catch (err) {
       console.error("Failed to load checklist:", err);
@@ -2625,6 +2666,14 @@ const MyTasks = ({ userRole, onLogout }) => {
           name = parts.slice(1).join('-').trim();
         } else {
           name = header;
+          // If the header is just a timestamp, the real name and action might be inside the text
+          if (/^\d{4}-\d{2}-\d{2}/.test(name) || /^\d{2}\/\d{2}\/\d{4}/.test(name)) {
+            const textMatch = text.match(/^([^:]+):\s*(.*)/);
+            if (textMatch) {
+              name = textMatch[1].trim();
+              text = textMatch[2].trim();
+            }
+          }
         }
       }
 
@@ -2638,20 +2687,46 @@ const MyTasks = ({ userRole, onLogout }) => {
       }
 
       const rawTask = task?.rawTask || task || {};
-      const appName = getEmployeeName(rawTask.approverId || rawTask.approver, employeesList);
-      const revName = getEmployeeName(rawTask.reviewerId || rawTask.reviewer, employeesList);
-      const exeName = getEmployeeName(rawTask.empId || rawTask.assignedTo, employeesList);
+      let appName = getEmployeeName(rawTask.approverId || rawTask.approver, employeesList);
+      if (appName.startsWith("User ") && rawTask.approverNm) appName = rawTask.approverNm;
+      
+      let revName = getEmployeeName(rawTask.reviewerId || rawTask.reviewer, employeesList);
+      if (revName.startsWith("User ") && rawTask.reviewerNm) revName = rawTask.reviewerNm;
+      
+      const exeName = rawTask.extEmpNm || rawTask.extEmpName || getEmployeeName(rawTask.extEmpId || rawTask.empId || rawTask.assignedTo, employeesList);
+
+      // Remove unwanted prefixes like "add remarks:" or "add remark :"
+      text = text.replace(/^(add remarks?[:\s]*)+/i, "").trim();
+
+      // If name is "User 9" (external user ID fallback), try to map it to the actual name
+      if (name && /^User\s+(\d+)$/i.test(name)) {
+        const userId = name.match(/^User\s+(\d+)$/i)[1];
+        if (String(userId) === String(rawTask.extEmpId || rawTask.empId || rawTask.assignedTo)) {
+          name = exeName;
+          role = "EXECUTOR";
+        }
+      }
 
       if (name) {
         const lowerName = name.toLowerCase();
         if (appName && appName.toLowerCase().includes(lowerName)) role = "APPROVER";
         else if (revName && revName.toLowerCase().includes(lowerName)) role = "REVIEWER";
-        else if (exeName && exeName.toLowerCase().includes(lowerName)) role = "EXECUTOR";
+        else if (exeName && exeName.toLowerCase().includes(lowerName)) {
+          role = (task?.isExternal || rawTask?.isExternal || rawTask?.extEmpId) ? "EXTERNAL" : "EXECUTOR";
+        }
         else if (lowerName.includes("approver")) { role = "APPROVER"; name = appName && appName !== "Unknown" ? appName : name; }
         else if (lowerName.includes("reviewer")) { role = "REVIEWER"; name = revName && revName !== "Unknown" ? revName : name; }
-        else if (lowerName.includes("executor")) { role = "EXECUTOR"; name = exeName && exeName !== "Unknown" ? exeName : name; }
+        else if (lowerName.includes("executor")) { 
+          role = (task?.isExternal || rawTask?.isExternal || rawTask?.extEmpId) ? "EXTERNAL" : "EXECUTOR"; 
+          name = exeName && exeName !== "Unknown" ? exeName : name; 
+        }
       } else {
-        name = "Team Member";
+        if (task?.isExternal || rawTask?.isExternal || rawTask?.extEmpId) {
+          name = exeName && exeName !== "Unknown" ? exeName : "External User";
+          role = "EXTERNAL";
+        } else {
+          name = "Team Member";
+        }
       }
 
       let photo = null;
@@ -2677,12 +2752,12 @@ const MyTasks = ({ userRole, onLogout }) => {
       let finalAction = action.charAt(0).toUpperCase() + action.slice(1);
 
       if (finalAction.toLowerCase().includes("reject")) {
-        finalAction = (task && task.isIndividual) ? "Reassign" : "Rework";
+        finalAction = (task && (task.isIndividual || task.isExternal || rawTask?.isExternal)) ? "Reassign" : "Rework";
       } else if (finalAction.toLowerCase().includes("reassign")) {
         finalAction = "Reassign";
       }
 
-      if (role.toUpperCase() === "EXECUTOR" && (finalAction.toLowerCase().includes("approve") || finalAction.toLowerCase().includes("submit"))) {
+      if ((role.toUpperCase() === "EXECUTOR" || role.toUpperCase() === "EXTERNAL") && (finalAction.toLowerCase().includes("approve") || finalAction.toLowerCase().includes("submit"))) {
         finalAction = "";
       }
 
@@ -3571,7 +3646,7 @@ const MyTasks = ({ userRole, onLogout }) => {
               </div>
 
               {/* Process Status Details */}
-              {rawTask?.prcsYesActn && rawTask?.prcsYesActn !== "NONE" && (
+              {rawTask?.prcsYesActn && rawTask?.prcsYesActn !== "NONE" && !isExternalMode && (
                 <div style={{ marginTop: "16px", paddingTop: "16px", borderTop: "1px solid #f1f5f9" }}>
                   <div style={{ fontSize: "12px", fontWeight: "600", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "4px" }}>
                     <RefreshCw size={14} style={{ display: "inline", marginRight: "4px" }} /> Process Status
@@ -3749,19 +3824,20 @@ const MyTasks = ({ userRole, onLogout }) => {
             )}
 
             {/* Team Members / Contributors Card */}
-            <div style={{
-              backgroundColor: "white",
-              borderRadius: "12px",
-              border: "1px solid #e2e8f0",
-              padding: "24px",
-              marginBottom: "24px"
-            }}>
+            {!isExternalMode && !isReviewer && !isApprover && (
+              <div style={{
+                backgroundColor: "white",
+                borderRadius: "12px",
+                border: "1px solid #e2e8f0",
+                padding: "24px",
+                marginBottom: "24px"
+              }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
                 <div style={{ fontSize: "15px", fontWeight: "700", color: "#0f172a", display: "flex", alignItems: "center", gap: "8px" }}>
                   <Users size={18} color="#475569" />
                   Team Members {taskTeamMembers.length > 0 ? `(${taskTeamMembers.length})` : ''}
                 </div>
-                {!isCompleted && !showAddMemberModal && (
+                {!isCompleted && !showAddMemberModal && !isExternalMode && (
                   String(rawTask.empId || rawTask.executorId) === String(currentUserEmpId) && !isReviewer && !isApprover
                 ) && (
                     <button onClick={() => setShowAddMemberModal(true)} style={{ padding: "6px 12px", fontSize: "13px", fontWeight: "600", color: "#3B82F6", backgroundColor: "#DBEAFE", border: "none", borderRadius: "6px", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px" }}>
@@ -3876,6 +3952,7 @@ const MyTasks = ({ userRole, onLogout }) => {
                 </div>
               )}
             </div>
+            )}
 
             {/* Task Attachments Card */}
             <div style={{
@@ -4720,8 +4797,8 @@ const MyTasks = ({ userRole, onLogout }) => {
                     {(() => {
                       // 1. REASSIGN MODE -> Target Executor selection (No Milestones)
                       if (isReassignMode) {
-                        const currentExecutorId = currentRawT.empId || currentRawT.assignedTo || currentRawT.executorId;
-                        const currentExecutorName = getEmployeeName(currentExecutorId, employeesList);
+                        const currentExecutorId = currentRawT.extEmpId || currentRawT.empId || currentRawT.assignedTo || currentRawT.executorId;
+                        const currentExecutorName = currentRawT.extEmpNm || currentRawT.extEmpName || getEmployeeName(currentExecutorId, employeesList);
 
                         return (
                           <div key="reassign-mode-form">
@@ -4803,10 +4880,10 @@ const MyTasks = ({ userRole, onLogout }) => {
 
                       return (
                         <div key="rework-mode-form">
-                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px", marginBottom: "20px" }}>
+                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "24px", marginBottom: "20px" }}>
                             <div className="myt-form-group">
                               <label style={{ display: "block", fontSize: "14px", fontWeight: "600", color: "#475569", marginBottom: "8px" }}>
-                                Select Target Milestone (Same Project)
+                                Target Milestone
                               </label>
                               <select
                                 className="myt-input"
@@ -4832,7 +4909,7 @@ const MyTasks = ({ userRole, onLogout }) => {
                             </div>
                             <div className="myt-form-group">
                               <label style={{ display: "block", fontSize: "14px", fontWeight: "600", color: "#475569", marginBottom: "8px" }}>
-                                Select Target Task / Deliverable
+                                Target Task
                               </label>
                               <select
                                 className="myt-input"
@@ -4852,22 +4929,39 @@ const MyTasks = ({ userRole, onLogout }) => {
                                 disabled={!effectiveMilestone || loadingReworkTasks}
                               >
                                 <option value="">
-                                  {!effectiveMilestone ? "Select Milestone First" : loadingReworkTasks ? "Loading Tasks..." : (displayedReworkTasks.length === 0 ? "No Tasks in this Milestone" : "Select Task")}
+                                  {!effectiveMilestone ? "Select Milestone First" : loadingReworkTasks ? "Loading Tasks..." : (displayedReworkTasks.length === 0 ? "No Tasks" : "Select Task")}
                                 </option>
                                 {displayedReworkTasks.map(t => {
                                   const tId = t.taskId || t.id || t.empTaskId;
                                   const tCode = t.taskCd || t.taskCode || (tId ? formatTaskCode(t.taskCd, tId, false) : "");
                                   const tCd = tCode ? `[${tCode}] ` : '';
                                   const tNm = t.taskNm || t.title || t.name || `Task ${tId}`;
-                                  const executorEmpId = t.empId || t.assignedTo || t.executorId;
-                                  const executorName = getEmployeeName(executorEmpId, employeesList);
                                   return (
                                     <option key={tId} value={String(tId)}>
-                                      {tCd}{tNm}{executorName ? ` — (${executorName})` : ''}
+                                      {tCd}{tNm}
                                     </option>
                                   );
                                 })}
                               </select>
+                            </div>
+                            <div className="myt-form-group">
+                              <label style={{ display: "block", fontSize: "14px", fontWeight: "600", color: "#475569", marginBottom: "8px" }}>
+                                Target Executor
+                              </label>
+                              {(() => {
+                                const selTaskIdForName = denyData.targetTaskId;
+                                const selTaskObjForName = selTaskIdForName ? displayedReworkTasks.find(t => String(t.taskId || t.id || t.empTaskId) === String(selTaskIdForName)) : null;
+                                const targetExecutorName = selTaskObjForName ? (selTaskObjForName.extEmpNm || selTaskObjForName.extEmpName || getEmployeeName(denyData.targetEmpId, employeesList)) : (denyData.targetEmpId ? getEmployeeName(denyData.targetEmpId, employeesList) : "—");
+                                return (
+                                  <input
+                                    type="text"
+                                    className="myt-input"
+                                    readOnly
+                                    style={{ width: "100%", padding: "10px", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "14px", backgroundColor: "#f8fafc", color: "#475569" }}
+                                    value={targetExecutorName}
+                                  />
+                                );
+                              })()}
                             </div>
                           </div>
 
