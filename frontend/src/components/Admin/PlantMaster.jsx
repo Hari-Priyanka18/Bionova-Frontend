@@ -377,10 +377,10 @@ const PlantCreation = ({ userRole, onLogout }) => {
       } else if (value.length > 100) {
         error = "Plant Email cannot exceed 100 characters.";
       } else {
-        const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/i;
+        const emailRegex = /^[a-zA-Z0-9._%+-]+@(gmail|bionova|company|mailinator)\.com$/i;
 
         if (!emailRegex.test(value.trim())) {
-          error = "Please enter a valid email address.";
+          error = "Please enter a valid email address ending with @gmail.com, @bionova.com, @company.com, or @mailinator.com.";
         }
       }
     } else if (name === "addressLine1") {
