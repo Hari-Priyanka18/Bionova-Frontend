@@ -223,15 +223,17 @@ const AdminDashboard = ({ userRole, onLogout }) => {
   };
 
   useEffect(() => {
+    const storedName = sessionStorage.getItem("userName");
     const email = sessionStorage.getItem("userEmail");
-    if (email) {
-      let namePart = email.split("@")[0];
-      namePart = namePart.charAt(0).toUpperCase() + namePart.slice(1);
-      
-      if(email === "admin@example.com" || email === "admin@atirath.com") {
-         setUserName("Syed Mohammad Johny Basha");
+    if (storedName && storedName.trim() !== "" && !storedName.includes("@")) {
+      setUserName(storedName);
+    } else if (email) {
+      if (email === "admin@example.com" || email === "admin@atirath.com") {
+        setUserName("Syed Mohammad Johny Basha");
       } else {
-         setUserName(namePart);
+        let namePart = email.split("@")[0];
+        namePart = namePart.split(/[._-]/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+        setUserName(namePart);
       }
     }
     fetchMetrics();

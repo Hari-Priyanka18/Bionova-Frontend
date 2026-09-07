@@ -30,7 +30,40 @@ const getNotifPriorityInfo = (notif) => {
   return { label: 'NORMAL', bg: '#f1f5f9', color: '#475569', border: '#e2e8f0' };
 };
 
-const Header = ({ title, subtitle, showSearch = false, statusBadge, progressPercent }) => {
+const formatDisplayName = (nameStr, emailStr) => {
+  let cleaned = nameStr;
+  if (!cleaned || cleaned === "User" || cleaned.toLowerCase() === "admin" || cleaned.includes("@")) {
+    const stored = sessionStorage.getItem("userName");
+    if (stored && stored !== "User" && stored.toLowerCase() !== "admin" && !stored.includes("@")) {
+      cleaned = stored;
+    }
+  }
+  if (!cleaned || cleaned.toLowerCase() === "admin" || cleaned.includes("@")) {
+    if (emailStr && (emailStr.toLowerCase().includes("admin") || emailStr === "admin@example.com" || emailStr === "admin@atirath.com")) {
+      return "Syed Mohammad Johny Basha";
+    }
+  }
+  if (cleaned && typeof cleaned === 'string' && cleaned.trim() !== '' && !cleaned.includes('@')) {
+    if (cleaned.toLowerCase() === "admin" && emailStr && emailStr.toLowerCase().includes("admin")) {
+      return "Syed Mohammad Johny Basha";
+    }
+    return cleaned.trim();
+  }
+  const target = (cleaned && cleaned.includes('@')) ? cleaned : (emailStr || '');
+  if (target && target.includes('@')) {
+    if (target.toLowerCase().includes("admin")) {
+      return "Syed Mohammad Johny Basha";
+    }
+    const namePart = target.split('@')[0];
+    return namePart
+      .split(/[._-]/)
+      .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(' ');
+  }
+  return cleaned || 'Syed Mohammad Johny Basha';
+};
+
+const Header = ({ title, subtitle, showSearch = false, statusBadge, progressPercent, userName: propUserName, userRole: propUserRole, initials: propInitials }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const [userName, setUserName] = useState("User");
@@ -57,7 +90,8 @@ const Header = ({ title, subtitle, showSearch = false, statusBadge, progressPerc
     
     setUserEmail(email);
 
-    if (storedName) setUserName(storedName);
+    if (propUserName) setUserName(propUserName);
+    else if (storedName) setUserName(storedName);
     if (storedRole) setUserRole(storedRole);
     if (storedPhoto) setPhotoUrl(storedPhoto);
     if (storedStatus) setUserAccountStatus(storedStatus);
@@ -92,7 +126,13 @@ const Header = ({ title, subtitle, showSearch = false, statusBadge, progressPerc
         if (res.ok) {
           const me = await res.json();
           if (me) {
-            const fullName = `${me.fstNm || me.firstName || ""} ${me.lstNm || me.lastName || ""}`.trim();
+            let fullName = `${me.fstNm || me.firstName || me.empNm || me.name || me.fullName || ""}`.trim();
+            if (me.lstNm || me.lastName) fullName = `${fullName} ${me.lstNm || me.lastName}`.trim();
+            if (!fullName || fullName.toLowerCase() === "admin" || fullName.toLowerCase() === "user" || fullName.includes("@")) {
+              if (email && email.toLowerCase().includes("admin")) {
+                fullName = "Syed Mohammad Johny Basha";
+              }
+            }
             const designation = me.designation || me.role || "User";
             const photo = me.photoUrl || null;
 
@@ -284,10 +324,7 @@ const Header = ({ title, subtitle, showSearch = false, statusBadge, progressPerc
   };
 
   const getGreeting = () => {
-    const hr = new Date().getHours();
-    if (hr >= 0 && hr < 12) return "Good Morning";
-    if (hr >= 12 && hr < 16) return "Good Afternoon";
-    return "Good Evening";
+    return "Welcome";
   };
 
   return (
@@ -643,7 +680,7 @@ const Header = ({ title, subtitle, showSearch = false, statusBadge, progressPerc
                             {notif.entityTyp === 'PROJECT' && <FolderOpen size={13} color="#3b82f6" />}
                             {notif.entityTyp === 'TASK' && <CheckSquare size={13} color="#10b981" />}
                             {notif.entityTyp === 'MILESTONE' && <Flag size={13} color="#f59e0b" />}
-                            <span style={{ fontSize: "13px", fontWeight: !notif.isRead ? "700" : "600", color: "#0f172a" }}>{notif.title}</span>
+                            <span style={{ fontSize: "13px", fontWeight: !notif.isRead ? "700" : "400", color: !notif.isRead ? "#0f172a" : "#64748b" }}>{notif.title}</span>
                           </div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
                             <span style={{
@@ -661,7 +698,7 @@ const Header = ({ title, subtitle, showSearch = false, statusBadge, progressPerc
                             <span style={{ fontSize: "10px", color: "#94a3b8", whiteSpace: "nowrap" }}>{formatNotifTime(notif.createdAt)}</span>
                           </div>
                         </div>
-                        <div style={{ fontSize: "12px", color: "#475569", lineHeight: "1.4", marginBottom: "6px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        <div style={{ fontSize: "12px", color: !notif.isRead ? "#1e293b" : "#64748b", fontWeight: !notif.isRead ? "600" : "400", lineHeight: "1.4", marginBottom: "6px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                           {notif.message}
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -776,7 +813,7 @@ const Header = ({ title, subtitle, showSearch = false, statusBadge, progressPerc
         {/* Animated Welcome Message (Shows only once after login) */}
         {showWelcome && (
           <div className="welcome-toast">
-            <span>🎉 {getGreeting()}, <strong style={{ fontWeight: '700' }}>{userName}</strong>!</span>
+            <span>🎉 {getGreeting()}, <strong style={{ fontWeight: '700' }}>{formatDisplayName(propUserName || userName, userEmail)}</strong>!</span>
           </div>
         )}
       </header>

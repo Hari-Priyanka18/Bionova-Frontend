@@ -494,11 +494,13 @@ const DepartmentMapping = ({ onLogout, userRole }) => {
     if (!tableSearchQuery) return true;
     const searchLower = tableSearchQuery.toLowerCase();
     const coyCodeStr = getCompanyCode(mapping.coyId).toLowerCase();
+    const coyNmStr = getCompanyName(mapping.coyId).toLowerCase();
     const deptCodeStr = getDeptCode(mapping.deptId).toLowerCase();
     const deptNmStr = getDeptName(mapping.deptId).toLowerCase();
     return (
       deptCodeStr.includes(searchLower) ||
       coyCodeStr.includes(searchLower) ||
+      coyNmStr.includes(searchLower) ||
       deptNmStr.includes(searchLower)
     );
   });

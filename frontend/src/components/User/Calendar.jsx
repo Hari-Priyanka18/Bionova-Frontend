@@ -152,6 +152,7 @@ const Calendar = ({ userRole, onLogout }) => {
               type: 'task',
               title: t.taskNm || t.taskName || t.taskTitle || "Task",
               date: t.endDt || t.enddt || t.dueDate || t.date || "",
+              startDate: t.stDt || t.stdt || t.startDate || t.start_date || "",
               status: t.taskSts || t.tasksts || t.status || "OPEN",
               code: t.taskCd || t.empTaskCd || "",
               description: t.taskDesc || "",
@@ -350,6 +351,10 @@ const Calendar = ({ userRole, onLogout }) => {
   const getUpcomingEvents = () => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
+    
+    const tomorrow = new Date(today);
+    tomorrow.setDate(today.getDate() + 1);
+
     const next7Days = new Date(today);
     next7Days.setDate(today.getDate() + 7);
     next7Days.setHours(23, 59, 59, 999);
@@ -371,7 +376,7 @@ const Calendar = ({ userRole, onLogout }) => {
         const evtDate = parseLocalDate(dateVal);
         if (!evtDate) return false;
         evtDate.setHours(0, 0, 0, 0);
-        return evtDate >= today && evtDate <= next7Days;
+        return evtDate >= tomorrow && evtDate <= next7Days;
       })
       .sort((a, b) => new Date(getEventDateString(a)) - new Date(getEventDateString(b)));
   };
@@ -664,6 +669,19 @@ const Calendar = ({ userRole, onLogout }) => {
                       year: 'numeric'
                     }) : evt.date;
 
+                    const rawStart = evt.startDate || evt.stDt || evt.stdt || evt.start_date || evt.st_dt;
+                    const parsedStart = parseLocalDate(rawStart);
+                    const formattedStart = parsedStart ? parsedStart.toLocaleDateString('en-GB', {
+                      day: '2-digit',
+                      month: 'short',
+                      year: 'numeric'
+                    }) : rawStart;
+
+                    let dateDisplay = formattedDate;
+                    if (formattedStart && formattedStart !== formattedDate) {
+                      dateDisplay = `${formattedStart} - ${formattedDate}`;
+                    }
+
                     return (
                       <div 
                         key={evt.id} 
@@ -682,7 +700,7 @@ const Calendar = ({ userRole, onLogout }) => {
                           <div className="upcoming-subtitle" style={{ textTransform: 'capitalize' }}>{eventType}</div>
                         </div>
                         <div className="upcoming-time">
-                          {formattedDate}
+                          {dateDisplay}
                           {evt.time && <><br/>{evt.time}</>}
                         </div>
                       </div>

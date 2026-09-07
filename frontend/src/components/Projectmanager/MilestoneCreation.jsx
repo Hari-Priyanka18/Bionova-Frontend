@@ -1331,7 +1331,13 @@ const MilestoneCreation = ({ onLogout, userRole }) => {
     }
   };
   const removeChecklistItem = (index) => {
-    const updatedChecklist = (selectedTask.checklist || []).filter((_, i) => i !== index);
+    const updatedChecklist = (selectedTask.checklist || [])
+      .filter((_, i) => i !== index)
+      .map((item, i) => ({
+        ...item,
+        chk_cd: `CHK-${i + 1}`,
+        seq_no: i + 1
+      }));
     const updatedTask = { ...selectedTask, checklist: updatedChecklist };
     setSelectedTask(updatedTask);
     if (editingTaskIndex !== null && editingTaskIndex >= 0) {

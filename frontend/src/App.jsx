@@ -80,7 +80,13 @@ const AppContent = () => {
   };
 
   const handleLogout = () => {
+    const hiddenNotifs = localStorage.getItem("hiddenNotifIds");
+    const rememberedEmail = localStorage.getItem("rememberedEmail");
+    const rememberedPassword = localStorage.getItem("rememberedPassword");
     localStorage.clear();
+    if (hiddenNotifs) localStorage.setItem("hiddenNotifIds", hiddenNotifs);
+    if (rememberedEmail) localStorage.setItem("rememberedEmail", rememberedEmail);
+    if (rememberedPassword) localStorage.setItem("rememberedPassword", rememberedPassword);
     sessionStorage.clear();
     setIsLoggedIn(false);
     setUserRole("user");

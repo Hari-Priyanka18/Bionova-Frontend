@@ -694,8 +694,9 @@ const UserDashboard = ({ userRole, onLogout }) => {
         { label: "Overdue", count: taskCounts.overdue || 0, pct: taskTotal > 0 ? ((taskCounts.overdue / taskTotal) * 100).toFixed(1) + "%" : "0.0%", color: "#ef4444" },
       ];
 
+      const profFullName = profRes ? `${profRes.fstNm || profRes.firstName || profRes.empNm || profRes.name || ''} ${profRes.lstNm || profRes.lastName || ''}`.trim() : '';
       const dashboard = {
-        fullName: data.fullName || "",
+        fullName: data.fullName || profFullName || sessionStorage.getItem("userName") || "",
         role: data.role || "",
         empId: data.empId || null,
         taskCounts,
