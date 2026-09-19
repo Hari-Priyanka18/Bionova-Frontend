@@ -159,7 +159,7 @@ const AdminDashboard = ({ userRole, onLogout }) => {
   const [metrics, setMetrics] = useState(null);
   
   // User Name State
-  const [userName, setUserName] = useState("Syed Mohammad Johny Basha");
+  const [userName, setUserName] = useState(() => sessionStorage.getItem("userName"));
 
   // Selected Member Performance Modal State
   const [selectedMemberModal, setSelectedMemberModal] = useState(null);
@@ -225,15 +225,15 @@ const AdminDashboard = ({ userRole, onLogout }) => {
   useEffect(() => {
     const storedName = sessionStorage.getItem("userName");
     const email = sessionStorage.getItem("userEmail");
-    if (storedName && storedName.trim() !== "" && !storedName.includes("@")) {
+    if (storedName && storedName.trim() !== "" && storedName !== "User" && !storedName.includes("@")) {
       setUserName(storedName);
     } else if (email) {
       if (email === "admin@example.com" || email === "admin@atirath.com") {
         setUserName("Syed Mohammad Johny Basha");
       } else {
-        let namePart = email.split("@")[0];
-        namePart = namePart.split(/[._-]/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
-        setUserName(namePart);
+        let namePart = email.split("@")[0].replace(/[0-9]/g, '');
+        namePart = namePart.split(/[._-]/).filter(Boolean).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+        setUserName(namePart || "User");
       }
     }
     fetchMetrics();

@@ -94,6 +94,8 @@ export default function ProjectList({ userRole, onLogout }) {
           priority: dynamicPrio.priority,
           priorityMeta: dynamicPrio,
           status: l.prjSts || 'LIVE',
+          leadLagSts: l.leadLagSts || l.lead_lag_sts || '',
+          actCmpDt: l.actCmpDt || l.act_cmp_dt || null,
           startDate: l.stDt || '',
           endDate: l.endDt || '',
           totalProjectDays: l.noOfDays || '',
@@ -110,6 +112,34 @@ export default function ProjectList({ userRole, onLogout }) {
   };
 
   useEffect(() => { fetchProjects(); }, []);
+
+  // Helper to determine schedule badge for closed projects (LEAD / LAG / ON TRACK)
+  const getProjectScheduleInfo = (p) => {
+    let actDateStr = p.actCmpDt;
+    let endDateStr = p.endDate;
+
+    if (actDateStr && endDateStr) {
+      const actD = new Date(actDateStr);
+      const endD = new Date(endDateStr);
+      if (!isNaN(actD.getTime()) && !isNaN(endD.getTime())) {
+        actD.setHours(0, 0, 0, 0);
+        endD.setHours(0, 0, 0, 0);
+        const diffDays = Math.round((endD.getTime() - actD.getTime()) / (1000 * 60 * 60 * 24));
+        if (diffDays > 0) {
+          return { type: 'lead', tag: 'Lead', label: `LEAD (${diffDays} DAYS)`, className: 'lead' };
+        } else if (diffDays < 0) {
+          return { type: 'lag', tag: 'Lag', label: `LAG (${Math.abs(diffDays)} DAYS)`, className: 'lag' };
+        } else {
+          return { type: 'on_track', tag: 'On Track', label: 'ON TRACK', className: 'on-track' };
+        }
+      }
+    }
+
+    const sts = (p.leadLagSts || '').toUpperCase();
+    if (sts === 'LEAD') return { type: 'lead', tag: 'Lead', label: 'LEAD', className: 'lead' };
+    if (sts === 'LAG') return { type: 'lag', tag: 'Lag', label: 'LAG', className: 'lag' };
+    return { type: 'on_track', tag: 'On Track', label: 'ON TRACK', className: 'on-track' };
+  };
 
   // Filter logic – search includes company, plant, department
   const filteredProjects = projects.filter(p => {
@@ -336,8 +366,45 @@ export default function ProjectList({ userRole, onLogout }) {
                         <td>{p.companyName || 'N/A'}</td>
                         <td>{p.plantName || 'N/A'}</td>
                         <td>{p.department || 'N/A'}</td>
-                        <td><span className={`pl-badge ${getPriorityClass(p.priority)}`}>{p.priority}</span></td>
-                        <td><span className={`pl-badge ${getStatusClass(p.status)}`}>{p.status}</span></td>
+                        <td>
+                          {(p.status?.toUpperCase() === 'CLOSED' || p.status?.toUpperCase() === 'COMPLETED') ? (
+                            <span style={{ color: "#94a3b8", fontWeight: 600 }}>-</span>
+                          ) : (
+                            <span className={`pl-badge ${getPriorityClass(p.priority)}`}>{p.priority}</span>
+                          )}
+                        </td>
+                        <td>
+                          {(p.status?.toUpperCase() === 'CLOSED' || p.status?.toUpperCase() === 'COMPLETED') ? (
+                            (() => {
+                              const sch = getProjectScheduleInfo(p);
+                              return (
+                                <span style={{
+                                  display: "inline-block",
+                                  textAlign: "center",
+                                  lineHeight: "1.2",
+                                  padding: "4px 10px",
+                                  borderRadius: "4px",
+                                  fontWeight: 600,
+                                  fontSize: "11px",
+                                  backgroundColor: "#dcfce7",
+                                  border: "1px solid #bbf7d0"
+                                }}>
+                                  <span style={{ color: "#16a34a", display: "block" }}>Closed</span>
+                                  <span style={{
+                                    display: "block",
+                                    fontSize: "10px",
+                                    fontWeight: 700,
+                                    color: sch.type === "lead" ? "#16a34a" : (sch.type === "lag" ? "#dc2626" : "#2563eb")
+                                  }}>
+                                    ({sch.tag})
+                                  </span>
+                                </span>
+                              );
+                            })()
+                          ) : (
+                            <span className={`pl-badge ${getStatusClass(p.status)}`}>{p.status}</span>
+                          )}
+                        </td>
                         <td>{p.startDate || 'N/A'}</td>
                         <td>{p.endDate || 'N/A'}</td>
                         <td>{p.totalProjectDays || 'N/A'}</td>

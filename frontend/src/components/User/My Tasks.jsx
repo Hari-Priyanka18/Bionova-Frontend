@@ -3004,11 +3004,20 @@ const MyTasks = ({ userRole, onLogout }) => {
     const isDoer = isExternalMode || String(rawTask.empId || rawTask.assignedTo || rawTask.extEmpId) === String(currentUserEmpId) || String(rawTask.assignedBy || rawTask.assigned_by || rawTask.createdBy) === String(currentUserEmpId) || isTeamMember || (!isReviewer && !isApprover);
 
     // Get current progress and process for display
+    const rawSubStatus = String(rawTask?.subStatus || rawTask?.sub_status || task?.subStatus || task?.sub_status || task?.processStatus || '').trim().toUpperCase();
+    const rawStatusNm = String(rawTask?.statusNm || rawTask?.status_nm || rawTask?.taskSts || task?.rawStatus || task?.status || '').trim().toUpperCase();
     const currentProgress = (rawTask.taskSts || task.rawStatus || task.status || "OPEN").toUpperCase();
-    const currentProcess = rawTask.prcsYesActn || (rawTask.subStatus === "Under Review" ? "PENDING_REVIEWER" : "NONE");
+    const currentProcess = String(rawTask.prcsYesActn || (rawSubStatus === "UNDER REVIEW" ? "PENDING_REVIEWER" : "NONE")).trim().toUpperCase();
 
-    // Determine if task is in review
-    const isUnderReview = currentProcess === "PENDING_REVIEWER" || currentProcess === "PENDING_APPROVER" || currentProcess === "UNDER_REVIEW";
+    // Determine if task is in review (with Reviewer/Approver, and not in Reassign/Rework)
+    const isUnderReview = (
+      currentProcess === "PENDING_REVIEWER" ||
+      currentProcess === "PENDING_APPROVER" ||
+      currentProcess === "UNDER_REVIEW" ||
+      rawSubStatus === "UNDER REVIEW" ||
+      rawStatusNm === "UNDER_REVIEW" ||
+      rawStatusNm === "UNDER REVIEW"
+    ) && rawSubStatus !== "REASSIGN" && rawSubStatus !== "REWORK" && currentProcess !== "REASSIGN" && currentProcess !== "REWORK";
 
     const renderTeamMember = (empId, role, label, fallbackName = null, isExternal = false) => {
       if (!empId && !fallbackName) return null;
@@ -3761,7 +3770,7 @@ const MyTasks = ({ userRole, onLogout }) => {
                   <Users size={18} color="#475569" />
                   Team Members {taskTeamMembers.length > 0 ? `(${taskTeamMembers.length})` : ''}
                 </div>
-                {!isCompleted && !showAddMemberModal && (
+                {!isCompleted && !isUnderReview && !showAddMemberModal && (
                   String(rawTask.empId || rawTask.executorId) === String(currentUserEmpId) && !isReviewer && !isApprover
                 ) && (
                     <button onClick={() => setShowAddMemberModal(true)} style={{ padding: "6px 12px", fontSize: "13px", fontWeight: "600", color: "#3B82F6", backgroundColor: "#DBEAFE", border: "none", borderRadius: "6px", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px" }}>
@@ -3781,7 +3790,7 @@ const MyTasks = ({ userRole, onLogout }) => {
                     const empInitials = getEmployeeInitials(tm.empId, employeesList, tm.fallbackName) || tm.label || "TM";
                     const empPhoto = getEmployeePhoto(tm.empId, employeesList);
                     const isPrimaryExec = String(rawTask.empId || rawTask.executorId) === String(currentUserEmpId);
-                    const canManageTeam = !isCompleted && isPrimaryExec && !isReviewer && !isApprover;
+                    const canManageTeam = !isCompleted && !isUnderReview && isPrimaryExec && !isReviewer && !isApprover;
                     return (
                       <div key={idx} style={{ display: "flex", alignItems: "center", gap: "8px", backgroundColor: "#f8fafc", padding: "6px 12px", borderRadius: "20px", border: "1px solid #e2e8f0" }}>
                         {empPhoto ? (

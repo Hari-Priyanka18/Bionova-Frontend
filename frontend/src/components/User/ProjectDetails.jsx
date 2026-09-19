@@ -83,10 +83,23 @@ const ProjectDetails = ({ userRole, onLogout }) => {
   const [tasks, setTasks] = useState([]);
   const [leadLagDetail, setLeadLagDetail] = useState(null);
 
+  const isClosed = Boolean(
+    project?.status && ['CLOSED', 'COMPLETED'].includes(project.status.toUpperCase().trim())
+  );
+
   let tabs = ['Overview', 'Milestones & Tasks', 'Gantt Chart', 'Forecasting', 'Documents', 'Change Logs'];
+  if (isClosed) {
+    tabs = tabs.filter(t => t !== 'Forecasting');
+  }
   if (viewMode === 'milestones_only') {
     tabs = ['Milestones & Tasks'];
   }
+
+  useEffect(() => {
+    if (isClosed && activeTab === 'Forecasting') {
+      setActiveTab('Overview');
+    }
+  }, [isClosed, activeTab]);
 
   useEffect(() => {
     const fetchProject = async () => {
@@ -369,9 +382,6 @@ const ProjectDetails = ({ userRole, onLogout }) => {
     }
   };
 
-  const isClosed = Boolean(
-    project?.status && ['CLOSED', 'COMPLETED'].includes(project.status.toUpperCase().trim())
-  );
   const leadLag = getProjectLeadLag(project, leadLagDetail, tasks);
 
   const dynamicPriorityInfo = calculateDynamicPriority(

@@ -213,6 +213,16 @@ const getPriorityBadgeInfo = (priorityStr) => {
   return { label: priorityStr || 'Medium', bg: '#fff7ed', color: '#f97316', border: '#ffedd5' };
 };
 
+const getStatusColor = (status) => {
+  const s = String(status || '').toUpperCase().trim();
+  if (s === 'CLOSED' || s === 'COMPLETED') return '#16a34a';
+  if (s === 'OVERDUE') return '#dc2626';
+  if (s === 'IN PROGRESS' || s === 'IN_PROGRESS' || s === 'WIP') return '#ea580c';
+  if (s === 'UNDER REVIEW' || s === 'UNDER_REVIEW' || s === 'SUBMIT_REVIEW') return '#9333ea';
+  if (s === 'NOT STARTED' || s === 'OPEN') return '#2563eb';
+  return '#2563eb';
+};
+
 const mapBackendTask = (t, projects, milestones, employees, externalEmployees = []) => {
   const tMId = String(t.mId || t.mid || t.milestoneId || t.drftMId || t.drft_m_id);
   const milestone = (milestones || []).find(m => (m.mId || m.mid || m.id) && String(m.mId || m.mid || m.id) === tMId);
@@ -479,10 +489,11 @@ const TaskBoard = ({ userRole, onLogout }) => {
     const matchAssignee = selectedAssignee === "All Employees" || task.assignee === selectedAssignee;
     const matchTaskType = selectedTaskType === "All" || task.taskType === selectedTaskType;
     const matchPriority = selectedPriority === "All" || (!isClosed && task.priority === selectedPriority);
+    const query = searchQuery.trim().toLowerCase();
     const matchSearch =
-      task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      task.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (task.description && task.description.toLowerCase().includes(searchQuery.toLowerCase()));
+      !query ||
+      (task.title && task.title.toLowerCase().includes(query)) ||
+      (task.id && task.id.toLowerCase().includes(query));
 
     return matchProject && matchMilestone && matchAssignee && matchTaskType && matchPriority && matchSearch;
   });
@@ -635,14 +646,35 @@ const TaskBoard = ({ userRole, onLogout }) => {
   };
 
   // ─── Helpers ──────────────────────────────────────────────────────────
-  const formatDate = (dateStr) => {
-    if (!dateStr) return "";
-    const parts = dateStr.split("-");
-    if (parts.length !== 3) return dateStr;
-    const day = parts[2];
-    const monthIndex = parseInt(parts[1], 10) - 1;
-    const monthsFull = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-    return `${parseInt(day, 10)}-${monthsFull[monthIndex]}-${parts[0]}`;
+  const formatDate = (dateVal) => {
+    if (!dateVal || dateVal === "N/A" || dateVal === "null" || dateVal === "undefined") return "";
+    try {
+      const str = String(dateVal).trim();
+      const cleanStr = str.split('T')[0].split(' ')[0];
+      
+      const ymdMatch = cleanStr.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/);
+      if (ymdMatch) {
+        const [, y, m, d] = ymdMatch;
+        return `${d.padStart(2, '0')}-${m.padStart(2, '0')}-${y}`;
+      }
+      
+      const dmyMatch = cleanStr.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
+      if (dmyMatch) {
+        const [, d, m, y] = dmyMatch;
+        return `${d.padStart(2, '0')}-${m.padStart(2, '0')}-${y}`;
+      }
+      
+      const dateObj = new Date(dateVal);
+      if (!isNaN(dateObj.getTime())) {
+        const day = String(dateObj.getDate()).padStart(2, '0');
+        const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+        const year = dateObj.getFullYear();
+        return `${day}-${month}-${year}`;
+      }
+      return str;
+    } catch {
+      return String(dateVal);
+    }
   };
 
   const getInitials = (name) => {
@@ -783,7 +815,7 @@ const TaskBoard = ({ userRole, onLogout }) => {
                           </div>
                           <div className="tb-proj-meta-item">
                             <CalendarIcon size={13} />
-                            <span>{`${proj.stDt || "N/A"} to ${proj.endDt || "N/A"}`}</span>
+                            <span>{`${formatDate(proj.stDt) || "N/A"} to ${formatDate(proj.endDt) || "N/A"}`}</span>
                           </div>
                         </div>
                       </div>
@@ -923,9 +955,17 @@ const TaskBoard = ({ userRole, onLogout }) => {
                           </div>
                           <span className="tb-card-name">{task.assignee}</span>
                         </div>
-                        <div className="tb-card-date-info">
-                          <CalendarIcon size={12} />
-                          <span>{formatDate(task.dueDate)}</span>
+                        <div className="tb-card-date-info" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
+                          {task.startDate && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '3px', color: '#64748b', fontSize: '10px' }}>
+                              <span style={{ color: '#94a3b8', fontSize: '9.5px' }}>Start:</span>
+                              <span>{formatDate(task.startDate)}</span>
+                            </div>
+                          )}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '10.5px' }}>
+                            <span style={{ color: '#94a3b8', fontSize: '9.5px' }}>Due:</span>
+                            <span>{formatDate(task.dueDate)}</span>
+                          </div>
                         </div>
 
                       </div>
@@ -1003,9 +1043,17 @@ const TaskBoard = ({ userRole, onLogout }) => {
                           </div>
                           <span className="tb-card-name">{task.assignee}</span>
                         </div>
-                        <div className="tb-card-date-info">
-                          <CalendarIcon size={12} />
-                          <span>{formatDate(task.dueDate)}</span>
+                        <div className="tb-card-date-info" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
+                          {task.startDate && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '3px', color: '#64748b', fontSize: '10px' }}>
+                              <span style={{ color: '#94a3b8', fontSize: '9.5px' }}>Start:</span>
+                              <span>{formatDate(task.startDate)}</span>
+                            </div>
+                          )}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '10.5px' }}>
+                            <span style={{ color: '#94a3b8', fontSize: '9.5px' }}>Due:</span>
+                            <span>{formatDate(task.dueDate)}</span>
+                          </div>
                         </div>
 
                       </div>
@@ -1083,9 +1131,17 @@ const TaskBoard = ({ userRole, onLogout }) => {
                           </div>
                           <span className="tb-card-name">{task.assignee}</span>
                         </div>
-                        <div className="tb-card-date-info">
-                          <CalendarIcon size={12} />
-                          <span>{formatDate(task.dueDate)}</span>
+                        <div className="tb-card-date-info" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
+                          {task.startDate && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '3px', color: '#64748b', fontSize: '10px' }}>
+                              <span style={{ color: '#94a3b8', fontSize: '9.5px' }}>Start:</span>
+                              <span>{formatDate(task.startDate)}</span>
+                            </div>
+                          )}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '10.5px' }}>
+                            <span style={{ color: '#94a3b8', fontSize: '9.5px' }}>Due:</span>
+                            <span>{formatDate(task.dueDate)}</span>
+                          </div>
                         </div>
 
                       </div>
@@ -1179,9 +1235,17 @@ const TaskBoard = ({ userRole, onLogout }) => {
                           </div>
                           <span className="tb-card-name">{task.assignee}</span>
                         </div>
-                        <div className="tb-card-date-info">
-                          <CalendarIcon size={12} />
-                          <span>{formatDate(task.dueDate)}</span>
+                        <div className="tb-card-date-info" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
+                          {task.startDate && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '3px', color: '#64748b', fontSize: '10px' }}>
+                              <span style={{ color: '#94a3b8', fontSize: '9.5px' }}>Start:</span>
+                              <span>{formatDate(task.startDate)}</span>
+                            </div>
+                          )}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '10.5px' }}>
+                            <span style={{ color: '#94a3b8', fontSize: '9.5px' }}>Due:</span>
+                            <span>{formatDate(task.dueDate)}</span>
+                          </div>
                         </div>
 
                       </div>
@@ -1259,9 +1323,17 @@ const TaskBoard = ({ userRole, onLogout }) => {
                           </div>
                           <span className="tb-card-name">{task.assignee}</span>
                         </div>
-                        <div className="tb-card-date-info urgent">
-                          <CalendarIcon size={12} />
-                          <span>{formatDate(task.dueDate)}</span>
+                        <div className="tb-card-date-info urgent" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
+                          {task.startDate && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '3px', color: '#64748b', fontSize: '10px' }}>
+                              <span style={{ color: '#94a3b8', fontSize: '9.5px' }}>Start:</span>
+                              <span>{formatDate(task.startDate)}</span>
+                            </div>
+                          )}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '10.5px', color: '#dc2626' }}>
+                            <span style={{ color: '#dc2626', fontSize: '9.5px', opacity: 0.85 }}>Due:</span>
+                            <span style={{ fontWeight: 700 }}>{formatDate(task.dueDate)}</span>
+                          </div>
                         </div>
 
                       </div>
@@ -1347,7 +1419,8 @@ const TaskBoard = ({ userRole, onLogout }) => {
                 <div className="tb-modal-detail-row">
                   <span className="tb-modal-detail-label">Status</span>
                   <span className="tb-modal-detail-value" style={{
-                    color: selectedTask.status === "Completed" ? "#16a34a" : selectedTask.status === "Overdue" ? "#dc2626" : "#2563eb",
+                    color: getStatusColor(selectedTask.status),
+                    fontWeight: '700',
                     textTransform: "uppercase"
                   }}>{selectedTask.status}</span>
                 </div>
@@ -1406,6 +1479,13 @@ const TaskBoard = ({ userRole, onLogout }) => {
                   <span className="tb-modal-detail-value">{selectedTask.taskType}</span>
                 </div>
               </div>
+
+              {selectedTask.startDate && (
+                <div className="tb-modal-detail-row">
+                  <span className="tb-modal-detail-label">Start Date</span>
+                  <span className="tb-modal-detail-value">{formatDate(selectedTask.startDate)}</span>
+                </div>
+              )}
 
               <div className="tb-modal-detail-row">
                 <span className="tb-modal-detail-label">Due Date</span>

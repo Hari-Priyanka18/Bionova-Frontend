@@ -64,9 +64,79 @@ const AppContent = () => {
 
   const getDashboardRoute = (role) => {
     const lowerRole = role?.toLowerCase() || '';
-    if (lowerRole === 'admin' || lowerRole === 'full_access') {
+    if (lowerRole === 'admin' || lowerRole === 'super_admin' || lowerRole === 'full_access') {
       return '/dashboard';
-    } else if (lowerRole === 'project_manager' || lowerRole === 'pm' || lowerRole === 'manager') {
+    }
+
+    // Check RBAC permissions in sessionStorage / localStorage
+    const rawPerms = sessionStorage.getItem("userPermissions") || localStorage.getItem("userPermissions");
+    if (rawPerms) {
+      try {
+        const perms = JSON.parse(rawPerms);
+        
+        // 1. Admin Dashboard access -> /dashboard
+        const hasAdminDashboard = perms.some(
+          p => p.screenCode === 'ADMIN_DASHBOARD' && (p.viewFlg || p.view_flg)
+        );
+        if (hasAdminDashboard) {
+          return '/dashboard';
+        }
+
+        // 2. Project Dashboard access -> /pm-dashboard
+        const hasProjectDashboard = perms.some(
+          p => (p.screenCode === 'PROJECT_DASHBOARD' || p.screenCode === 'PROJECT_CREATION') && (p.viewFlg || p.view_flg)
+        );
+        if (hasProjectDashboard) {
+          return '/pm-dashboard';
+        }
+
+        // 3. User Dashboard access -> /user-dashboard
+        const hasUserDashboard = perms.some(
+          p => p.screenCode === 'USER_DASHBOARD' && (p.viewFlg || p.view_flg)
+        );
+        if (hasUserDashboard) {
+          return '/user-dashboard';
+        }
+
+        // 4. Any other accessible screen
+        const firstAllowed = perms.find(p => (p.viewFlg || p.view_flg));
+        if (firstAllowed) {
+          const SCREEN_PATHS = {
+            'ADMIN_DASHBOARD': '/dashboard',
+            'COMPANY_CREATION': '/company-creation',
+            'PLANT_CREATION': '/plant-creation',
+            'LAND_CREATION': '/agriland-allocation',
+            'DEPARTMENT_CREATION': '/department-creation',
+            'DEPARTMENT_MAPPING': '/department-mapping',
+            'DESIGNATION_CREATION': '/designation-creation',
+            'EMPLOYEE_CREATION': '/employee-creation',
+            'PROJECT_CREATION': '/project-creation',
+            'MILESTONE_CREATION': '/milestone-creation',
+            'PROJECT_DASHBOARD': '/pm-dashboard',
+            'TASK_BOARD': '/task-board',
+            'GANTT_CHART': '/all-project-gantt-chart',
+            'ALL_PROJECT_GANTT_CHART': '/all-project-gantt-chart',
+            'USER_DASHBOARD': '/user-dashboard',
+            'MY_TASK': '/my-tasks',
+            'MY_PROJECTS': '/projects',
+            'CALENDAR': '/calendar',
+            'USER_TASK_BOARD': '/user-task-board',
+            'PUBLIC_HOLIDAYS': '/public-holidays',
+            'PROFILE': '/profile',
+            'INDIVIDUAL_TASK': '/assignment',
+            'ASSIGN_ACCESS': '/assign-access',
+            'PROJECT_ACCESS': '/project-access'
+          };
+          if (SCREEN_PATHS[firstAllowed.screenCode]) {
+            return SCREEN_PATHS[firstAllowed.screenCode];
+          }
+        }
+      } catch (e) {
+        console.warn("Error checking permissions in getDashboardRoute:", e);
+      }
+    }
+
+    if (lowerRole === 'project_manager' || lowerRole === 'pm' || lowerRole === 'manager') {
       return '/pm-dashboard';
     } else {
       return '/user-dashboard';

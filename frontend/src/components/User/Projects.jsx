@@ -371,8 +371,9 @@ const MyProjects = ({ userRole, onLogout }) => {
     return matchSearch && matchFilter;
   });
 
-  const totalPages = Math.ceil(filtered.length / projectsPerPage);
-  const paged = filtered.slice((currentPage - 1) * projectsPerPage, currentPage * projectsPerPage);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / projectsPerPage));
+  const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
+  const paged = filtered.slice((safeCurrentPage - 1) * projectsPerPage, safeCurrentPage * projectsPerPage);
 
   const progressColor = (pct) => pct >= 70 ? "#10b981" : pct >= 40 ? "#3b82f6" : "#f59e0b";
   
@@ -428,7 +429,10 @@ const MyProjects = ({ userRole, onLogout }) => {
                     placeholder="Search projects..."
                     value={searchQuery}
                     maxLength={25}
-                    onChange={e => setSearchQuery(e.target.value.slice(0, 25))}
+                    onChange={e => {
+                      setSearchQuery(e.target.value.slice(0, 25));
+                      setCurrentPage(1);
+                    }}
                   />
                 </div>
                 <div className="mp-filter-wrap">
@@ -570,11 +574,15 @@ const MyProjects = ({ userRole, onLogout }) => {
 
               {/* Pagination */}
               <div className="mp-pagination">
-                <span>{filtered.length === 0 ? "Showing 0 of 0 projects" : `Showing 1 to ${filtered.length} of ${filtered.length} projects`}</span>
+                <span>
+                  {filtered.length === 0 
+                    ? "Showing 0 of 0 projects" 
+                    : `Showing ${(safeCurrentPage - 1) * projectsPerPage + 1} to ${Math.min(filtered.length, safeCurrentPage * projectsPerPage)} of ${filtered.length} projects`}
+                </span>
                 <div className="mp-pag-controls">
-                  <button disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)}><ChevronLeft size={14} /></button>
-                  <span className="mp-pag-page">{currentPage}</span>
-                  <button disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => p + 1)}><ChevronRight size={14} /></button>
+                  <button disabled={safeCurrentPage === 1} onClick={() => setCurrentPage(p => Math.max(1, p - 1))}><ChevronLeft size={14} /></button>
+                  <span className="mp-pag-page">{safeCurrentPage}</span>
+                  <button disabled={safeCurrentPage >= totalPages} onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}><ChevronRight size={14} /></button>
                 </div>
               </div>
             </div>

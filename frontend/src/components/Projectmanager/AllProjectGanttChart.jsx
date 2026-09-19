@@ -173,27 +173,25 @@ const DdMmYyyyDateInput = ({ value, onChange, title }) => {
   }, [value]);
 
   const handleTextChange = (e) => {
-    let raw = e.target.value.replace(/[^0-9/]/g, '');
-    const cleanDigits = raw.replace(/\//g, '');
-    if (cleanDigits.length > 0 && !raw.includes('/')) {
-      if (cleanDigits.length <= 2) {
-        raw = cleanDigits;
-      } else if (cleanDigits.length <= 4) {
-        raw = `${cleanDigits.slice(0, 2)}/${cleanDigits.slice(2)}`;
-      } else {
-        raw = `${cleanDigits.slice(0, 2)}/${cleanDigits.slice(2, 4)}/${cleanDigits.slice(4, 8)}`;
-      }
+    const rawDigits = e.target.value.replace(/\D/g, '').slice(0, 8);
+    let formatted = rawDigits;
+    if (rawDigits.length > 4) {
+      formatted = `${rawDigits.slice(0, 2)}/${rawDigits.slice(2, 4)}/${rawDigits.slice(4)}`;
+    } else if (rawDigits.length > 2) {
+      formatted = `${rawDigits.slice(0, 2)}/${rawDigits.slice(2)}`;
     }
+    setDisplayText(formatted);
 
-    setDisplayText(raw);
-
-    if (raw.length === 10) {
-      const iso = displayToIso(raw);
-      const testD = new Date(iso);
-      if (!isNaN(testD.getTime())) {
+    if (rawDigits.length === 8) {
+      const d = rawDigits.slice(0, 2);
+      const m = rawDigits.slice(2, 4);
+      const y = rawDigits.slice(4);
+      const iso = `${y}-${m}-${d}`;
+      const testD = parseLocalDate(iso);
+      if (testD && !isNaN(testD.getTime())) {
         onChange(iso);
       }
-    } else if (raw === '') {
+    } else if (rawDigits.length === 0) {
       onChange('');
     }
   };
@@ -292,8 +290,6 @@ export default function AllProjectGanttChart({ userRole, onLogout }) {
 
   const [loading, setLoading] = useState(true);
   const [ganttRows, setGanttRows] = useState([]);
-  const [timelineStart, setTimelineStart] = useState(new Date());
-  const [months, setMonths] = useState([]);
   const [stats, setStats] = useState({ total: 0, completed: 0, inProgress: 0, notStarted: 0, overdue: 0 });
 
   const [markerOff, setMarkerOff] = useState(null); 
@@ -316,11 +312,17 @@ export default function AllProjectGanttChart({ userRole, onLogout }) {
       const projRow = ganttRows.find(r => r.type === 'project' && String(r.id) === String(projectFilter));
       if (projRow) {
         setSingleProjectView(projRow);
-        setTableCollapsed(true);
         setExpandedProjects(prev => new Set([...prev, projRow.id]));
       }
     }
   }, [ganttRows, projectFilter, singleProjectView]);
+
+  useEffect(() => {
+    setMarkerOff(null);
+    if (timelineRef.current) {
+      timelineRef.current.scrollTo({ left: 0, behavior: 'smooth' });
+    }
+  }, [projectFilter, startDateFilter, endDateFilter]);
 
   const handleDragStart = (e) => {
     dragState.current = { isDragging: true, startX: e.clientX, startW: tableWidth };
@@ -340,7 +342,7 @@ export default function AllProjectGanttChart({ userRole, onLogout }) {
   };
 
   const handleDragEnd = () => {
-    dragState.current.isDragging = false;
+    dragState.current = false;
     document.removeEventListener("mousemove", handleDragMove);
     document.removeEventListener("mouseup", handleDragEnd);
     document.body.style.cursor = 'default';
@@ -386,6 +388,30 @@ export default function AllProjectGanttChart({ userRole, onLogout }) {
     const month = d.toLocaleDateString('en-GB', { month: 'short' });
     const year = String(d.getFullYear()).slice(-2);
     return `${day}-${month}-${year}`;
+  };
+
+  // Helper: check if an item overlaps with date filter [startFilter, endFilter]
+  const isItemInRange = (item, startFilter, endFilter) => {
+    if (!startFilter && !endFilter) return true;
+    const iStart = parseLocalDate(item.rawStart);
+    const iEnd = parseLocalDate(item.rawEnd || item.rawStart);
+    if (!iStart && !iEnd) return false;
+
+    const effectiveStart = iStart || iEnd;
+    const effectiveEnd = iEnd || iStart;
+
+    if (startFilter) {
+      const sF = parseLocalDate(startFilter);
+      if (sF && effectiveEnd < sF) return false;
+    }
+    if (endFilter) {
+      const eF = parseLocalDate(endFilter);
+      if (eF) {
+        eF.setHours(23, 59, 59, 999);
+        if (effectiveStart > eF) return false;
+      }
+    }
+    return true;
   };
 
   // Returns exact day offset from timeline start (month boundary aligned)
@@ -448,17 +474,6 @@ export default function AllProjectGanttChart({ userRole, onLogout }) {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
-        let minDate = null;
-        let maxDate = null;
-
-        const updateMinMax = (dateStr) => {
-          if (!dateStr) return;
-          const d = parseLocalDate(dateStr);
-          if (!d || isNaN(d.getTime())) return;
-          if (!minDate || d < minDate) minDate = d;
-          if (!maxDate || d > maxDate) maxDate = d;
-        };
-
         const mapStatus = (statusStr, endDate) => {
           const s = (statusStr || 'Not Started').toUpperCase();
           let label = 'Not Started';
@@ -485,33 +500,7 @@ export default function AllProjectGanttChart({ userRole, onLogout }) {
           else kpi.notStarted++;
         });
 
-        rawItems.forEach(item => {
-          updateMinMax(item.startDate);
-          updateMinMax(item.endDate);
-        });
-
         setStats(kpi);
-
-        if (!minDate) minDate = new Date();
-        if (!maxDate) maxDate = new Date(minDate.getTime() + 180 * 24 * 60 * 60 * 1000);
-
-        const tStart = new Date(minDate.getFullYear(), minDate.getMonth(), 1);
-        let monthCount = (maxDate.getFullYear() - tStart.getFullYear()) * 12 + (maxDate.getMonth() - tStart.getMonth()) + 2;
-        if (monthCount < 6) monthCount = 6;
-        if (monthCount > 36) monthCount = 36;
-
-        const monthsList = [];
-        let current = new Date(tStart);
-        for (let i = 0; i < monthCount; i++) {
-          const year = current.getFullYear();
-          const month = current.getMonth();
-          const label = current.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
-          const days = new Date(year, month + 1, 0).getDate();
-          monthsList.push({ label, days, year, month });
-          current.setMonth(current.getMonth() + 1);
-        }
-        setTimelineStart(tStart);
-        setMonths(monthsList);
 
         const result = [];
         
@@ -520,9 +509,7 @@ export default function AllProjectGanttChart({ userRole, onLogout }) {
           const prjItem = rawItems.find(i => i.type === 'project' && i.id === `PRJ-${p.prjId}`);
           if (!prjItem) return;
 
-          const pOff = getDayOffset(prjItem.startDate, tStart);
           const pW = getDurationDays(prjItem.startDate, prjItem.endDate);
-          const paOff = getDayOffset(prjItem.plannedStartDate || prjItem.startDate, tStart);
           const paW = getDurationDays(prjItem.plannedStartDate || prjItem.startDate, prjItem.plannedEndDate || prjItem.endDate);
 
           result.push({
@@ -534,11 +521,11 @@ export default function AllProjectGanttChart({ userRole, onLogout }) {
             end: formatDateString(prjItem.endDate),
             rawStart: prjItem.startDate,
             rawEnd: prjItem.endDate,
+            rawPlannedStart: prjItem.plannedStartDate || prjItem.startDate,
+            rawPlannedEnd: prjItem.plannedEndDate || prjItem.endDate,
             prog: Math.round((prjItem.progress || 0) * 100),
             status: mapStatus(prjItem.status, prjItem.endDate),
-            off: pOff,
             w: pW,
-            aOff: paOff,
             aW: paW,
             aProg: Math.round((prjItem.progress || 0) * 100)
           });
@@ -546,9 +533,7 @@ export default function AllProjectGanttChart({ userRole, onLogout }) {
           const pMilestones = rawItems.filter(i => i.type === 'milestone' && i.parent === prjItem.id).sort((a,b) => new Date(a.startDate) - new Date(b.startDate));
           
           pMilestones.forEach((ms, msIdx) => {
-            const msOff = getDayOffset(ms.startDate, tStart);
             const msW = getDurationDays(ms.startDate, ms.endDate);
-            const msaOff = getDayOffset(ms.plannedStartDate || ms.startDate, tStart);
             const msaW = getDurationDays(ms.plannedStartDate || ms.startDate, ms.plannedEndDate || ms.endDate);
 
             result.push({
@@ -560,11 +545,11 @@ export default function AllProjectGanttChart({ userRole, onLogout }) {
               end: formatDateString(ms.endDate),
               rawStart: ms.startDate,
               rawEnd: ms.endDate,
+              rawPlannedStart: ms.plannedStartDate || ms.startDate,
+              rawPlannedEnd: ms.plannedEndDate || ms.endDate,
               prog: Math.round((ms.progress || 0) * 100),
               status: mapStatus(ms.status, ms.endDate),
-              off: msOff,
               w: msW,
-              aOff: msaOff,
               aW: msaW,
               aProg: Math.round((ms.progress || 0) * 100),
               displayId: `${pIdx + 1}.${msIdx + 1}`,
@@ -574,9 +559,7 @@ export default function AllProjectGanttChart({ userRole, onLogout }) {
             const msTasks = rawItems.filter(i => i.type === 'task' && i.parent === ms.id).sort((a,b) => new Date(a.startDate) - new Date(b.startDate));
 
             msTasks.forEach((tsk, tskIdx) => {
-              const tOff = getDayOffset(tsk.startDate, tStart);
               const tW = getDurationDays(tsk.startDate, tsk.endDate);
-              const taOff = getDayOffset(tsk.plannedStartDate || tsk.startDate, tStart);
               const taW = getDurationDays(tsk.plannedStartDate || tsk.startDate, tsk.plannedEndDate || tsk.endDate);
 
               result.push({
@@ -588,11 +571,11 @@ export default function AllProjectGanttChart({ userRole, onLogout }) {
                 end: formatDateString(tsk.endDate),
                 rawStart: tsk.startDate,
                 rawEnd: tsk.endDate,
+                rawPlannedStart: tsk.plannedStartDate || tsk.startDate,
+                rawPlannedEnd: tsk.plannedEndDate || tsk.endDate,
                 prog: Math.round((tsk.progress || 0) * 100),
                 status: mapStatus(tsk.status, tsk.endDate),
-                off: tOff,
                 w: tW,
-                aOff: taOff,
                 aW: taW,
                 aProg: Math.round((tsk.progress || 0) * 100),
                 displayId: `${pIdx + 1}.${msIdx + 1}.${tskIdx + 1}`,
@@ -618,7 +601,100 @@ export default function AllProjectGanttChart({ userRole, onLogout }) {
     fetchData();
   }, []);
 
-  let visibleRows = ganttRows.filter(r => {
+  // ── Dynamic Timeline Start & Month Range calculation ─────────
+  const { timelineStart, timelineEnd, months } = React.useMemo(() => {
+    if (!ganttRows || ganttRows.length === 0) {
+      const defaultStart = new Date();
+      defaultStart.setDate(1);
+      defaultStart.setHours(0, 0, 0, 0);
+      const defaultEnd = new Date(defaultStart.getFullYear(), defaultStart.getMonth() + 6, 0);
+      defaultEnd.setHours(0, 0, 0, 0);
+      return { timelineStart: defaultStart, timelineEnd: defaultEnd, months: [] };
+    }
+
+    let relevantRows = ganttRows;
+    if (projectFilter !== "All Projects") {
+      relevantRows = ganttRows.filter(r => 
+        (r.type === 'project' && String(r.id) === String(projectFilter)) ||
+        (r.type === 'milestone' && String(r.parentId) === String(projectFilter)) ||
+        (r.type === 'task' && String(r.grandParentId) === String(projectFilter))
+      );
+      if (relevantRows.length === 0) {
+        const p = ganttRows.find(r => r.type === 'project' && String(r.id) === String(projectFilter));
+        if (p) relevantRows = [p];
+        else relevantRows = ganttRows;
+      }
+    }
+
+    let minDate = null;
+    let maxDate = null;
+
+    const checkDate = (dateStr) => {
+      if (!dateStr) return;
+      const d = parseLocalDate(dateStr);
+      if (!d || isNaN(d.getTime())) return;
+      if (!minDate || d < minDate) minDate = d;
+      if (!maxDate || d > maxDate) maxDate = d;
+    };
+
+    relevantRows.forEach(item => {
+      checkDate(item.rawStart);
+      checkDate(item.rawEnd);
+      checkDate(item.rawPlannedStart);
+      checkDate(item.rawPlannedEnd);
+    });
+
+    if (!minDate) minDate = new Date();
+    if (!maxDate) maxDate = new Date(minDate.getTime() + 180 * 24 * 60 * 60 * 1000);
+
+    let tActualStart;
+    let tActualEnd;
+
+    if (startDateFilter) {
+      const sF = parseLocalDate(startDateFilter);
+      tActualStart = (sF && !isNaN(sF.getTime())) ? sF : new Date(minDate.getFullYear(), minDate.getMonth(), 1);
+    } else {
+      tActualStart = new Date(minDate.getFullYear(), minDate.getMonth(), 1);
+    }
+    tActualStart.setHours(0, 0, 0, 0);
+
+    if (endDateFilter) {
+      const eF = parseLocalDate(endDateFilter);
+      tActualEnd = (eF && !isNaN(eF.getTime())) ? eF : new Date(maxDate.getFullYear(), maxDate.getMonth() + 2, 0);
+    } else {
+      let monthCount = (maxDate.getFullYear() - tActualStart.getFullYear()) * 12 + (maxDate.getMonth() - tActualStart.getMonth()) + 2;
+      const minMonths = projectFilter !== "All Projects" ? 2 : 6;
+      if (monthCount < minMonths) monthCount = minMonths;
+      if (monthCount > 48) monthCount = 48;
+      tActualEnd = new Date(tActualStart.getFullYear(), tActualStart.getMonth() + monthCount, 0);
+    }
+    tActualEnd.setHours(0, 0, 0, 0);
+
+    if (tActualEnd < tActualStart) {
+      tActualEnd = new Date(tActualStart);
+    }
+
+    // Build months list grouping exact days within [tActualStart, tActualEnd]
+    const monthsMap = new Map();
+    let curr = new Date(tActualStart);
+    while (curr <= tActualEnd) {
+      const yr = curr.getFullYear();
+      const mo = curr.getMonth();
+      const key = `${yr}-${mo}`;
+      if (!monthsMap.has(key)) {
+        const label = curr.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
+        monthsMap.set(key, { label, year: yr, month: mo, days: [] });
+      }
+      monthsMap.get(key).days.push(curr.getDate());
+      curr.setDate(curr.getDate() + 1);
+    }
+
+    const monthsList = Array.from(monthsMap.values());
+
+    return { timelineStart: tActualStart, timelineEnd: tActualEnd, months: monthsList };
+  }, [ganttRows, projectFilter, startDateFilter, endDateFilter]);
+
+  let filteredRows = ganttRows.filter(r => {
     let match = true;
     if (searchQuery) match = match && r.name.toLowerCase().includes(searchQuery.toLowerCase());
     if (statusFilter !== "All Status") match = match && r.status === statusFilter;
@@ -632,22 +708,84 @@ export default function AllProjectGanttChart({ userRole, onLogout }) {
       if (String(rProjectId) !== String(projectFilter)) match = false;
     }
 
-    if (startDateFilter && match) {
-      if (!r.rawStart) match = false;
-      else if (new Date(r.rawStart) < new Date(startDateFilter)) match = false;
-    }
-
-    if (endDateFilter && match) {
-      if (!r.rawEnd) match = false;
-      else if (new Date(r.rawEnd) > new Date(endDateFilter)) match = false;
-    }
-
     if (!match) return false;
+
+    if (startDateFilter || endDateFilter) {
+      if (r.type === 'task') {
+        if (!isItemInRange(r, startDateFilter, endDateFilter)) return false;
+      } else if (r.type === 'milestone') {
+        const childTasks = ganttRows.filter(t => t.type === 'task' && t.parentId === r.id);
+        if (childTasks.length > 0) {
+          const hasMatchingTask = childTasks.some(t => {
+            let tMatch = true;
+            if (searchQuery && !t.name.toLowerCase().includes(searchQuery.toLowerCase())) tMatch = false;
+            if (statusFilter !== "All Status" && t.status !== statusFilter) tMatch = false;
+            if (!isItemInRange(t, startDateFilter, endDateFilter)) tMatch = false;
+            return tMatch;
+          });
+          if (!hasMatchingTask) return false;
+        } else {
+          if (!isItemInRange(r, startDateFilter, endDateFilter)) return false;
+        }
+      } else if (r.type === 'project') {
+        const childItems = ganttRows.filter(c => (c.type === 'milestone' && c.parentId === r.id) || (c.type === 'task' && c.grandParentId === r.id));
+        if (childItems.length > 0) {
+          const hasMatchingChild = childItems.some(c => {
+            let cMatch = true;
+            if (searchQuery && !c.name.toLowerCase().includes(searchQuery.toLowerCase())) cMatch = false;
+            if (statusFilter !== "All Status" && c.status !== statusFilter) cMatch = false;
+            if (!isItemInRange(c, startDateFilter, endDateFilter)) cMatch = false;
+            return cMatch;
+          });
+          if (!hasMatchingChild) return false;
+        } else {
+          if (!isItemInRange(r, startDateFilter, endDateFilter)) return false;
+        }
+      }
+    }
 
     if (r.type === 'project') return true;
     if (r.type === 'milestone') return expandedProjects.has(r.parentId);
     if (r.type === 'task') return expandedProjects.has(r.grandParentId) && expandedMilestones.has(r.parentId);
     return false;
+  });
+
+  const visibleRows = filteredRows.map(row => {
+    const s = parseLocalDate(row.rawStart);
+    const e = parseLocalDate(row.rawEnd || row.rawStart);
+    let off = 0;
+    let w = 0;
+
+    if (s && e && !isNaN(s.getTime()) && !isNaN(e.getTime())) {
+      if (e >= timelineStart && s <= timelineEnd) {
+        const visStart = s < timelineStart ? timelineStart : s;
+        const visEnd = e > timelineEnd ? timelineEnd : e;
+        off = Math.round((visStart - timelineStart) / (1000 * 60 * 60 * 24));
+        w = Math.round((visEnd - visStart) / (1000 * 60 * 60 * 24)) + 1;
+      }
+    }
+
+    const ps = parseLocalDate(row.rawPlannedStart || row.rawStart);
+    const pe = parseLocalDate(row.rawPlannedEnd || row.rawEnd || row.rawStart);
+    let aOff = 0;
+    let aW = 0;
+
+    if (ps && pe && !isNaN(ps.getTime()) && !isNaN(pe.getTime())) {
+      if (pe >= timelineStart && ps <= timelineEnd) {
+        const visPStart = ps < timelineStart ? timelineStart : ps;
+        const visPEnd = pe > timelineEnd ? timelineEnd : pe;
+        aOff = Math.round((visPStart - timelineStart) / (1000 * 60 * 60 * 24));
+        aW = Math.round((visPEnd - visPStart) / (1000 * 60 * 60 * 24)) + 1;
+      }
+    }
+
+    return {
+      ...row,
+      off,
+      w,
+      aOff,
+      aW
+    };
   });
 
   const handleExportCSV = () => {
@@ -665,9 +803,12 @@ export default function AllProjectGanttChart({ userRole, onLogout }) {
     document.body.removeChild(link);
   };
 
-  const totalDays = months.reduce((s, m) => s + m.days, 0);
+  const totalDays = months.reduce((s, m) => s + m.days.length, 0);
   const timelineW = totalDays * DW;
-  const todayOffFixed = getDayOffset(new Date(), timelineStart) * DW;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const isTodayInRange = today >= timelineStart && today <= timelineEnd;
+  const todayOffFixed = isTodayInRange ? Math.round((today - timelineStart) / (1000 * 60 * 60 * 24)) * DW : -9999;
   const currentMarkerOff = markerOff !== null ? markerOff : todayOffFixed;
 
   const handleBarClick = (e, rowId) => {
@@ -709,20 +850,18 @@ export default function AllProjectGanttChart({ userRole, onLogout }) {
           <div className="gantt-header-row" style={{ flexShrink: 0, justifyContent: 'space-between', alignItems: 'center' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               {singleProjectView ? (
-                <button className="gantt-btn" onClick={() => { setSingleProjectView(null); setProjectFilter('All Projects'); setTableCollapsed(false); setShowFilters(false); }} style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'white', border: '1px solid #e2e8f0', color: '#1e293b' }}><ArrowLeft size={16}/> Back to All Projects</button>
+                <button className="gantt-btn" onClick={() => { setSingleProjectView(null); setProjectFilter('All Projects'); }} style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'white', border: '1px solid #e2e8f0', color: '#1e293b' }}><ArrowLeft size={16}/> Back to All Projects</button>
               ) : (
                 <button className="gantt-btn" onClick={() => navigate('/pm-dashboard')} style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'white', border: '1px solid #e2e8f0', color: '#1e293b' }}><ArrowLeft size={16}/> Back to Dashboard</button>
               )}
             </div>
             <div className="gantt-header-actions">
-              {!singleProjectView && (
-                <button className="gantt-btn gantt-btn-filters" onClick={() => setShowFilters(!showFilters)} style={{ background: showFilters ? '#f1f5f9' : 'white' }}><Filter size={16}/> Filters</button>
-              )}
+              <button className="gantt-btn gantt-btn-filters" onClick={() => setShowFilters(!showFilters)} style={{ background: showFilters ? '#f1f5f9' : 'white' }}><Filter size={16}/> Filters</button>
               <button className="gantt-btn gantt-btn-export" onClick={handleExportCSV}><Download size={16}/> Export <ChevronDown size={14}/></button>
             </div>
           </div>
 
-          {showFilters && !singleProjectView && (
+          {showFilters && (
             <div className="gantt-filters-bar" style={{ flexShrink: 0 }}>
             <div className="gantt-filters-left">
               <div className="gantt-search-input">
@@ -741,11 +880,9 @@ export default function AllProjectGanttChart({ userRole, onLogout }) {
                   if (val !== "All Projects") {
                     const projRow = ganttRows.find(r => r.type === 'project' && String(r.id) === String(val));
                     setSingleProjectView(projRow || null);
-                    setTableCollapsed(true);
                     if (projRow) setExpandedProjects(prev => new Set([...prev, projRow.id]));
                   } else {
                     setSingleProjectView(null);
-                    setTableCollapsed(false);
                   }
                 }}
                 placeholder="All Projects"
@@ -755,13 +892,7 @@ export default function AllProjectGanttChart({ userRole, onLogout }) {
                 <span style={{ color: '#64748b' }}>-</span>
                 <DdMmYyyyDateInput value={endDateFilter} onChange={setEndDateFilter} title="End Date" />
               </div>
-              <button className="gantt-btn-clear" onClick={() => { setSearchQuery(""); setStatusFilter("All Status"); setProjectFilter("All Projects"); setStartDateFilter(""); setEndDateFilter(""); }}>Clear</button>
-              <button className="gantt-btn-today" onClick={() => { 
-                setMarkerOff(todayOffFixed);
-                if(timelineRef.current) timelineRef.current.scrollTo({ left: Math.max(0, todayOffFixed - 100), behavior: 'smooth' }); 
-              }} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px', background: '#e0e7ff', color: '#4f46e5', border: 'none', borderRadius: '6px', fontSize: '13px', fontWeight: '600', cursor: 'pointer', whiteSpace: 'nowrap' }}>
-                <Calendar size={14}/> Today
-              </button>
+              <button className="gantt-btn-clear" onClick={() => { setSearchQuery(""); setStatusFilter("All Status"); setProjectFilter("All Projects"); setStartDateFilter(""); setEndDateFilter(""); setSingleProjectView(null); }}>Clear</button>
             </div>
           </div>
           )}
@@ -929,11 +1060,11 @@ export default function AllProjectGanttChart({ userRole, onLogout }) {
                       {/* Month row */}
                       <div className="gantt-months-row">
                         {months.map((m, i) => {
-                          const prevDays = months.slice(0, i).reduce((s, mm) => s + mm.days, 0);
+                          const prevDays = months.slice(0, i).reduce((s, mm) => s + mm.days.length, 0);
                           return (
                             <div
-                              key={m.label}
-                              style={{ position: 'absolute', left: prevDays * DW, width: m.days * DW, borderRight: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 12, color: '#1e293b', height: '100%' }}
+                              key={`${m.label}-${i}`}
+                              style={{ position: 'absolute', left: prevDays * DW, width: m.days.length * DW, borderRight: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 12, color: '#1e293b', height: '100%' }}
                             >
                               {m.label}
                             </div>
@@ -943,10 +1074,8 @@ export default function AllProjectGanttChart({ userRole, onLogout }) {
                       {/* Day ticks row — every single day with number */}
                       <div className="gantt-days-row" style={{ position: 'relative', height: 28 }}>
                         {months.map((m, mi) => {
-                          const prevDays = months.slice(0, mi).reduce((s, mm) => s + mm.days, 0);
-                          const numDays = m.days;
-                          return Array.from({ length: numDays }, (_, di) => {
-                            const dayNum = di + 1;
+                          const prevDays = months.slice(0, mi).reduce((s, mm) => s + mm.days.length, 0);
+                          return m.days.map((dayNum, di) => {
                             const leftPx = (prevDays + di) * DW;
                             const isMajor = dayNum === 1 || dayNum % 5 === 0;
                             const isToday =
@@ -954,10 +1083,10 @@ export default function AllProjectGanttChart({ userRole, onLogout }) {
                               m.month === new Date().getMonth() &&
                               dayNum === new Date().getDate();
                             return (
-                              <React.Fragment key={`${mi}-${di}`}>
+                              <React.Fragment key={`${mi}-${di}-${dayNum}`}>
                                 {/* Tick line */}
                                 <div style={{ position: 'absolute', left: leftPx, top: isMajor ? 0 : 12, width: 1, height: isMajor ? '100%' : '45%', background: isToday ? '#2563eb' : isMajor ? '#cbd5e1' : '#e2e8f0' }} />
-                                {/* Day number — every day */}
+                                {/* Day number */}
                                 <span style={{
                                   position: 'absolute',
                                   left: leftPx + 2,
@@ -982,20 +1111,28 @@ export default function AllProjectGanttChart({ userRole, onLogout }) {
                     </div>
                     
                     {/* Marker line */}
-                    <div className="gantt-today-line" style={{ left: currentMarkerOff }}>
-                      <div className="gantt-today-label">Marker</div>
-                    </div>
+                    {currentMarkerOff >= 0 && (
+                      <div className="gantt-today-line" style={{ left: currentMarkerOff }}>
+                        <div className="gantt-today-label">Marker</div>
+                      </div>
+                    )}
 
                     <div style={{ position: 'relative', height: visibleRows.length * ROW_H }}>
                       {/* Grid Lines */}
                       {months.map((m, i) => {
-                        const left = months.slice(0, i).reduce((s, mm) => s + mm.days * DW, 0);
+                        const left = months.slice(0, i).reduce((s, mm) => s + mm.days.length * DW, 0);
                         return (
                           <React.Fragment key={`grid-${i}`}>
                             <div style={{ position: 'absolute', left, top: 0, bottom: 0, width: 1, background: '#f1f5f9' }} />
-                            {getWeeklyDays(m.year, m.month).map(d => (
-                              <div key={d} style={{ position: 'absolute', left: left + (d - 1) * DW, top: 0, bottom: 0, width: 1, background: '#f8fafc' }} />
-                            ))}
+                            {m.days.map((d, dIdx) => {
+                              const dObj = new Date(m.year, m.month, d);
+                              if (dObj.getDay() === 1) {
+                                return (
+                                  <div key={`wk-${d}`} style={{ position: 'absolute', left: left + dIdx * DW, top: 0, bottom: 0, width: 1, background: '#f8fafc' }} />
+                                );
+                              }
+                              return null;
+                            })}
                           </React.Fragment>
                         );
                       })}
@@ -1010,7 +1147,7 @@ export default function AllProjectGanttChart({ userRole, onLogout }) {
                         const barH = row.type === 'project' ? 22 : row.type === 'milestone' ? 18 : 16;
                         const barTop = (ROW_H - barH) / 2;
                         const barLeft = row.off * DW;
-                        const barWidth = Math.max(row.w * DW, 8);
+                        const barWidth = Math.max(row.w * DW, row.w > 0 ? 8 : 0);
                         const progWidth = `${Math.min(row.prog, 100)}%`;
 
                         // Border-radius per type
@@ -1027,29 +1164,31 @@ export default function AllProjectGanttChart({ userRole, onLogout }) {
                             }}
                           >
                             
-                            {/* ── Planned Bar ── */}
-                            <div
-                              style={{ position: 'absolute', top: barTop, left: barLeft, width: barWidth, height: barH, borderRadius: radius, overflow: 'hidden', cursor: 'pointer', zIndex: 4, boxShadow: isActive ? `0 0 0 2px ${highlightColor}` : 'none' }}
-                              title={`${row.name} | ${row.start} → ${row.end} | 100%`}
-                              onClick={(e) => { e.stopPropagation(); setActiveRow(row.id); if (row.type === 'project') toggleProjectExpand(row.id); if (row.type === 'milestone') toggleMilestoneExpand(row.id); }}
-                            >
-                              {/* Background track */}
-                              <div style={{ position: 'absolute', inset: 0, background: isActive ? '#fed7aa' : barBg }} />
-                              {/* Progress fill */}
-                              <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', background: highlightColor, transition: 'width 0.3s ease' }} />
-                            </div>
+                            {/* ── Planned Bar (only if row.w > 0) ── */}
+                            {row.w > 0 && (
+                              <div
+                                style={{ position: 'absolute', top: barTop, left: barLeft, width: barWidth, height: barH, borderRadius: radius, overflow: 'hidden', cursor: 'pointer', zIndex: 4, boxShadow: isActive ? `0 0 0 2px ${highlightColor}` : 'none' }}
+                                title={`${row.name} | ${row.start} → ${row.end} | 100%`}
+                                onClick={(e) => { e.stopPropagation(); setActiveRow(row.id); if (row.type === 'project') toggleProjectExpand(row.id); if (row.type === 'milestone') toggleMilestoneExpand(row.id); }}
+                              >
+                                {/* Background track */}
+                                <div style={{ position: 'absolute', inset: 0, background: isActive ? '#fed7aa' : barBg }} />
+                                {/* Progress fill */}
+                                <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', background: highlightColor, transition: 'width 0.3s ease' }} />
+                              </div>
+                            )}
 
                             {/* Progress % badge */}
-                            {barWidth > 30 && (
+                            {row.w > 0 && barWidth > 30 && (
                               <span style={{ position: 'absolute', top: baseline ? barTop + barH + 14 : barTop + barH + 2, left: barLeft, fontSize: 9, color: barColor, fontWeight: 600, pointerEvents: 'none' }}>
                                 {baseline ? `${row.prog}%` : '100%'}
                               </span>
                             )}
 
                             {/* ── Baseline Actual Bar (only when baseline ON) ── */}
-                            {baseline && (
+                            {baseline && row.aW > 0 && (
                               <div
-                                style={{ position: 'absolute', top: barTop + barH + 2, left: barLeft, width: barWidth, height: 10, borderRadius: 2, overflow: 'hidden', cursor: 'pointer', zIndex: 4 }}
+                                style={{ position: 'absolute', top: barTop + barH + 2, left: row.aOff * DW, width: Math.max(row.aW * DW, 8), height: 10, borderRadius: 2, overflow: 'hidden', cursor: 'pointer', zIndex: 4 }}
                                 title={`Progress: ${row.prog || 0}%`}
                                 onClick={(e) => { e.stopPropagation(); setActiveRow(row.id); if (row.type === 'project') toggleProjectExpand(row.id); if (row.type === 'milestone') toggleMilestoneExpand(row.id); }}
                               >

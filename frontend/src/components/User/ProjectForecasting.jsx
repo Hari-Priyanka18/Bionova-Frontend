@@ -11,10 +11,38 @@ import '../../styles/project-forecasting.css';
 import { apiGet } from "../../utils/api";
 
 const getHelperDateStr = (dateStr) => {
-  if (!dateStr) return 'N/A';
+  if (!dateStr || dateStr === 'N/A') return 'N/A';
+  if (typeof dateStr === 'string' && dateStr.includes('-')) {
+    const parts = dateStr.split('T')[0].split('-');
+    if (parts.length === 3 && parts[0].length === 4) {
+      const year = parseInt(parts[0], 10);
+      const monthIndex = parseInt(parts[1], 10) - 1;
+      const day = parseInt(parts[2], 10);
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      if (monthIndex >= 0 && monthIndex < 12 && !isNaN(day)) {
+        return `${String(day).padStart(2, '0')}-${months[monthIndex]}-${year}`;
+      }
+    }
+  }
   const d = new Date(dateStr);
   if (isNaN(d.getTime())) return dateStr;
   return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/ /g, '-');
+};
+
+const addDaysToDateStr = (dateStr, days) => {
+  if (!dateStr || days === 0) return dateStr;
+  const parts = dateStr.split('T')[0].split('-');
+  if (parts.length === 3 && parts[0].length === 4) {
+    const d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+    d.setDate(d.getDate() + days);
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  }
+  const d = new Date(dateStr);
+  d.setDate(d.getDate() + days);
+  return d.toISOString().split('T')[0];
 };
 
 export default function ProjectForecasting({ project }) {
@@ -117,9 +145,7 @@ export default function ProjectForecasting({ project }) {
 
   const actualProgress = forecastData.actualProgress || 0;
   const plannedProgress = forecastData.plannedProgress || 0;
-  const variance = forecastData.variance || 0;
-  const statusColor = forecastData.statusColor || '#f59e0b';
-  const statusText = forecastData.statusText || 'On Track';
+  const rawVariance = forecastData.variance || 0;
   const trendData = forecastData.trendData || [];
   const scenarios = forecastData.scenarios || [];
   const keyFactors = forecastData.keyFactors || [];
@@ -127,6 +153,224 @@ export default function ProjectForecasting({ project }) {
   const velocity = forecastData.velocity || 1.0;
 
   const todayStr = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/ /g, '-');
+
+  // Find the selected scenario object
+  const activeScenario = scenarios.find(s => s.name === selectedScenario) || scenarios[0] || {
+    name: "Current Trend",
+    completionDate: forecastData.forecastedCompletionDate,
+    varianceDays: forecastData.delayDays || 0,
+    confidence: "High (87%)",
+    description: "Based on current progress and productivity rate"
+  };
+
+  const scenarioVarianceDays = activeScenario.varianceDays !== undefined ? activeScenario.varianceDays : (forecastData.delayDays || 0);
+  const scenarioCompletionDate = activeScenario.completionDate || forecastData.forecastedCompletionDate;
+
+  // Compute scenario-specific velocity
+  let scenarioVelocity = velocity;
+  if (selectedScenario === "Best Case") {
+    scenarioVelocity = Math.min(velocity * 1.15, 1.5);
+  } else if (selectedScenario === "Worst Case") {
+    scenarioVelocity = Math.max(velocity * 0.85, 0.2);
+  } else if (selectedScenario === "Original Plan") {
+    scenarioVelocity = 1.0;
+  }
+
+  // Compute status and color for header / summary
+  let headerStatusText = forecastData.statusText || 'On Track';
+  let headerStatusColor = forecastData.statusColor || '#f59e0b';
+
+  if (selectedScenario === "Original Plan") {
+    headerStatusText = "On Track";
+    headerStatusColor = "#10b981";
+  } else if (selectedScenario === "Best Case") {
+    if (scenarioVarianceDays <= 0) {
+      headerStatusText = "Ahead of Plan";
+      headerStatusColor = "#10b981";
+    } else if (scenarioVarianceDays <= 10) {
+      headerStatusText = "Moderate Risk";
+      headerStatusColor = "#f59e0b";
+    } else {
+      headerStatusText = "At Risk";
+      headerStatusColor = "#ef4444";
+    }
+  } else if (selectedScenario === "Worst Case") {
+    if (scenarioVarianceDays <= 0) {
+      headerStatusText = "On Track";
+      headerStatusColor = "#10b981";
+    } else {
+      headerStatusText = "High Risk";
+      headerStatusColor = "#ef4444";
+    }
+  }
+
+  // Dynamic Trend Data for chart extending dynamically up to the scenario completion date reaching 100%
+  const activeTrendData = (() => {
+    const parseDate = (s) => {
+      if (!s) return new Date();
+      const parts = s.split('T')[0].split('-');
+      if (parts.length === 3 && parts[0].length === 4) {
+        return new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+      }
+      return new Date(s);
+    };
+
+    const dStart = parseDate(forecastData.startDate);
+    dStart.setHours(0, 0, 0, 0);
+    const dEnd = parseDate(forecastData.endDate);
+    dEnd.setHours(0, 0, 0, 0);
+    const dForecast = parseDate(scenarioCompletionDate || forecastData.endDate);
+    dForecast.setHours(0, 0, 0, 0);
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const dMax = dForecast.getTime() > dEnd.getTime() ? dForecast : dEnd;
+
+    const totalDays = Math.max(1, Math.round((dMax - dStart) / (1000 * 60 * 60 * 24)));
+    const steps = 6;
+    const rawDates = [];
+
+    for (let i = 0; i <= steps; i++) {
+      const d = new Date(dStart);
+      d.setDate(d.getDate() + Math.round((totalDays * i) / steps));
+      rawDates.push(d);
+    }
+
+    const allDates = [...rawDates, today, dEnd, dForecast]
+      .filter(d => d >= dStart && d <= dMax)
+      .sort((a, b) => a.getTime() - b.getTime());
+
+    const uniqueDates = [];
+    for (const d of allDates) {
+      if (!uniqueDates.some(u => Math.abs(u.getTime() - d.getTime()) < 1.5 * 24 * 60 * 60 * 1000)) {
+        uniqueDates.push(d);
+      }
+    }
+    if (!uniqueDates.some(u => Math.abs(u.getTime() - dStart.getTime()) < 24 * 60 * 60 * 1000)) {
+      uniqueDates.unshift(dStart);
+    }
+    if (!uniqueDates.some(u => Math.abs(u.getTime() - dMax.getTime()) < 24 * 60 * 60 * 1000)) {
+      uniqueDates.push(dMax);
+    }
+    uniqueDates.sort((a, b) => a.getTime() - b.getTime());
+
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+    return uniqueDates.map(d => {
+      const label = `${months[d.getMonth()]} ${String(d.getDate()).padStart(2, '0')}`;
+
+      // Baseline Plan: 0% at dStart -> 100% at dEnd
+      let baseline = 0;
+      if (d.getTime() <= dStart.getTime()) baseline = 0;
+      else if (d.getTime() >= dEnd.getTime()) baseline = 100;
+      else {
+        baseline = ((d - dStart) / (dEnd - dStart)) * 100;
+      }
+
+      // Actual Progress: up to today
+      let actual = null;
+      if (d.getTime() <= today.getTime()) {
+        if (today.getTime() === dStart.getTime()) {
+          actual = actualProgress;
+        } else {
+          actual = Math.min(actualProgress, ((d - dStart) / (today - dStart)) * actualProgress);
+        }
+      }
+
+      // Forecast Line: matches actual up to today, then goes to 100% at dForecast
+      let forecast = null;
+      if (d.getTime() < today.getTime()) {
+        forecast = actual;
+      } else if (d.getTime() === today.getTime()) {
+        forecast = actualProgress;
+      } else {
+        if (d.getTime() >= dForecast.getTime()) {
+          forecast = 100;
+        } else {
+          const remainingSpan = dForecast.getTime() - today.getTime();
+          if (remainingSpan <= 0) forecast = 100;
+          else {
+            forecast = actualProgress + ((d.getTime() - today.getTime()) / remainingSpan) * (100 - actualProgress);
+          }
+        }
+      }
+
+      return {
+        name: label,
+        baseline: Math.round(baseline * 10) / 10,
+        actual: actual !== null ? Math.round(actual * 10) / 10 : null,
+        forecast: forecast !== null ? Math.round(forecast * 10) / 10 : null
+      };
+    });
+  })();
+
+  // Dynamic Key Factors for selected scenario
+  const activeKeyFactors = (() => {
+    if (selectedScenario === 'Original Plan') {
+      return [
+        { factor: "Overall Productivity", impact: "Neutral", impactDays: 0, trend: "Stable" },
+        { factor: "Task Completion Rate", impact: "Neutral", impactDays: 0, trend: "Stable" },
+        { factor: "Resource Availability", impact: "Neutral", impactDays: 0, trend: "Stable" }
+      ];
+    }
+    if (selectedScenario === 'Best Case') {
+      const pOffset = Math.max(0, Math.round(scenarioVarianceDays / 3));
+      const tOffset = Math.max(0, Math.round(scenarioVarianceDays * 0.4));
+      return [
+        { factor: "Overall Productivity", impact: "Positive", impactDays: pOffset, trend: "Improving" },
+        { factor: "Task Completion Rate", impact: pOffset === 0 ? "Positive" : "Neutral", impactDays: tOffset, trend: "Improving" },
+        { factor: "Resource Availability", impact: "Positive", impactDays: 0, trend: "Stable" }
+      ];
+    }
+    if (selectedScenario === 'Worst Case') {
+      const pOffset = Math.max(1, Math.round(scenarioVarianceDays / 2));
+      const tOffset = Math.max(1, Math.round(scenarioVarianceDays * 0.6));
+      return [
+        { factor: "Overall Productivity", impact: "Negative", impactDays: pOffset, trend: "Worsening" },
+        { factor: "Task Completion Rate", impact: "Negative", impactDays: tOffset, trend: "Worsening" },
+        { factor: "Resource Availability", impact: "Negative", impactDays: 2, trend: "Worsening" }
+      ];
+    }
+    return keyFactors;
+  })();
+
+  // Dynamic Milestones Impact for selected scenario
+  const activeMilestonesImpact = milestonesImpact.map((m) => {
+    const baseEnd = m.endDt;
+    if (selectedScenario === 'Original Plan') {
+      return {
+        ...m,
+        forecastDate: baseEnd,
+        impact: "On Time",
+        impactColor: "#10b981"
+      };
+    }
+    if (selectedScenario === 'Current Trend') {
+      return m;
+    }
+    
+    const baseShift = (m.forecastDate && m.endDt) ? 
+      Math.max(0, Math.round((new Date(m.forecastDate) - new Date(m.endDt)) / (1000 * 60 * 60 * 24))) : 0;
+    
+    const baseDelayDays = Math.max(1, forecastData.delayDays || 1);
+    const ratio = scenarioVarianceDays / baseDelayDays;
+    
+    let newShift = 0;
+    if (selectedScenario === 'Best Case') {
+      newShift = Math.round(baseShift * ratio);
+    } else if (selectedScenario === 'Worst Case') {
+      newShift = Math.max(baseShift, Math.round(baseShift * (ratio || 1.2)));
+    }
+    
+    const newForecastDate = addDaysToDateStr(baseEnd, newShift);
+    return {
+      ...m,
+      forecastDate: newForecastDate,
+      impact: newShift > 0 ? `+${newShift} Days` : "On Time",
+      impactColor: newShift > 0 ? (newShift < baseShift ? "#f59e0b" : "#ef4444") : "#10b981"
+    };
+  });
 
   const td = forecastData.tasksData || { onTime: 0, ahead: 0, delayed: 0, total: 0 };
   const totalAnalyzed = td.total || 0;
@@ -146,6 +390,10 @@ export default function ProjectForecasting({ project }) {
   if (accuracyData.length === 0) {
      accuracyData = [{ name: 'No Data', value: 1, color: '#e2e8f0' }];
   }
+
+  const chartStrokeColor = selectedScenario === 'Best Case' ? '#3b82f6' : 
+    (selectedScenario === 'Worst Case' ? '#ef4444' : 
+    (selectedScenario === 'Original Plan' ? '#8b5cf6' : '#10b981'));
 
   return (
     <div className="fc-container">
@@ -187,13 +435,15 @@ export default function ProjectForecasting({ project }) {
           </div>
           <div className="fc-divider"></div>
           <div className="fc-metric">
-            <label>Variance</label>
-            <span className="fc-val" style={{color: statusColor}}>{variance > 0 ? '+' : ''}{variance.toFixed(2)}% {variance < 0 ? '↓' : '↑'}</span>
+            <label>Variance ({selectedScenario})</label>
+            <span className="fc-val" style={{color: headerStatusColor}}>
+              {scenarioVarianceDays > 0 ? `+${scenarioVarianceDays}d Delay` : (scenarioVarianceDays === 0 ? '0d (On Time)' : `${scenarioVarianceDays}d Ahead`)}
+            </span>
           </div>
           <div className="fc-divider"></div>
           <div className="fc-metric">
             <label>Project Status</label>
-            <span className="fc-val-status" style={{color: statusColor}}>{statusText}</span>
+            <span className="fc-val-status" style={{color: headerStatusColor}}>{headerStatusText}</span>
           </div>
         </div>
       </div>
@@ -264,11 +514,11 @@ export default function ProjectForecasting({ project }) {
             </div>
             
             <div className="fc-sum-item right-align">
-              <label>Forecasted Completion (Current Trend)</label>
-              <div className="fc-sum-val highlight" style={{color: variance < 0 ? '#f59e0b' : '#10b981'}}>
-                {getHelperDateStr(forecastData.forecastedCompletionDate)}
-                <span className="fc-sum-days" style={{color: variance < 0 ? '#f59e0b' : '#10b981'}}>
-                  {forecastData.delayDays > 0 ? ` (${forecastData.delayDays} Days Delay)` : ' (On Time)'}
+              <label>Forecasted Completion ({selectedScenario})</label>
+              <div className="fc-sum-val highlight" style={{color: scenarioVarianceDays > 0 ? '#f59e0b' : '#10b981'}}>
+                {getHelperDateStr(scenarioCompletionDate)}
+                <span className="fc-sum-days" style={{color: scenarioVarianceDays > 0 ? '#f59e0b' : '#10b981'}}>
+                  {scenarioVarianceDays > 0 ? ` (${scenarioVarianceDays} Days Delay)` : ' (On Time)'}
                 </span>
               </div>
             </div>
@@ -276,11 +526,19 @@ export default function ProjectForecasting({ project }) {
           
           <div className="fc-sum-variance">
             <label>Performance Velocity</label>
-            <div className="fc-var-val" style={{color: statusColor}}>{velocity.toFixed(2)}x <span className="fc-var-sub">({variance < 0 ? 'Behind' : 'Ahead of'} Plan)</span></div>
+            <div className="fc-var-val" style={{color: scenarioVelocity >= 1.0 ? '#10b981' : (scenarioVelocity >= 0.85 ? '#f59e0b' : '#ef4444')}}>
+              {scenarioVelocity.toFixed(2)}x 
+              <span className="fc-var-sub">
+                {selectedScenario === 'Original Plan' ? ' (Baseline Plan)' : (scenarioVarianceDays <= 0 || scenarioVelocity >= 1.0 ? ' (Ahead of Plan)' : ' (Behind Plan)')}
+              </span>
+            </div>
           </div>
           
           <div className="fc-sum-footer">
-            Based on actual database metrics, the project is moving at {velocity.toFixed(2)}x planned speed.
+            {selectedScenario === 'Current Trend' && `Based on actual database metrics, the project is moving at ${velocity.toFixed(2)}x planned speed.`}
+            {selectedScenario === 'Best Case' && `Assuming 15% improvement in productivity, the project is projected at ${scenarioVelocity.toFixed(2)}x planned speed.`}
+            {selectedScenario === 'Worst Case' && `Assuming 15% drop in productivity, the project is projected at ${scenarioVelocity.toFixed(2)}x planned speed.`}
+            {selectedScenario === 'Original Plan' && `Projected as per baseline schedule with on-time execution.`}
           </div>
         </div>
 
@@ -289,7 +547,7 @@ export default function ProjectForecasting({ project }) {
           <h3 className="fc-panel-title">Forecast Completion Trend</h3>
           <div className="fc-chart-container">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={trendData} margin={{ top: 20, right: 20, left: -20, bottom: 0 }}>
+              <LineChart data={activeTrendData} margin={{ top: 20, right: 20, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 11, fill: '#64748b'}} />
                 <YAxis axisLine={false} tickLine={false} tick={{fontSize: 11, fill: '#64748b'}} tickFormatter={(v)=>`${v}%`} />
@@ -297,7 +555,7 @@ export default function ProjectForecasting({ project }) {
                 <Legend iconType="plainline" wrapperStyle={{fontSize:'12px', color:'#475569'}} />
                 <Line type="monotone" dataKey="baseline" name="Baseline Plan" stroke="#94a3b8" strokeWidth={2} strokeDasharray="5 5" dot={false} />
                 <Line type="monotone" dataKey="actual" name="Actual Progress" stroke="#3b82f6" strokeWidth={3} dot={{r: 3}} />
-                <Line type="monotone" dataKey="forecast" name="Forecast (Current Trend)" stroke="#10b981" strokeWidth={2} strokeDasharray="5 5" dot={{r: 4}} />
+                <Line type="monotone" dataKey="forecast" name={`Forecast (${selectedScenario})`} stroke={chartStrokeColor} strokeWidth={2} strokeDasharray="5 5" dot={{r: 4}} />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -405,7 +663,7 @@ export default function ProjectForecasting({ project }) {
               </tr>
             </thead>
             <tbody>
-              {keyFactors.map((f, idx) => (
+              {activeKeyFactors.map((f, idx) => (
                 <tr key={idx}>
                   <td>{f.factor}</td>
                   <td style={{ color: f.impact === "Negative" ? '#ef4444' : (f.impact === "Positive" ? '#10b981' : '#64748b') }}>
@@ -435,12 +693,12 @@ export default function ProjectForecasting({ project }) {
               </tr>
             </thead>
             <tbody>
-              {milestonesImpact.length === 0 ? (
+              {activeMilestonesImpact.length === 0 ? (
                 <tr>
                   <td colSpan="4" style={{ textAlign: 'center', color: '#64748b' }}>No milestones found for this project.</td>
                 </tr>
               ) : (
-                milestonesImpact.map((m, idx) => (
+                activeMilestonesImpact.map((m, idx) => (
                   <tr key={idx}>
                     <td>{m.mlstnTtl}</td>
                     <td>{getHelperDateStr(m.endDt)}</td>
@@ -458,3 +716,4 @@ export default function ProjectForecasting({ project }) {
     </div>
   );
 }
+

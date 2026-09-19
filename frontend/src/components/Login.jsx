@@ -102,14 +102,75 @@ const Login = ({ onLogin }) => {
           sessionStorage.setItem("empId", String(data.empId));
         }
         
-        const namePart = emailInput.split("@")[0];
-        const formattedName = namePart
-          .split(/[._]/)
-          .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-          .join(" ");
-        sessionStorage.setItem("userName", formattedName);
-        localStorage.setItem("userName", formattedName);
+        let realName = "";
+        let realDesignation = "";
+        let realPhoto = "";
+        let realStatus = "Active";
+
+        try {
+          const profileRes = await fetch(`${apiBaseUrl}/api/profile`, {
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${data.token || ""}`
+            }
+          });
+          if (profileRes.ok) {
+            const me = await profileRes.json();
+            if (me) {
+              let fullName = `${me.fstNm || me.firstName || me.empNm || me.name || me.fullName || ""}`.trim();
+              if (me.lstNm || me.lastName) fullName = `${fullName} ${me.lstNm || me.lastName}`.trim();
+              if (fullName && fullName.toLowerCase() !== "admin" && fullName.toLowerCase() !== "user" && !fullName.includes("@")) {
+                realName = fullName;
+              }
+              if (me.designation || me.role) realDesignation = me.designation || me.role;
+              if (me.photoUrl) realPhoto = me.photoUrl;
+              const isInactive = me.sts === false || me.sts === "INACTIVE" || me.sts === 0 || me.sts === "false" || me.status === "Inactive" || me.status === false;
+              realStatus = isInactive ? "Inactive" : "Active";
+            }
+          }
+        } catch (profileErr) {
+          console.error("Error fetching profile on login:", profileErr);
+        }
+
+        if (!realName) {
+          if (emailInput.toLowerCase().includes("admin")) {
+            realName = "Syed Mohammad Johny Basha";
+          } else {
+            const namePart = emailInput.split("@")[0].replace(/[0-9]/g, '');
+            realName = namePart
+              .split(/[._-]/)
+              .filter(Boolean)
+              .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+              .join(" ") || "User";
+          }
+        }
+
+        sessionStorage.setItem("userName", realName);
+        localStorage.setItem("userName", realName);
+        if (realDesignation) sessionStorage.setItem("userDesignation", realDesignation);
+        if (realPhoto) sessionStorage.setItem("userPhoto", realPhoto);
+        sessionStorage.setItem("userAccountStatus", realStatus);
         
+        // Fetch user's RBAC permissions on login so they are immediately available for routing
+        try {
+          const empIdToFetch = data.empId || sessionStorage.getItem("empId");
+          if (empIdToFetch) {
+            const permsRes = await fetch(`${apiBaseUrl}/api/rbac/employees/${empIdToFetch}/permissions`, {
+              headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${data.token || ""}`
+              }
+            });
+            if (permsRes.ok) {
+              const permissions = await permsRes.json();
+              sessionStorage.setItem("userPermissions", JSON.stringify(permissions));
+              localStorage.setItem("userPermissions", JSON.stringify(permissions));
+            }
+          }
+        } catch (rbacErr) {
+          console.error("Error fetching RBAC permissions on login:", rbacErr);
+        }
+
         if (rememberMe) {
           localStorage.setItem('rememberedEmail', emailInput);
           localStorage.setItem('rememberedPassword', formData.password);

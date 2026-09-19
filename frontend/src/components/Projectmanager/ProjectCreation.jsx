@@ -539,6 +539,8 @@ const ProjectCreation = ({ userRole, onLogout }) => {
           priorityMeta: dynamicPrio,
           rawPriority: l.prjPrty || "MEDIUM",
           status: displaySts,
+          leadLagSts: l.leadLagSts || l.lead_lag_sts || "",
+          actCmpDt: l.actCmpDt || l.act_cmp_dt || null,
           startDate: l.stDt || "",
           endDate: l.endDt || "",
           totalProjectDays: l.noOfDays || "",
@@ -566,6 +568,54 @@ const ProjectCreation = ({ userRole, onLogout }) => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const getProjectScheduleInfo = (p) => {
+    let actDateStr = p.actCmpDt;
+    let endDateStr = p.endDate;
+
+    if (actDateStr && endDateStr) {
+      const actD = new Date(actDateStr);
+      const endD = new Date(endDateStr);
+      if (!isNaN(actD.getTime()) && !isNaN(endD.getTime())) {
+        actD.setHours(0, 0, 0, 0);
+        endD.setHours(0, 0, 0, 0);
+        const diffDays = Math.round((endD.getTime() - actD.getTime()) / (1000 * 60 * 60 * 24));
+        if (diffDays > 0) {
+          return {
+            type: "lead",
+            tag: "Lead",
+            label: `LEAD (${diffDays} DAYS)`,
+            color: '#166534',
+            bgColor: '#dcfce7',
+            borderColor: '#bbf7d0'
+          };
+        } else if (diffDays < 0) {
+          return {
+            type: "lag",
+            tag: "Lag",
+            label: `LAG (${Math.abs(diffDays)} DAYS)`,
+            color: '#dc2626',
+            bgColor: '#fee2e2',
+            borderColor: '#fecaca'
+          };
+        } else {
+          return {
+            type: "on_track",
+            tag: "On Track",
+            label: 'ON TRACK',
+            color: '#2563eb',
+            bgColor: '#dbeafe',
+            borderColor: '#bfdbfe'
+          };
+        }
+      }
+    }
+
+    const sts = (p.leadLagSts || '').toUpperCase();
+    if (sts === 'LEAD') return { type: "lead", tag: "Lead", label: 'LEAD', color: '#166534', bgColor: '#dcfce7', borderColor: '#bbf7d0' };
+    if (sts === 'LAG') return { type: "lag", tag: "Lag", label: 'LAG', color: '#dc2626', bgColor: '#fee2e2', borderColor: '#fecaca' };
+    return { type: "on_track", tag: "On Track", label: 'ON TRACK', color: '#2563eb', bgColor: '#dbeafe', borderColor: '#bfdbfe' };
   };
 
   const generateNextProjectCode = (projectList = projects) => {
@@ -1956,36 +2006,40 @@ const ProjectCreation = ({ userRole, onLogout }) => {
                                 {project.expectedDeliverables || "N/A"}
                               </td>
                               <td data-label="PRIORITY" style={{ padding: '14px 20px', fontSize: '14px', color: '#334155' }}>
-                                <span style={{
-                                  padding: '4px 10px',
-                                  borderRadius: '4px',
-                                  fontSize: '12px',
-                                  fontWeight: '700',
-                                  display: 'inline-block',
-                                  backgroundColor: project.priorityMeta?.bgColor || (
-                                    project.priority === 'ATMOST CRITICAL' ? '#7f1d1d18' :
-                                      project.priority === 'CRITICAL' ? '#b91c1c18' :
-                                        project.priority === 'HIGH' ? '#ef444418' :
-                                          project.priority === 'NORMAL' ? '#3b82f618' :
-                                            project.priority === 'MEDIUM' ? '#f59e0b18' : '#22c55e18'
-                                  ),
-                                  color: project.priorityMeta?.color || (
-                                    project.priority === 'ATMOST CRITICAL' ? '#7F1D1D' :
-                                      project.priority === 'CRITICAL' ? '#B91C1C' :
-                                        project.priority === 'HIGH' ? '#EF4444' :
-                                          project.priority === 'NORMAL' ? '#3B82F6' :
-                                            project.priority === 'MEDIUM' ? '#F59E0B' : '#22C55E'
-                                  ),
-                                  border: `1px solid ${project.priorityMeta?.borderColor || (
-                                    project.priority === 'ATMOST CRITICAL' ? '#7f1d1d40' :
-                                      project.priority === 'CRITICAL' ? '#b91c1c40' :
-                                        project.priority === 'HIGH' ? '#ef444440' :
-                                          project.priority === 'NORMAL' ? '#3b82f640' :
-                                            project.priority === 'MEDIUM' ? '#f59e0b40' : '#22c55e40'
-                                  )}`
-                                }}>
-                                  {project.priority}
-                                </span>
+                                {project.status?.toUpperCase() === 'CLOSED' || project.status?.toUpperCase() === 'COMPLETED' ? (
+                                  <span style={{ color: "#94a3b8", fontWeight: 600 }}>-</span>
+                                ) : (
+                                  <span style={{
+                                    padding: '4px 10px',
+                                    borderRadius: '4px',
+                                    fontSize: '12px',
+                                    fontWeight: '700',
+                                    display: 'inline-block',
+                                    backgroundColor: project.priorityMeta?.bgColor || (
+                                      project.priority === 'ATMOST CRITICAL' ? '#7f1d1d18' :
+                                        project.priority === 'CRITICAL' ? '#b91c1c18' :
+                                          project.priority === 'HIGH' ? '#ef444418' :
+                                            project.priority === 'NORMAL' ? '#3b82f618' :
+                                              project.priority === 'MEDIUM' ? '#f59e0b18' : '#22c55e18'
+                                    ),
+                                    color: project.priorityMeta?.color || (
+                                      project.priority === 'ATMOST CRITICAL' ? '#7F1D1D' :
+                                        project.priority === 'CRITICAL' ? '#B91C1C' :
+                                          project.priority === 'HIGH' ? '#EF4444' :
+                                            project.priority === 'NORMAL' ? '#3B82F6' :
+                                              project.priority === 'MEDIUM' ? '#F59E0B' : '#22C55E'
+                                    ),
+                                    border: `1px solid ${project.priorityMeta?.borderColor || (
+                                      project.priority === 'ATMOST CRITICAL' ? '#7f1d1d40' :
+                                        project.priority === 'CRITICAL' ? '#b91c1c40' :
+                                          project.priority === 'HIGH' ? '#ef444440' :
+                                            project.priority === 'NORMAL' ? '#3b82f640' :
+                                              project.priority === 'MEDIUM' ? '#f59e0b40' : '#22c55e40'
+                                    )}`
+                                  }}>
+                                    {project.priority}
+                                  </span>
+                                )}
                               </td>
                               <td data-label="START DATE" style={{ padding: '14px 20px', fontSize: '14px', color: '#334155' }}>{formatListDate(project.startDate)}</td>
                               <td data-label="END DATE" style={{ padding: '14px 20px', fontSize: '14px', color: '#334155' }}>{formatListDate(project.endDate)}</td>
@@ -2002,19 +2056,33 @@ const ProjectCreation = ({ userRole, onLogout }) => {
                                 {project.remarks || "N/A"}
                               </td>
                               <td data-label="STATUS" style={{ padding: '14px 20px', fontSize: '14px', color: '#334155' }}>
-                                {project.status.toUpperCase() === 'CLOSED' ? (
-                                  <span style={{
-                                    padding: '6px 12px',
-                                    borderRadius: '8px',
-                                    fontSize: '13px',
-                                    fontWeight: '600',
-                                    backgroundColor: '#fee2e2',
-                                    color: '#991b1b',
-                                    display: 'inline-block',
-                                    border: '1px solid #fecaca'
-                                  }}>
-                                    Closed
-                                  </span>
+                                {project.status?.toUpperCase() === 'CLOSED' || project.status?.toUpperCase() === 'COMPLETED' ? (
+                                  (() => {
+                                    const sch = getProjectScheduleInfo(project);
+                                    return (
+                                      <span style={{
+                                        display: "inline-block",
+                                        textAlign: "center",
+                                        lineHeight: "1.2",
+                                        padding: "4px 10px",
+                                        borderRadius: "4px",
+                                        fontWeight: 600,
+                                        fontSize: "11px",
+                                        backgroundColor: "#dcfce7",
+                                        border: "1px solid #bbf7d0"
+                                      }}>
+                                        <span style={{ color: "#16a34a", display: "block" }}>Closed</span>
+                                        <span style={{
+                                          display: "block",
+                                          fontSize: "10px",
+                                          fontWeight: 700,
+                                          color: sch.type === "lead" ? "#16a34a" : (sch.type === "lag" ? "#dc2626" : "#2563eb")
+                                        }}>
+                                          ({sch.tag})
+                                        </span>
+                                      </span>
+                                    );
+                                  })()
                                 ) : (
                                   <select
                                     value={project.status}
