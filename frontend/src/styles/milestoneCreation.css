@@ -2816,14 +2816,16 @@
 }
 
 .mc-details-label {
-  font-size: 11px;
+  display: block;
+  font-size: 12px;
   font-weight: 600;
   color: #64748b;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  text-transform: none;
+  letter-spacing: 0.02em;
 }
 
 .mc-details-val {
+  display: block;
   font-size: 14px;
   color: #0f172a;
   word-break: break-word;

@@ -357,11 +357,19 @@ const TaskBoard = ({ userRole, onLogout }) => {
 
       const userTasks = liveTasks || [];
 
-      const allMapped = (liveTasks || []).map(t => mapBackendTask(t, liveProjects, liveMilestones, liveEmployees, liveExtEmployees));
-      setAllTasks(allMapped);
+      const seenTaskKeys = new Set();
+      const uniqueMapped = [];
+      userTasks.forEach(t => {
+        const mappedT = mapBackendTask(t, liveProjects, liveMilestones, liveEmployees, liveExtEmployees);
+        const key = String(mappedT.taskId || mappedT.id || mappedT.title).toUpperCase().trim();
+        if (!seenTaskKeys.has(key)) {
+          seenTaskKeys.add(key);
+          uniqueMapped.push(mappedT);
+        }
+      });
 
-      const mapped = userTasks.map(t => mapBackendTask(t, liveProjects, liveMilestones, liveEmployees, liveExtEmployees));
-      setTasks(mapped);
+      setAllTasks(uniqueMapped);
+      setTasks(uniqueMapped);
       setApiLoaded(true);
     } catch (err) {
       console.error("Failed to load tasks from API:", err);
@@ -438,17 +446,29 @@ const TaskBoard = ({ userRole, onLogout }) => {
     };
   }, [showAddModal, showDetailModal]);
 
-  // ─── Derived data for dropdowns ──────────────────────────────────────
+  const seenMilestones = new Set();
   const derivedMilestones = milestonesRaw
     .filter(m => {
       const mPrjId = String(m.prjId || m.prjid || m.project?.prjId || m.projectId || m.prj_id || m.drftPrjId);
       return selectedProjectId === "All" || mPrjId === String(selectedProjectId);
     })
-    .map(m => ({
-      value: `${m.mlstnCd || "ML-???"} ${m.mlstnTtl || ""}`,
-      label: `${m.mlstnCd || "ML-???"} ${m.mlstnTtl || ""}`
-    }))
-    .filter(Boolean);
+    .map(m => {
+      const mPrjId = String(m.prjId || m.prjid || m.project?.prjId || m.projectId || m.prj_id || m.drftPrjId);
+      const prj = projectsRaw.find(p => String(p.prjId || p.id || p.prjid) === mPrjId);
+      const prjCode = prj ? (prj.prjCd || prj.prjcd || prj.name) : "";
+      const baseLabel = `${m.mlstnCd || "ML-???"} ${m.mlstnTtl || ""}`.trim();
+      const label = selectedProjectId === "All" && prjCode ? `${baseLabel} (${prjCode})` : baseLabel;
+      const mId = String(m.mId || m.mid || m.id || m.drftMId || "");
+      return {
+        value: mId || baseLabel,
+        label: label
+      };
+    })
+    .filter(opt => {
+      if (!opt || !opt.value || seenMilestones.has(opt.value)) return false;
+      seenMilestones.add(opt.value);
+      return true;
+    });
 
   // ─── Format assignee options with designation + company/plant ──────────
   const getAssigneeLabel = (emp) => {
@@ -485,7 +505,10 @@ const TaskBoard = ({ userRole, onLogout }) => {
   const baseFilteredTasks = tasks.filter((task) => {
     const isClosed = task.status === "Closed" || task.status === "Completed";
     const matchProject = selectedProjectId === "All" || String(task.projectId) === String(selectedProjectId);
-    const matchMilestone = selectedMilestone === "All Milestones" || task.milestone === selectedMilestone;
+    const matchMilestone =
+      selectedMilestone === "All Milestones" ||
+      (task.milestoneId && String(task.milestoneId) === String(selectedMilestone)) ||
+      task.milestone === selectedMilestone;
     const matchAssignee = selectedAssignee === "All Employees" || task.assignee === selectedAssignee;
     const matchTaskType = selectedTaskType === "All" || task.taskType === selectedTaskType;
     const matchPriority = selectedPriority === "All" || (!isClosed && task.priority === selectedPriority);

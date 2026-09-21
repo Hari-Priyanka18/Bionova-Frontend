@@ -174,19 +174,21 @@ const AdminDashboard = ({ userRole, onLogout }) => {
 
   // Employees & Person Filter State
   const [employeesList, setEmployeesList] = useState([]);
+  const [externalEmployeesList, setExternalEmployeesList] = useState([]);
   const [personFilter, setPersonFilter] = useState("All Persons");
 
   const fetchMetrics = async () => {
     try {
       const headers = authHeaders();
-      const [resMetrics, resCompanies, resPlants, resProjLive, resMileLive, resTaskLive, resEmp] = await Promise.all([
+      const [resMetrics, resCompanies, resPlants, resProjLive, resMileLive, resTaskLive, resEmp, resExtEmp] = await Promise.all([
         fetch(`${API_BASE}/admin/dashboard/metrics`, { headers }),
         fetch(`${API_BASE}/companies`, { headers }),
         fetch(`${API_BASE}/plants`, { headers }),
         fetch(`${API_BASE}/project-live`, { headers }),
         fetch(`${API_BASE}/milestone-live`, { headers }),
         fetch(`${API_BASE}/task-live`, { headers }),
-        fetch(`${API_BASE}/employees`, { headers })
+        fetch(`${API_BASE}/employees`, { headers }),
+        fetch(`${API_BASE}/external-employees`, { headers }).catch(() => ({ ok: false }))
       ]);
 
       if (resMetrics.ok) {
@@ -216,6 +218,10 @@ const AdminDashboard = ({ userRole, onLogout }) => {
       if (resEmp.ok) {
         const empData = await resEmp.json();
         setEmployeesList(empData);
+      }
+      if (resExtEmp && resExtEmp.ok) {
+        const extData = await resExtEmp.json();
+        setExternalEmployeesList(extData);
       }
     } catch (err) {
       console.error("Error fetching dashboard metrics:", err);
@@ -587,10 +593,25 @@ const AdminDashboard = ({ userRole, onLogout }) => {
     return map;
   }, [employeesList]);
 
+  const extMapById = React.useMemo(() => {
+    const map = {};
+    (externalEmployeesList || []).forEach(e => {
+      const name = e.extEmpNm || e.ext_emp_nm || e.companyNm || e.company_nm || e.name || `External #${e.extEmpId || e.id}`;
+      if (e.extEmpId !== undefined && e.extEmpId !== null) map[String(e.extEmpId)] = name;
+      if (e.id !== undefined && e.id !== null) map[String(e.id)] = name;
+      if (e.extEmpCd) map[String(e.extEmpCd)] = name;
+    });
+    return map;
+  }, [externalEmployeesList]);
+
   const allPersonNames = React.useMemo(() => {
     const names = new Set();
     (employeesList || []).forEach(e => {
       const name = `${e.fstNm || e.firstName || ''} ${e.lstNm || e.lastName || ''}`.trim() || e.empNm || e.name;
+      if (name) names.add(name);
+    });
+    (externalEmployeesList || []).forEach(e => {
+      const name = e.extEmpNm || e.ext_emp_nm || e.name;
       if (name) names.add(name);
     });
     tasksList.forEach(t => {
@@ -598,9 +619,16 @@ const AdminDashboard = ({ userRole, onLogout }) => {
       if (targetId && empMapById[String(targetId)]) {
         names.add(empMapById[String(targetId)]);
       }
+      const extTargetId = t.extEmpId || t.ext_emp_id;
+      if (extTargetId && extMapById[String(extTargetId)]) {
+        names.add(extMapById[String(extTargetId)]);
+      }
+      if (t.extEmpNm && t.extEmpNm.trim()) {
+        names.add(t.extEmpNm.trim());
+      }
     });
     return Array.from(names).sort();
-  }, [employeesList, tasksList, empMapById]);
+  }, [employeesList, externalEmployeesList, tasksList, empMapById, extMapById]);
 
   const teamPerformanceToRender = React.useMemo(() => {
     if (!tasksList || tasksList.length === 0) return [];
@@ -609,53 +637,109 @@ const AdminDashboard = ({ userRole, onLogout }) => {
 
     tasksList.forEach(t => {
       let empName = null;
+      let isExternal = false;
       const targetEmpId = t.empId || t.empid || t.executorId || t.executor_id;
+      const targetExtEmpId = t.extEmpId || t.ext_emp_id;
+      const taskAsgnTo = (t.taskAsgnTo || t.taskasgnto || t.task_asgn_to || '').toUpperCase();
 
-      if (targetEmpId && empMapById[String(targetEmpId)]) {
-        empName = empMapById[String(targetEmpId)];
-      } else if (t.empCode && empMapById[String(t.empCode)]) {
-        empName = empMapById[String(t.empCode)];
-      } else if (t.executorNm && t.executorNm.trim()) {
-        empName = t.executorNm.trim();
-      } else if (t.executor_nm && t.executor_nm.trim()) {
-        empName = t.executor_nm.trim();
-      } else if (t.extEmpNm && t.extEmpNm.trim()) {
-        empName = t.extEmpNm.trim();
-      } else if (t.ext_emp_nm && t.ext_emp_nm.trim()) {
-        empName = t.ext_emp_nm.trim();
-      } else if (t.assignedTo && typeof t.assignedTo === 'string' && t.assignedTo.trim() && isNaN(t.assignedTo)) {
-        empName = t.assignedTo.trim();
-      } else if (t.createdByName && t.createdByName.trim()) {
-        empName = t.createdByName.trim();
-      } else if (t.assignedByNm && t.assignedByNm.trim()) {
-        empName = t.assignedByNm.trim();
+      if (taskAsgnTo === "EXTERNAL" || targetExtEmpId || t.extEmpNm || t.ext_emp_nm) {
+        isExternal = true;
+      }
+
+      if (isExternal) {
+        if (targetExtEmpId && extMapById[String(targetExtEmpId)]) {
+          empName = extMapById[String(targetExtEmpId)];
+        } else if (t.extEmpNm && t.extEmpNm.trim()) {
+          empName = t.extEmpNm.trim();
+        } else if (t.ext_emp_nm && t.ext_emp_nm.trim()) {
+          empName = t.ext_emp_nm.trim();
+        } else if (targetEmpId && extMapById[String(targetEmpId)]) {
+          empName = extMapById[String(targetEmpId)];
+        } else if (targetEmpId && empMapById[String(targetEmpId)]) {
+          empName = empMapById[String(targetEmpId)];
+        } else if (t.executorNm && t.executorNm.trim()) {
+          empName = t.executorNm.trim();
+        }
+      } else {
+        if (targetEmpId && empMapById[String(targetEmpId)]) {
+          empName = empMapById[String(targetEmpId)];
+        } else if (t.empCode && empMapById[String(t.empCode)]) {
+          empName = empMapById[String(t.empCode)];
+        } else if (t.executorNm && t.executorNm.trim()) {
+          empName = t.executorNm.trim();
+        } else if (t.executor_nm && t.executor_nm.trim()) {
+          empName = t.executor_nm.trim();
+        } else if (t.extEmpNm && t.extEmpNm.trim()) {
+          empName = t.extEmpNm.trim();
+          isExternal = true;
+        } else if (t.ext_emp_nm && t.ext_emp_nm.trim()) {
+          empName = t.ext_emp_nm.trim();
+          isExternal = true;
+        } else if (t.assignedTo && typeof t.assignedTo === 'string' && t.assignedTo.trim() && isNaN(t.assignedTo)) {
+          empName = t.assignedTo.trim();
+        } else if (t.createdByName && t.createdByName.trim()) {
+          empName = t.createdByName.trim();
+        } else if (t.assignedByNm && t.assignedByNm.trim()) {
+          empName = t.assignedByNm.trim();
+        }
       }
 
       if (!empName || empName.trim() === "" || empName.toLowerCase().includes("unassigned") || empName.toLowerCase() === "team member") {
-        const empMatch = (employeesList || []).find(e => 
-          String(e.empId || e.id) === String(targetEmpId || '') ||
-          (t.empCode && (e.empCode === t.empCode || e.code === t.empCode))
-        );
-        if (empMatch) {
-          empName = `${empMatch.fstNm || empMatch.firstName || ''} ${empMatch.lstNm || empMatch.lastName || ''}`.trim() || empMatch.empNm || empMatch.name || empMatch.empCode || `Employee #${empMatch.empId || empMatch.id}`;
+        if (isExternal) {
+          const extMatch = (externalEmployeesList || []).find(e =>
+            String(e.extEmpId || e.id) === String(targetExtEmpId || targetEmpId || '')
+          );
+          if (extMatch) {
+            empName = extMatch.extEmpNm || extMatch.ext_emp_nm || extMatch.companyNm || `External #${extMatch.extEmpId || extMatch.id}`;
+          } else {
+            empName = targetExtEmpId ? `External #${targetExtEmpId}` : "External Assignee";
+          }
         } else {
-          empName = t.empCode ? `Employee (${t.empCode})` : (targetEmpId ? `Employee #${targetEmpId}` : null);
+          const empMatch = (employeesList || []).find(e => 
+            String(e.empId || e.id) === String(targetEmpId || '') ||
+            (t.empCode && (e.empCode === t.empCode || e.code === t.empCode))
+          );
+          if (empMatch) {
+            empName = `${empMatch.fstNm || empMatch.firstName || ''} ${empMatch.lstNm || empMatch.lastName || ''}`.trim() || empMatch.empNm || empMatch.name || empMatch.empCode || `Employee #${empMatch.empId || empMatch.id}`;
+          } else {
+            empName = t.empCode ? `Employee (${t.empCode})` : (targetEmpId ? `Employee #${targetEmpId}` : null);
+          }
         }
       }
 
       if (!empName) return;
 
+      if (!isExternal) {
+        const extMatch = (externalEmployeesList || []).find(e =>
+          (e.extEmpNm && e.extEmpNm.toLowerCase() === empName.toLowerCase()) ||
+          (e.ext_emp_nm && e.ext_emp_nm.toLowerCase() === empName.toLowerCase())
+        );
+        if (extMatch) isExternal = true;
+        
+        const empMatch = (employeesList || []).find(e => {
+          const full = `${e.fstNm || ''} ${e.lstNm || ''}`.trim() || e.empNm || e.name;
+          return full && full.toLowerCase() === empName.toLowerCase();
+        });
+        if (empMatch && (empMatch.empType === 'EXTERNAL' || empMatch.type === 'EXTERNAL' || empMatch.isExternal)) {
+          isExternal = true;
+        }
+      }
+
       if (!empMap[empName]) {
         empMap[empName] = {
           name: empName,
           empId: t.empId || null,
+          isExternal: isExternal,
           totalTasks: 0,
           completed: 0,
           overdue: 0,
           onTime: 0,
           taskList: []
         };
+      } else if (isExternal) {
+        empMap[empName].isExternal = true;
       }
+
       empMap[empName].totalTasks += 1;
       empMap[empName].taskList.push(t);
 
@@ -695,7 +779,7 @@ const AdminDashboard = ({ userRole, onLogout }) => {
     }
 
     return list.sort((a, b) => b.overdue - a.overdue);
-  }, [tasksList, empMapById, personFilter, now]);
+  }, [tasksList, empMapById, extMapById, externalEmployeesList, employeesList, personFilter, now]);
 
   return (
     <div className="db-shell-container">
@@ -955,11 +1039,27 @@ const AdminDashboard = ({ userRole, onLogout }) => {
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <div style={{ width: '34px', height: '34px', borderRadius: '50%', background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: 'bold' }}>
+                        <div style={{ width: '34px', height: '34px', borderRadius: '50%', background: member.isExternal ? 'linear-gradient(135deg, #8b5cf6, #6d28d9)' : 'linear-gradient(135deg, #3b82f6, #1d4ed8)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: 'bold' }}>
                           {member.name.charAt(0).toUpperCase()}
                         </div>
                         <div>
-                          <strong style={{ fontSize: '14px', color: '#0f172a', display: 'block' }}>{member.name}</strong>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <strong style={{ fontSize: '14px', color: '#0f172a', display: 'block' }}>{member.name}</strong>
+                            {member.isExternal && (
+                              <span style={{
+                                fontSize: '10px',
+                                fontWeight: '700',
+                                padding: '2px 6px',
+                                borderRadius: '4px',
+                                background: '#f3e8ff',
+                                color: '#7c3aed',
+                                border: '1px solid #d8b4fe',
+                                lineHeight: '1.2'
+                              }}>
+                                EXT
+                              </span>
+                            )}
+                          </div>
                           <span style={{ fontSize: '11px', color: '#64748b' }}>Click to view details</span>
                         </div>
                       </div>
@@ -1022,12 +1122,28 @@ const AdminDashboard = ({ userRole, onLogout }) => {
               flexShrink: 0
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, minWidth: 0 }}>
-                <div style={{ width: '42px', height: '42px', borderRadius: '50%', background: 'linear-gradient(135deg, #2563eb, #1d4ed8)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px', fontWeight: 'bold', flexShrink: 0 }}>
+                <div style={{ width: '42px', height: '42px', borderRadius: '50%', background: selectedMemberModal.isExternal ? 'linear-gradient(135deg, #8b5cf6, #6d28d9)' : 'linear-gradient(135deg, #2563eb, #1d4ed8)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px', fontWeight: 'bold', flexShrink: 0 }}>
                   {(selectedMemberModal.name || "T").charAt(0).toUpperCase()}
                 </div>
                 <div style={{ minWidth: 0, flex: 1 }}>
-                  <h3 style={{ margin: 0, fontSize: '18px', color: '#0f172a', fontWeight: '700', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{selectedMemberModal.name || "Unassigned"}</h3>
-                  <span style={{ fontSize: '12px', color: '#64748b', display: 'block' }}>Team Member Performance & Schedule Health</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <h3 style={{ margin: 0, fontSize: '18px', color: '#0f172a', fontWeight: '700', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{selectedMemberModal.name || "Unassigned"}</h3>
+                    {selectedMemberModal.isExternal && (
+                      <span style={{
+                        fontSize: '11px',
+                        fontWeight: '700',
+                        padding: '2px 7px',
+                        borderRadius: '4px',
+                        background: '#f3e8ff',
+                        color: '#7c3aed',
+                        border: '1px solid #d8b4fe',
+                        lineHeight: '1.2'
+                      }}>
+                        EXT
+                      </span>
+                    )}
+                  </div>
+                  <span style={{ fontSize: '12px', color: '#64748b', display: 'block' }}>{selectedMemberModal.isExternal ? 'External Associate Performance & Schedule Health' : 'Team Member Performance & Schedule Health'}</span>
                 </div>
               </div>
               <button

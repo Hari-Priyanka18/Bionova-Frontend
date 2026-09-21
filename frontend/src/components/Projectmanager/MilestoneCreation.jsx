@@ -3059,9 +3059,13 @@ const MilestoneCreation = ({ onLogout, userRole }) => {
       );
     }
 
-    const project = projects.find(p => p.prj_id === parseInt(milestone.drft_prj_id));
+    const project = projects.find(p => String(p.prj_id || p.prjId) === String(milestone.drft_prj_id));
     const isLive = milestone.mlstm_sts !== "DRAFT" && milestone.mlstm_sts !== "draft";
-    const dependentMilestone = milestoneList.find(m => m.id === parseInt(milestone.mlstm_dep_m_id) && m.type === (isLive ? 'live' : 'draft'));
+    const depTarget = String(milestone.mlstm_dep_m_id || "").trim();
+    const dependentMilestone = milestoneList.find(m =>
+      String(m.id || m.mId || m.mid || m.drftMId) === depTarget ||
+      String(m.code || m.mlstnCd) === depTarget
+    );
 
     return (
       <div className="mc-content">
@@ -3102,8 +3106,8 @@ const MilestoneCreation = ({ onLogout, userRole }) => {
                 <span className="mc-details-val">{formatDisplayDate(milestone.tent_st_dt)}</span>
               </div>
               <div className="mc-details-item">
-                <span className="mc-details-val">Tentative End Date</span>
-                <span className="mc-details-label">{formatDisplayDate(milestone.tent_end_dt)}</span>
+                <span className="mc-details-label">Tentative End Date</span>
+                <span className="mc-details-val">{formatDisplayDate(milestone.tent_end_dt)}</span>
               </div>
               <div className="mc-details-item">
                 <span className="mc-details-label">Status</span>
@@ -3124,20 +3128,20 @@ const MilestoneCreation = ({ onLogout, userRole }) => {
             {/* Dependency Box */}
             <div className="mc-details-dependency-section">
               <h4><Link size={16} /> Milestone Dependency</h4>
-              <div className="mc-details-dependency-grid">
-                <div>
-                  <span className="mc-details-label">Dependency Available</span>
-                  <span className="mc-details-val">{milestone.mlstm_dep_flg ? "Yes" : "No"}</span>
+              <div className="mc-details-dependency-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "24px" }}>
+                <div className="mc-details-item" style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                  <span className="mc-details-label" style={{ display: "block", textTransform: "none", fontSize: "12px", color: "#64748b", fontWeight: 600 }}>Dependency Available</span>
+                  <span className="mc-details-val" style={{ display: "block", fontSize: "14px", color: "#0f172a", fontWeight: 600 }}>{milestone.mlstm_dep_flg ? "Yes" : "No"}</span>
                 </div>
                 {milestone.mlstm_dep_flg && (
                   <>
-                    <div>
-                      <span className="mc-details-label">Dependent Milestone</span>
-                      <span className="mc-details-val">{dependentMilestone ? `${dependentMilestone.code} - ${dependentMilestone.title}` : (milestone.mlstm_dep_m_id || "-")}</span>
+                    <div className="mc-details-item" style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                      <span className="mc-details-label" style={{ display: "block", textTransform: "none", fontSize: "12px", color: "#64748b", fontWeight: 600 }}>Dependent Milestone</span>
+                      <span className="mc-details-val" style={{ display: "block", fontSize: "14px", color: "#0f172a", fontWeight: 600 }}>{dependentMilestone ? `${dependentMilestone.code} - ${dependentMilestone.title}` : (milestone.mlstm_dep_m_id || "-")}</span>
                     </div>
-                    <div>
-                      <span className="mc-details-label">Dependency Type</span>
-                      <span className="mc-details-val">{milestone.mlstm_dep_typ}</span>
+                    <div className="mc-details-item" style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                      <span className="mc-details-label" style={{ display: "block", textTransform: "none", fontSize: "12px", color: "#64748b", fontWeight: 600 }}>Dependency Type</span>
+                      <span className="mc-details-val" style={{ display: "block", fontSize: "14px", color: "#0f172a", fontWeight: 600 }}>{milestone.mlstm_dep_typ}</span>
                     </div>
                   </>
                 )}

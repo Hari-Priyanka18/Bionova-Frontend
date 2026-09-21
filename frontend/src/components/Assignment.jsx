@@ -2128,7 +2128,11 @@ const Assignment = ({ userRole, onLogout }) => {
                         </div>
                         <div style={{ display: 'flex', borderBottom: '1px solid #e2e8f0', padding: '8px 0' }}>
                           <span style={{ fontWeight: '600', color: '#475569', width: '140px', flexShrink: 0 }}>Priority</span>
-                          <span style={{ color: priority === 'High' || priority === 'Critical' ? '#ef4444' : priority === 'Medium' ? '#eab308' : priority === 'Normal' ? '#3b82f6' : '#22c55e', fontWeight: 600 }}>{priority}</span>
+                          {['CLOSED', 'COMPLETED', 'Closed', 'Completed', 'DONE', 'Done'].includes(String(status || '').trim()) ? (
+                            <span style={{ color: '#94a3b8', fontWeight: 600 }}>—</span>
+                          ) : (
+                            <span style={{ color: priority === 'High' || priority === 'Critical' ? '#ef4444' : priority === 'Medium' ? '#eab308' : priority === 'Normal' ? '#3b82f6' : '#22c55e', fontWeight: 600 }}>{priority}</span>
+                          )}
                         </div>
                         <div style={{ display: 'flex', borderBottom: '1px solid #e2e8f0', padding: '8px 0' }}>
                           <span style={{ fontWeight: '600', color: '#475569', width: '140px', flexShrink: 0 }}>Status</span>

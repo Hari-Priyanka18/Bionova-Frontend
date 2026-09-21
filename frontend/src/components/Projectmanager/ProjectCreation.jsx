@@ -1938,7 +1938,9 @@ const ProjectCreation = ({ userRole, onLogout }) => {
                           <th style={{ padding: '14px 20px', fontSize: '11px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>DESCRIPTION</th>
                           <th style={{ padding: '14px 20px', fontSize: '11px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>OBJECTIVE</th>
                           <th style={{ padding: '14px 20px', fontSize: '11px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>DELIVERABLES</th>
-                          <th style={{ padding: '14px 20px', fontSize: '11px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>PRIORITY</th>
+                          {statusTab !== 'Draft' && (
+                            <th style={{ padding: '14px 20px', fontSize: '11px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>PRIORITY</th>
+                          )}
                           <th style={{ padding: '14px 20px', fontSize: '11px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>START DATE</th>
                           <th style={{ padding: '14px 20px', fontSize: '11px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>END DATE</th>
                           <th style={{ padding: '14px 20px', fontSize: '11px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>TOTAL DAYS</th>
@@ -2005,42 +2007,44 @@ const ProjectCreation = ({ userRole, onLogout }) => {
                               }}>
                                 {project.expectedDeliverables || "N/A"}
                               </td>
-                              <td data-label="PRIORITY" style={{ padding: '14px 20px', fontSize: '14px', color: '#334155' }}>
-                                {project.status?.toUpperCase() === 'CLOSED' || project.status?.toUpperCase() === 'COMPLETED' ? (
-                                  <span style={{ color: "#94a3b8", fontWeight: 600 }}>-</span>
-                                ) : (
-                                  <span style={{
-                                    padding: '4px 10px',
-                                    borderRadius: '4px',
-                                    fontSize: '12px',
-                                    fontWeight: '700',
-                                    display: 'inline-block',
-                                    backgroundColor: project.priorityMeta?.bgColor || (
-                                      project.priority === 'ATMOST CRITICAL' ? '#7f1d1d18' :
-                                        project.priority === 'CRITICAL' ? '#b91c1c18' :
-                                          project.priority === 'HIGH' ? '#ef444418' :
-                                            project.priority === 'NORMAL' ? '#3b82f618' :
-                                              project.priority === 'MEDIUM' ? '#f59e0b18' : '#22c55e18'
-                                    ),
-                                    color: project.priorityMeta?.color || (
-                                      project.priority === 'ATMOST CRITICAL' ? '#7F1D1D' :
-                                        project.priority === 'CRITICAL' ? '#B91C1C' :
-                                          project.priority === 'HIGH' ? '#EF4444' :
-                                            project.priority === 'NORMAL' ? '#3B82F6' :
-                                              project.priority === 'MEDIUM' ? '#F59E0B' : '#22C55E'
-                                    ),
-                                    border: `1px solid ${project.priorityMeta?.borderColor || (
-                                      project.priority === 'ATMOST CRITICAL' ? '#7f1d1d40' :
-                                        project.priority === 'CRITICAL' ? '#b91c1c40' :
-                                          project.priority === 'HIGH' ? '#ef444440' :
-                                            project.priority === 'NORMAL' ? '#3b82f640' :
-                                              project.priority === 'MEDIUM' ? '#f59e0b40' : '#22c55e40'
-                                    )}`
-                                  }}>
-                                    {project.priority}
-                                  </span>
-                                )}
-                              </td>
+                              {statusTab !== 'Draft' && (
+                                <td data-label="PRIORITY" style={{ padding: '14px 20px', fontSize: '14px', color: '#334155' }}>
+                                  {project.status?.toUpperCase() === 'CLOSED' || project.status?.toUpperCase() === 'COMPLETED' || project.status?.toUpperCase() === 'DRAFT' || project._type?.toLowerCase() === 'draft' ? (
+                                    <span style={{ color: "#94a3b8", fontWeight: 600 }}>-</span>
+                                  ) : (
+                                    <span style={{
+                                      padding: '4px 10px',
+                                      borderRadius: '4px',
+                                      fontSize: '12px',
+                                      fontWeight: '700',
+                                      display: 'inline-block',
+                                      backgroundColor: project.priorityMeta?.bgColor || (
+                                        project.priority === 'ATMOST CRITICAL' ? '#7f1d1d18' :
+                                          project.priority === 'CRITICAL' ? '#b91c1c18' :
+                                            project.priority === 'HIGH' ? '#ef444418' :
+                                              project.priority === 'NORMAL' ? '#3b82f618' :
+                                                project.priority === 'MEDIUM' ? '#f59e0b18' : '#22c55e18'
+                                      ),
+                                      color: project.priorityMeta?.color || (
+                                        project.priority === 'ATMOST CRITICAL' ? '#7F1D1D' :
+                                          project.priority === 'CRITICAL' ? '#B91C1C' :
+                                            project.priority === 'HIGH' ? '#EF4444' :
+                                              project.priority === 'NORMAL' ? '#3B82F6' :
+                                                project.priority === 'MEDIUM' ? '#F59E0B' : '#22C55E'
+                                      ),
+                                      border: `1px solid ${project.priorityMeta?.borderColor || (
+                                        project.priority === 'ATMOST CRITICAL' ? '#7f1d1d40' :
+                                          project.priority === 'CRITICAL' ? '#b91c1c40' :
+                                            project.priority === 'HIGH' ? '#ef444440' :
+                                              project.priority === 'NORMAL' ? '#3b82f640' :
+                                                project.priority === 'MEDIUM' ? '#f59e0b40' : '#22c55e40'
+                                      )}`
+                                    }}>
+                                      {project.priority}
+                                    </span>
+                                  )}
+                                </td>
+                              )}
                               <td data-label="START DATE" style={{ padding: '14px 20px', fontSize: '14px', color: '#334155' }}>{formatListDate(project.startDate)}</td>
                               <td data-label="END DATE" style={{ padding: '14px 20px', fontSize: '14px', color: '#334155' }}>{formatListDate(project.endDate)}</td>
                               <td data-label="TOTAL DAYS" style={{ padding: '14px 20px', fontSize: '14px', color: '#334155' }}>{project.totalProjectDays || "N/A"}</td>
